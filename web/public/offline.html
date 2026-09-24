@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offline - Aquastats</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+          sans-serif;
+        background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .container {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        max-width: 500px;
+        padding: 40px;
+        text-align: center;
+      }
+
+      .offline-icon {
+        font-size: 64px;
+        margin-bottom: 20px;
+      }
+
+      h1 {
+        font-size: 28px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 10px;
+      }
+
+      p {
+        color: #64748b;
+        line-height: 1.6;
+        margin-bottom: 20px;
+      }
+
+      .features {
+        background: #f1f5f9;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 30px 0;
+        text-align: left;
+      }
+
+      .features h3 {
+        color: #0f172a;
+        margin-bottom: 12px;
+        font-size: 16px;
+      }
+
+      .features li {
+        color: #64748b;
+        margin-bottom: 8px;
+        margin-left: 20px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 30px;
+        flex-direction: column;
+      }
+
+      button {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .primary {
+        background: #0ea5e9;
+        color: white;
+      }
+
+      .primary:hover {
+        background: #0284c7;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+      }
+
+      .secondary {
+        background: #e2e8f0;
+        color: #0f172a;
+      }
+
+      .secondary:hover {
+        background: #cbd5e1;
+      }
+
+      .status {
+        margin-top: 30px;
+        padding: 16px;
+        background: #fef3c7;
+        border-left: 4px solid #f59e0b;
+        border-radius: 8px;
+        text-align: left;
+      }
+
+      .status h4 {
+        color: #92400e;
+        margin-bottom: 8px;
+      }
+
+      .status p {
+        color: #b45309;
+        font-size: 14px;
+      }
+
+      @media (max-width: 600px) {
+        .container {
+          padding: 30px 20px;
+        }
+
+        h1 {
+          font-size: 24px;
+        }
+
+        .offline-icon {
+          font-size: 48px;
+        }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: linear-gradient(135deg, #0c4a6e 0%, #164e63 100%);
+        }
+
+        .container {
+          background: #1e293b;
+        }
+
+        h1 {
+          color: #f1f5f9;
+        }
+
+        p {
+          color: #cbd5e1;
+        }
+
+        .features {
+          background: #0f172a;
+        }
+
+        .features h3 {
+          color: #f1f5f9;
+        }
+
+        .features li {
+          color: #cbd5e1;
+        }
+
+        .secondary {
+          background: #334155;
+          color: #f1f5f9;
+        }
+
+        .secondary:hover {
+          background: #475569;
+        }
+
+        .status {
+          background: #78350f;
+          border-left-color: #f59e0b;
+        }
+
+        .status h4 {
+          color: #fef3c7;
+        }
+
+        .status p {
+          color: #fed7aa;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="offline-icon">📡</div>
+
+      <h1>Sem Conexão</h1>
+      <p>
+        Parece que você está offline. Mas não se preocupe! Aquastats funciona offline também.
+      </p>
+
+      <div class="features">
+        <h3>✅ Você ainda pode:</h3>
+        <ul>
+          <li>Visualizar atletas e treinos em cache</li>
+          <li>Registrar novos tempos</li>
+          <li>Visualizar gráficos e análises</li>
+          <li>Adicionar novos treinos</li>
+        </ul>
+      </div>
+
+      <div class="features">
+        <h3>🔄 O que vai sincronizar quando online:</h3>
+        <ul>
+          <li>Novos tempos registados</li>
+          <li>Treinos adicionados</li>
+          <li>Alterações em atletas</li>
+          <li>Todas as alterações ficarão no servidor</li>
+        </ul>
+      </div>
+
+      <div class="status">
+        <h4>Status de Sincronização</h4>
+        <p id="sync-status">Verificando status de sincronização...</p>
+      </div>
+
+      <div class="actions">
+        <button class="primary" onclick="goHome()">Voltar ao Início</button>
+        <button class="secondary" onclick="reload()">Tentar Reconectar</button>
+      </div>
+    </div>
+
+    <script>
+      // Check sync status
+      if ('serviceWorker' in navigator && 'SyncManager' in window) {
+        navigator.serviceWorker.ready.then((registration) => {
+          updateSyncStatus(registration);
+        });
+      }
+
+      function updateSyncStatus(registration) {
+        const statusEl = document.getElementById('sync-status');
+
+        if (navigator.onLine) {
+          statusEl.textContent = 'Reconectando... suas alterações offline serão sincronizadas automaticamente.';
+        } else {
+          statusEl.textContent = 'Você está offline. As alterações serão sincronizadas quando a conexão for restaurada.';
+        }
+      }
+
+      function goHome() {
+        window.location.href = '/';
+      }
+
+      function reload() {
+        window.location.reload();
+      }
+
+      // Listen for online status
+      window.addEventListener('online', () => {
+        document.getElementById('sync-status').textContent =
+          'Reconectando... suas alterações offline estão sendo sincronizadas.';
+      });
+
+      window.addEventListener('offline', () => {
+        document.getElementById('sync-status').textContent =
+          'Conexão perdida. As alterações será sincronizadas quando online.';
+      });
+    </script>
+  </body>
+</html>

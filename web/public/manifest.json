@@ -1,0 +1,141 @@
+{
+  "name": "Aquastats - Competitive Swimming Training",
+  "short_name": "Aquastats",
+  "description": "Professional training analytics for competitive swimmers. Predict performance, analyze workouts, manage teams.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#0ea5e9",
+  "prefer_related_applications": false,
+  "categories": ["sports", "productivity"],
+  "screenshots": [
+    {
+      "src": "/screenshots/mobile-1.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/screenshots/mobile-2.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/screenshots/desktop-1.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/android-chrome-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Ver Dashboard",
+      "short_name": "Dashboard",
+      "description": "Visualizar seu dashboard de treino",
+      "url": "/coach/treino/painel",
+      "icons": [
+        {
+          "src": "/icons/dashboard-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Registrar Tempo",
+      "short_name": "Registrar",
+      "description": "Registrar novo tempo de atleta",
+      "url": "/coach/times",
+      "icons": [
+        {
+          "src": "/icons/timer-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Adicionar Treino",
+      "short_name": "Treino",
+      "description": "Criar novo treino",
+      "url": "/coach/treino/novo",
+      "icons": [
+        {
+          "src": "/icons/workout-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Análise de Prova",
+      "short_name": "Prova",
+      "description": "Analisar performance em provas",
+      "url": "/coach/provas/painel-v2",
+      "icons": [
+        {
+          "src": "/icons/race-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/api/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "file",
+          "accept": [
+            "text/csv",
+            "application/json"
+          ]
+        }
+      ]
+    }
+  },
+  "iarc_rating_id": "",
+  "screenshots_for_screenshots": [
+    {
+      "src": "/screenshots/mobile-1.png",
+      "sizes": "540x720",
+      "type": "image/png"
+    }
+  ]
+}
