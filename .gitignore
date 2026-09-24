@@ -1,0 +1,44 @@
+# Secrets and local env
+.env
+.env.*
+!.env.example
+!**/.env.example
+.env.local
+.neon
+.dev.vars
+*.pem
+*credentials*.json
+*service-account*.json
+cloudrun_env.yaml
+
+# Dependencies and virtualenvs
+node_modules/
+infra/neon/node_modules/
+**/.venv/
+.deploy-venv/
+__pycache__/
+*.pyc
+
+# Build and cache
+dist/
+coverage/
+web/.next/
+web/.open-next/
+web/.wrangler/
+web/out/
+*.tsbuildinfo
+
+# Local databases and logs
+*.db
+*.db-journal
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Deploy artefacts and bootstrap secrets (never commit)
+.deploy-venv/resend.env
+.deploy-venv/pw-resend-profile/
+**/.next/standalone/
+infra/neon/node_modules/

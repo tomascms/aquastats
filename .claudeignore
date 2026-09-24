@@ -1,0 +1,92 @@
+# Node.js dependencies
+node_modules/
+web/node_modules/
+infra/neon/node_modules/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+api/.venv/
+.deploy-venv/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Build outputs (não mexer)
+dist/
+web/.next/
+web/.open-next/
+web/.wrangler/
+web/out/
+api/build/
+*.tsbuildinfo
+coverage/
+htmlcov/
+
+# Local databases (não mexer)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE/Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Secrets already in gitignore (não mexer)
+.env
+.env.local
+.env.*.local
+.neon
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+
+# Docker volumes (não mexer)
+data/postgres/
+data/redis/
+
+# Deployment artifacts (não mexer)
+.deploy-venv/resend.env
+.deploy-venv/pw-resend-profile/
+**/.next/standalone/
+
+# CI/CD (pode ler mas não vai mexer)
+.github/workflows/
+
+# Documentação (referência, não mexer)
+docs/
+
+# Scripts de setup (referência, não mexer)
+scripts/
+
+# Agentes (não mexer)
+.agents/
+
+# Node-specific (node_modules já está acima, mas explicitar)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Terraform state (não mexer)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl

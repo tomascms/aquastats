@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "aquastats-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-20",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "placement": {
+    "mode": "smart"
+  },
+  "vars": {
+    "API_URL": "https://aquastats-api-kijldbtoaq-uc.a.run.app",
+    "APP_URL": "https://aquastats.net"
+  },
+  "routes": [
+    { "pattern": "aquastats.net", "custom_domain": true },
+    { "pattern": "www.aquastats.net", "custom_domain": true }
+  ]
+}
