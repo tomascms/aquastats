@@ -301,9 +301,8 @@ async def create_portal_link(
     return {"url": portal_url}
 
 
-@router.get("/usage/{team_id}")
+@router.get("/usage")
 async def get_team_usage(
-    team_id: str,
     payload: dict = Depends(require_coach),
     session: Session = Depends(get_session),
 ):
@@ -311,7 +310,7 @@ async def get_team_usage(
     if not BILLING_FEATURE_ENABLED:
         raise HTTPException(status_code=404, detail="Billing not available")
 
-    team_id_uuid = UUID(team_id)
+    team_id_uuid = UUID(payload.get("team_uuid"))
     sub = session.scalar(select(Subscription).where(Subscription.team_id == team_id_uuid))
 
     if not sub:
