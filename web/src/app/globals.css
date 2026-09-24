@@ -1,6 +1,20 @@
 @import "tailwindcss";
 
+/* Geist Font Variables */
+@supports (font-variation-settings: normal) {
+  :root {
+    --font-geist-sans: 'Geist', sans-serif;
+    --font-geist-mono: 'Geist Mono', monospace;
+  }
+}
+
+/* Light Mode (Default) */
 :root {
+  /* Brand Colors */
+  --color-aqua-500: #0ea5e9;
+  --color-aqua-600: #0284c7;
+
+  /* UI */
   --ink: #f5f7fb;
   --ink-2: #edf3fb;
   --panel: #ffffff;
@@ -14,6 +28,90 @@
   --mist: #10213d;
   --mute: #61708a;
   --shadow-soft: 0 16px 40px rgba(19, 39, 68, 0.08);
+
+  /* Semantic */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f6fb;
+  --bg-tertiary: #edf3fb;
+  --bg-muted: #f8fafc;
+
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-tertiary: #64748b;
+  --text-muted: #94a3b8;
+
+  --border-color: #e2e8f0;
+  --border-light: #f1f5f9;
+
+  /* Zones */
+  --zone-z1: #10b981;
+  --zone-z2: #84cc16;
+  --zone-z3: #eab308;
+  --zone-z4: #f97316;
+  --zone-z5: #ef4444;
+  --zone-z6: #991b1b;
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #1e293b;
+    --ink-2: #334155;
+    --panel: #0f172a;
+    --panel-2: #1e293b;
+    --line: #334155;
+    --aqua: #e0f2fe;
+    --aqua-2: #bae6fd;
+    --aqua-soft: #082f4b;
+    --sand: #cbd5e1;
+    --coral: #fb7185;
+    --mist: #f1f5f9;
+    --mute: #94a3b8;
+    --shadow-soft: 0 16px 40px rgba(0, 0, 0, 0.3);
+
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --bg-muted: #1e293b;
+
+    --text-primary: #f8fafc;
+    --text-secondary: #e2e8f0;
+    --text-tertiary: #cbd5e1;
+    --text-muted: #64748b;
+
+    --border-color: #334155;
+    --border-light: #1e293b;
+  }
+}
+
+/* Data theme attribute (explicit dark mode toggle) */
+[data-theme="dark"] {
+  --ink: #1e293b;
+  --ink-2: #334155;
+  --panel: #0f172a;
+  --panel-2: #1e293b;
+  --line: #334155;
+  --aqua: #e0f2fe;
+  --aqua-2: #bae6fd;
+  --aqua-soft: #082f4b;
+  --sand: #cbd5e1;
+  --coral: #fb7185;
+  --mist: #f1f5f9;
+  --mute: #94a3b8;
+  --shadow-soft: 0 16px 40px rgba(0, 0, 0, 0.3);
+
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-muted: #1e293b;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #e2e8f0;
+  --text-tertiary: #cbd5e1;
+  --text-muted: #64748b;
+
+  --border-color: #334155;
+  --border-light: #1e293b;
 }
 
 @theme inline {

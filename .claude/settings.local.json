@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m 'PHASE 3: UI Design - New design system with Tailwind 4 *)"
+    ]
+  }
+}
