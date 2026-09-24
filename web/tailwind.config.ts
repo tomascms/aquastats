@@ -234,7 +234,7 @@ const config: Config = {
     },
   },
   plugins: [
-    require('tailwindcss/plugin')(function ({ addBase, addComponents, theme }) {
+    require('tailwindcss/plugin')(function ({ addBase, addComponents, theme }: any) {
       addBase({
         html: {
           '@apply scroll-smooth': {},

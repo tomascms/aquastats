@@ -13,14 +13,17 @@ h1 {
   font-weight: 700 !important;
 }
 
-.btn-primary {
+.btn-primary,
+button[type="submit"] {
   background: linear-gradient(135deg, #0f1f3d 0%, #17375f 100%) !important;
   color: #fff !important;
   font-weight: 600 !important;
   font-size: 1rem !important;
+  border: none !important;
 }
 
-.btn-primary:hover {
+.btn-primary:hover,
+button[type="submit"]:hover {
   filter: brightness(1.1) !important;
 }
 

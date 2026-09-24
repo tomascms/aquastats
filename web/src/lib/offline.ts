@@ -184,7 +184,7 @@ export async function queueRequest(
     if ('serviceWorker' in navigator && 'SyncManager' in window) {
       try {
         const registration = await navigator.serviceWorker.ready;
-        await registration.sync.register('sync-data');
+        await (registration as any).sync.register('sync-data');
       } catch (error) {
         console.error('[Offline] Failed to register sync:', error);
       }

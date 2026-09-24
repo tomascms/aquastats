@@ -38,7 +38,11 @@
       "Bash(PYTHONIOENCODING=utf-8 python -m uvicorn src.app.main:app --host 127.0.0.1 --port 8000)",
       "Bash(PYTHONIOENCODING=utf-8 python -c \"from src.app.routes.billing_routes import router; print\\('billing ok'\\)\")",
       "Bash(npm install *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(vercel deploy *)",
+      "Bash(timeout 120 vercel deploy --temporary)",
+      "Bash(tee /tmp/vercel-final.log)",
+      "Bash(tee /tmp/vercel-url.log)"
     ]
   }
 }
