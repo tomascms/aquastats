@@ -43,7 +43,10 @@
       "Bash(timeout 120 vercel deploy --temporary)",
       "Bash(tee /tmp/vercel-final.log)",
       "Bash(tee /tmp/vercel-url.log)",
-      "Bash(gcloud run *)"
+      "Bash(gcloud run *)",
+      "Bash(python -m pip install certifi -q)",
+      "Bash(python -c \"import certifi; print\\(f'Certifi path: {certifi.where\\(\\)}'\\)\")",
+      "Bash(gcloud auth *)"
     ]
   }
 }
