@@ -42,7 +42,8 @@
       "Bash(vercel deploy *)",
       "Bash(timeout 120 vercel deploy --temporary)",
       "Bash(tee /tmp/vercel-final.log)",
-      "Bash(tee /tmp/vercel-url.log)"
+      "Bash(tee /tmp/vercel-url.log)",
+      "Bash(gcloud run *)"
     ]
   }
 }
