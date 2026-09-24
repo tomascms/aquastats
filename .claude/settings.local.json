@@ -11,7 +11,9 @@
       "Bash(git commit -m 'PHASE 7: Offline-First PWA Implementation *)",
       "Bash(git commit -m 'PHASES 11-12 PLAN: Production Deployment & Professionalization *)",
       "Bash(git commit -m 'PHASE 11: Two-Tier System, i18n, OAuth Consolidation \\(WIP\\) *)",
-      "Bash(git commit -m 'PHASE 11-12: Comprehensive Testing & Deployment Suite *)"
+      "Bash(git commit -m 'PHASE 11-12: Comprehensive Testing & Deployment Suite *)",
+      "Bash(chmod +x deploy.sh)",
+      "Bash(git commit -m 'PHASE 12: Deployment Script & Final Implementation *)"
     ]
   }
 }
