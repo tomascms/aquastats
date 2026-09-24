@@ -8,7 +8,7 @@ from datetime import datetime
 import structlog
 import json
 
-from ..core.database import get_session
+from ..core.db import SessionLocal
 from ..core.config import get_settings
 from ..core.caching import invalidate_team_cache
 from ..domain.billing import Subscription, Invoice, SubscriptionStatus, PlanType

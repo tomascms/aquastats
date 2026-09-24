@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 from datetime import datetime
 import structlog
 
-from ..core.database import get_session
+from ..core.db import SessionLocal
 from ..core.auth import require_coach
 from ..core.stripe_client import get_stripe_client
 from ..core.caching import invalidate_team_cache

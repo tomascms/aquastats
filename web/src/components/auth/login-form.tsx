@@ -98,31 +98,31 @@ export function LoginForm() {
 
   return (
     <AuthFrame>
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      <h1 className="text-3xl font-bold tracking-tight text-mist">{title}</h1>
 
-      <form className="mt-6 space-y-3" onSubmit={(event) => void submitCredentials(event)}>
+      <form className="mt-8 space-y-4" onSubmit={(event) => void submitCredentials(event)}>
         {mode === "register" && (
           <>
-            <label className="block text-sm" htmlFor="auth-name">
+            <label className="block text-base font-medium text-mist" htmlFor="auth-name">
               Nome
               <input
                 id="auth-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="field mt-1.5"
+                className="field mt-2"
                 autoComplete="name"
               />
             </label>
             {!invite ? (
-              <label className="block text-sm" htmlFor="auth-team-code">
-                Código da equipa <span className="text-mute">(opcional)</span>
+              <label className="block text-base font-medium text-mist" htmlFor="auth-team-code">
+                Código da equipa <span className="text-mute text-sm">(opcional)</span>
                 <input
                   id="auth-team-code"
                   value={teamCode}
                   onChange={(event) =>
                     setTeamCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))
                   }
-                  className="field mt-1.5 uppercase tracking-widest"
+                  className="field mt-2 uppercase tracking-widest"
                   placeholder="ABCD1234"
                   autoComplete="off"
                   spellCheck={false}
@@ -132,21 +132,21 @@ export function LoginForm() {
             ) : null}
           </>
         )}
-        <label className="block text-sm" htmlFor="auth-email">
+        <label className="block text-base font-medium text-mist" htmlFor="auth-email">
           Email
           <input
             id="auth-email"
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="field mt-1.5"
+            className="field mt-2"
             autoComplete="email"
             required
             aria-invalid={Boolean(banner)}
             aria-describedby={banner ? "auth-error" : undefined}
           />
         </label>
-        <label className="block text-sm" htmlFor="auth-password">
+        <label className="block text-base font-medium text-mist" htmlFor="auth-password">
           Palavra-passe
           <span className="relative mt-1.5 block">
             <input
@@ -176,20 +176,20 @@ export function LoginForm() {
           </p>
         )}
 
-        <button type="submit" disabled={busy} className="btn-primary mt-1 h-10 w-full">
+        <button type="submit" disabled={busy} className="btn-primary mt-2 h-11 w-full font-semibold text-base">
           {busy ? "A entrar…" : mode === "register" ? "Criar conta" : "Entrar"}
         </button>
       </form>
 
-      <div className="mt-4 flex items-center justify-between text-sm">
+      <div className="mt-6 flex items-center justify-between text-sm font-medium">
         {mode === "login" ? (
-          <Link href="/repor" className="text-mute hover:text-mist">
+          <Link href="/repor" className="text-sand hover:text-aqua transition-colors">
             Recuperar
           </Link>
         ) : (
           <span />
         )}
-        <button type="button" className="text-mute hover:text-mist" onClick={() => setMode(mode === "login" ? "register" : "login")}>
+        <button type="button" className="text-sand hover:text-aqua transition-colors" onClick={() => setMode(mode === "login" ? "register" : "login")}>
           {mode === "login" ? "Criar conta" : "Já tenho conta"}
         </button>
       </div>

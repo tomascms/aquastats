@@ -144,6 +144,8 @@ const config: Config = {
           secondary: 'var(--text-secondary)',
           tertiary: 'var(--text-tertiary)',
           muted: 'var(--text-muted)',
+          mist: 'var(--mist)',
+          sand: 'var(--sand)',
         },
 
         border: {

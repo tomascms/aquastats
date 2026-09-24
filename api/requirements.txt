@@ -30,7 +30,7 @@ numpy==1.26.2
 pandas==2.1.4
 
 # 📧 COMUNICAÇÕES
-resend==0.18.0
+resend==2.47.0
 
 # ☁️ CLOUD
 aioboto3==12.1.0

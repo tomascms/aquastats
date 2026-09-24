@@ -1,0 +1,47 @@
+/* Override styles for login form - force proper contrast */
+
+label {
+  color: #0f1f3d !important;
+  font-weight: 500 !important;
+  font-size: 1rem !important;
+  display: block !important;
+  margin-bottom: 0.5rem !important;
+}
+
+h1 {
+  color: #0f1f3d !important;
+  font-weight: 700 !important;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0f1f3d 0%, #17375f 100%) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.1) !important;
+}
+
+a {
+  color: #4d6b8d !important;
+  font-weight: 500 !important;
+}
+
+a:hover {
+  color: #0f1f3d !important;
+}
+
+p {
+  color: #334155 !important;
+}
+
+input,
+.field {
+  font-size: 1rem !important;
+}
+
+.field::placeholder {
+  color: #94a3b8 !important;
+}
