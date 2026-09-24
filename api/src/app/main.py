@@ -29,6 +29,7 @@ from .core.http_security import (
 )
 from .routes.auth_routes import router as auth_router
 from .routes.data_routes import router as data_router
+from .routes.prediction_routes import router as prediction_router
 
 init_observability()
 settings = get_settings()
@@ -61,6 +62,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(data_router)
+app.include_router(prediction_router)
 
 
 @app.exception_handler(RuntimeError)
@@ -91,7 +93,7 @@ async def hidden_errors(request: Request, exc: Exception):
 
 @app.get("/api/v1/health")
 def health():
-    return {"ok": True, "service": "swimanalytics-api"}
+    return {"ok": True, "service": "aquastats-api"}
 
 
 @app.get("/api/v1/health/ready")
