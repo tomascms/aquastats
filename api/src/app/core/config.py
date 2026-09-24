@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     recent_auth_seconds: int = 300
     edge_auth_token: str = ""
     outbox_batch_size: int = 20
+    stripe_publishable_key: str = ""
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
 
     @property
     def is_production(self) -> bool:
