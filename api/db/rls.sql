@@ -1,9 +1,0 @@
--- Row Level Security — ver api/db/migrations/001_rls_functions.sql e 002_rls_policies.sql
--- Aplicado automaticamente no arranque da API (schema_migrations).
---
--- Para activar RLS em produção:
---   1. CREATE ROLE aquastats_app LOGIN PASSWORD '...' no Neon
---   2. Deploy aplica migration 003 (grants)
---   3. Cloud Run: DATABASE_URL com aquastats_app + DATABASE_ENABLE_RLS=true
---
--- Guia completo: docs/DEPLOY-SECURITY.md

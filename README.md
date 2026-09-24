@@ -1,42 +1,65 @@
 # Aquastats
 
-App de treino de natação: treinador, atleta, tempos e estilos. Repositório **privado** — nunca commits secrets (`api/.env`, `web/.env.local`, credenciais GCP, etc.).
+Plataforma de análise de natação para treinadores e atletas — tempos, treinos, provas e previsões.
+
+- Site: https://aquastats.net
+- Repositório privado: nunca fazer commit de segredos (`.env`, credenciais, chaves).
 
 ## Estrutura
 
-| Pasta | Conteúdo |
-|---|---|
-| `web/src/` | Next.js — páginas, componentes, store |
-| `api/src/app/` | FastAPI — auth, dados, segurança |
-| `data/` | Schema PostgreSQL (`schema.sql`) |
-| `docs/` | Planos e documentação |
-| `infra/` | Ferramentas Neon preview (não produção) |
-| `scripts/` | Setup OAuth, DNS, manutenção |
-
-Ver [`docs/STRUCTURE.md`](docs/STRUCTURE.md) para detalhe.
-
-## Correr em local
-
-1. PostgreSQL (Neon). Corre `data/schema.sql` na base.
-2. Copia `api/.env.example` → `api/.env` (`DATABASE_URL`, `SESSION_SECRET` ≥32 chars).
-3. Copia `web/.env.example` → `web/.env.local`.
-4. **API:** `cd api && set PYTHONPATH=src` (Windows) ou `PYTHONPATH=src` (Unix), depois `python -m uvicorn app.main:app --reload --port 8000`
-5. **Site:** `cd web && npm run dev`
-
-## Produção
-
-Site: `https://aquastats.net` (Cloudflare Workers). API: Cloud Run. Base: Neon.
-
-Variáveis sensíveis só no hosting — nunca no git. Ver `.gitignore` e [`docs/SECURITY.md`](docs/SECURITY.md).
-
-### Deploy
-
-```powershell
-# API (Cloud Run) — requer AQUASTATS_GCP_PROJECT e api/.env
-$env:AQUASTATS_GCP_PROJECT = "gen-lang-client-0997549665"
-python .deploy-venv/cloudrun_deploy.py
-python .deploy-venv/cloudrun_redeploy_env.py
-
-# Web (Cloudflare)
-cd web && npm run deploy
 ```
+apps/
+  api/                  FastAPI (Python 3.12) → Google Cloud Run
+    src/app/
+      core/             config, base de dados, segurança, sessões, rate limit
+      domain/           modelos, comandos, consultas, previsões
+      routes/           endpoints HTTP (/api/v1/...)
+      schemas/          validação de payloads (Pydantic)
+      webhooks/         webhooks externos (Stripe)
+    db/
+      schema.sql        schema PostgreSQL completo
+      migrations/       migrações SQL versionadas (aplicadas automaticamente só em dev)
+    tests/
+    Dockerfile
+  web/                  Next.js 16 + Tailwind 4 → Cloudflare Workers (OpenNext)
+    src/
+      app/              rotas (App Router)
+      components/       componentes por domínio + ui/
+      lib/              lógica de cliente, API, store
+    public/
+    wrangler.jsonc      configuração do Worker (domínios, variáveis)
+docs/                   segurança e hardening de produção
+.github/                CI (testes API, lint/typecheck/build web)
+docker-compose.yml      Postgres + Redis + Mailpit para desenvolvimento local
+```
+
+## Desenvolvimento local
+
+```bash
+docker compose up -d                      # Postgres (com schema), Redis, Mailpit
+
+cd apps/api
+cp .env.example .env                      # preencher DATABASE_URL e SESSION_SECRET
+pip install -r requirements-dev.txt
+PYTHONPATH=src uvicorn app.main:app --reload --port 8000
+PYTHONPATH=src pytest
+
+cd apps/web
+cp .env.example .env.local
+npm install
+npm run dev                               # http://localhost:3000
+```
+
+## Deploy
+
+Deploy contínuo a partir do branch `main`:
+
+| Serviço | Plataforma | Build |
+|---|---|---|
+| Web | Cloudflare Workers `aquastats-web` (Workers Builds ligado ao GitHub) | raiz `apps/web`, `npx opennextjs-cloudflare build`, deploy `npx opennextjs-cloudflare deploy` |
+| API | Google Cloud Run `aquastats-api` (us-central1, trigger Cloud Build ligado ao GitHub) | `apps/api/Dockerfile` |
+| Base de dados | Neon Postgres | — |
+
+Variáveis de produção e segredos vivem apenas nas plataformas (Cloud Run → Variables & Secrets; Cloudflare → Worker → Settings). Ver [docs/production-hardening.md](docs/production-hardening.md) e [docs/security.md](docs/security.md).
+
+Pagamentos (Stripe) estão desligados por omissão: ativar com `BILLING_ENABLED=true` na API.

@@ -2,33 +2,35 @@
 .env
 .env.*
 !.env.example
-!**/.env.example
-.env.local
-.neon
 .dev.vars
 *.pem
 *credentials*.json
 *service-account*.json
-cloudrun_env.yaml
 
-# Dependencies and virtualenvs
-node_modules/
-infra/neon/node_modules/
-**/.venv/
-.deploy-venv/
+# Local tooling
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# Python
 __pycache__/
 *.pyc
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Build and cache
-dist/
-coverage/
-web/.next/
-web/.open-next/
-web/.wrangler/
-web/out/
+# Node / Next.js / Cloudflare
+node_modules/
+.next/
+.open-next/
+.wrangler/
+out/
 *.tsbuildinfo
+next-env.d.ts
+cloudflare-env.d.ts
 
-# Local databases and logs
+# Databases and logs
 *.db
 *.db-journal
 *.log
@@ -36,9 +38,4 @@ web/out/
 # OS
 .DS_Store
 Thumbs.db
-
-# Deploy artefacts and bootstrap secrets (never commit)
-.deploy-venv/resend.env
-.deploy-venv/pw-resend-profile/
-**/.next/standalone/
-infra/neon/node_modules/
+desktop.ini
