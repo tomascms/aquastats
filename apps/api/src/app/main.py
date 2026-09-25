@@ -31,7 +31,6 @@ from .routes.auth_routes import router as auth_router
 from .routes.data_routes import router as data_router
 from .routes.prediction_routes import router as prediction_router
 from .routes.billing_routes import router as billing_router
-from .webhooks.stripe_webhooks import router as stripe_webhooks_router
 
 init_observability()
 settings = get_settings()
@@ -66,7 +65,6 @@ app.include_router(auth_router)
 app.include_router(data_router)
 app.include_router(prediction_router)
 app.include_router(billing_router)
-app.include_router(stripe_webhooks_router)
 
 
 @app.exception_handler(RuntimeError)

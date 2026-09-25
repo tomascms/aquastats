@@ -436,12 +436,15 @@ def assert_role_signup_allowed(role: str) -> None:
         raise HTTPException(status_code=403, detail="Registo de treinador indisponível. Pagamentos em breve.")
 
 
-def provision_role(session: Session, user: User, role: str, request: Request, team_name: str = "") -> User:
+def provision_role(
+    session: Session, user: User, role: str, request: Request, team_name: str = "", paid: bool = False
+) -> User:
     if user.role != "pending":
         raise HTTPException(status_code=409, detail="Esta conta já escolheu o tipo.")
     if role not in {"coach", "swimmer"}:
         raise HTTPException(status_code=400, detail="Escolhe treinador ou atleta.")
-    assert_role_signup_allowed(role)
+    if not paid:
+        assert_role_signup_allowed(role)
     stamp = now()
     saga = SagaInstance(
         id=uuid4(),

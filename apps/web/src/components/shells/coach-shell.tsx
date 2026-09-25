@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { AppShell, type NavItem } from "@/components/shells/app-shell";
+import { SubscriptionPanel } from "@/components/billing/subscription-panel";
 import { IconCalendar, IconFlag, IconGrid, IconPeople, IconSettings } from "@/components/ui/icons";
 import { useAppState } from "@/lib/store";
 
@@ -15,13 +16,13 @@ const NAV: NavItem[] = [
 
 export function CoachShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { teamName } = useAppState();
+  const { teamName, billingLapsed } = useAppState();
 
-  if (pathname.includes("/matrix")) return <>{children}</>;
+  if (pathname.includes("/matrix") && !billingLapsed) return <>{children}</>;
 
   return (
     <AppShell nav={NAV} homeHref="/coach" context={teamName}>
-      {children}
+      {billingLapsed ? <SubscriptionPanel lapsed /> : children}
     </AppShell>
   );
 }

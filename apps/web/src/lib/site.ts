@@ -27,6 +27,15 @@ export function securityEmail(): string {
   return mailbox("security", process.env.SECURITY_EMAIL);
 }
 
+/** Seller identification required for online sales (DL 7/2004 and DL 24/2014); set in the Worker vars. */
+export function legalEntity(): { name: string; nif: string; address: string } {
+  return {
+    name: process.env.LEGAL_NAME || "",
+    nif: process.env.LEGAL_NIF || "",
+    address: process.env.LEGAL_ADDRESS || "",
+  };
+}
+
 /** SMTP transaccional: confirmação de conta e repor palavra-passe. */
 export function confirmationEmail(): string {
   return mailbox("confirmation", process.env.MAIL_FROM);

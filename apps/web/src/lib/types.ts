@@ -289,6 +289,7 @@ export type AppState = {
   swimmerId: string;
   online: boolean;
   syncing: boolean;
+  billingLapsed?: boolean;
   teamName: string;
   joinCode: string;
   athletes: Athlete[];

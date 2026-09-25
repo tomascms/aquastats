@@ -27,8 +27,12 @@ export default function PrivacyPage() {
         <li>IBAN ou dados bancários completos.</li>
         <li>A palavra-passe em texto — só um hash Argon2id.</li>
       </ul>
-      <p>
-        Este lançamento não tem pagamentos. Não há checkout nem dados de cartão na Aquastats.
+      <h2 className="pt-2 text-xl font-semibold tracking-tight">Pagamentos</h2>
+      <p className="text-mute">
+        A subscrição de treinador é paga no Stripe (Stripe Payments Europe, Ltd.), que trata os dados de pagamento como
+        responsável independente. A Aquastats recebe apenas o identificador de cliente e de subscrição, o estado, o valor e a
+        data de renovação, para saber se a conta está ativa, e guarda o registo de pagamentos pelo prazo exigido pela lei
+        fiscal.
       </p>
       <h2 className="pt-2 text-xl font-semibold tracking-tight">Cookies</h2>
       <p className="text-mute">

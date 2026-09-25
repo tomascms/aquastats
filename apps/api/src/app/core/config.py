@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     stripe_publishable_key: str = ""
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
+    stripe_price_coach_monthly: str = ""
+    # ISO date. Coach organisations created before it are exempt from paying (existing clubs).
+    billing_enforced_from: str = ""
 
     @property
     def is_production(self) -> bool:
