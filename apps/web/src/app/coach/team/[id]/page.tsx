@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo } from "react";
-import { COURSE_LABEL, GENDER_LABEL, ageFromDob, formatDatePt, formatEvent, strokeLabel } from "@/lib/labels";
+import { COURSE_LABEL, GENDER_LABEL, ageFromDob, formatDatePt, formatEvent, initials, strokeLabel } from "@/lib/labels";
+import { formatRaceClock } from "@/lib/race";
 import { athleteVolumeM, formatMeters, weeklyVolume, workoutMeters } from "@/lib/rankings";
 import { personalRecords } from "@/lib/records";
 import { formatSet } from "@/lib/set";
 import { actions, useAppState } from "@/lib/store";
-import { formatTime, hasClockTime } from "@/lib/swim-time";
+import { hasClockTime } from "@/lib/swim-time";
 
 export default function AthletePage() {
   const params = useParams<{ id: string }>();
@@ -44,164 +45,203 @@ export default function AthletePage() {
     );
   }
 
+  const weeks = weeklyVolume(workouts, athlete.id, 10);
+  const thisWeek = weeks[weeks.length - 1]?.meters ?? 0;
+  const total = athleteVolumeM(workouts, athlete.id);
+  const maxWeek = Math.max(...weeks.map((week) => week.meters), 1);
+  const raceCount = raceSessions.filter((item) => item.athleteId === athlete.id).length + mineResults.filter((item) => item.result).length;
+  const age = ageFromDob(athlete.dateOfBirth);
+  const seconds = (mm: number, ss: number, cc: number) => mm * 60 + ss + cc / 100;
+
   return (
-    <div className="space-y-4">
-      <Link href="/coach/team" className="text-sm text-mute">
+    <div className="space-y-6">
+      <Link href="/coach/team" className="text-sm font-semibold text-pool hover:underline">
         ← Equipa
       </Link>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{athlete.name}</h1>
-          <p className="text-sm text-mute">
-            {[
-              strokeLabel(athlete.primaryStroke),
-              athlete.gender === "M" || athlete.gender === "F" ? GENDER_LABEL[athlete.gender] : "",
-              ageFromDob(athlete.dateOfBirth) != null ? `${ageFromDob(athlete.dateOfBirth)} anos` : "",
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
+
+      <section className="overflow-hidden rounded-2xl bg-aqua text-white">
+        <div className="flex flex-wrap items-center gap-5 px-6 pb-5 pt-6">
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/12 font-display text-3xl font-bold">
+            {initials(athlete.name)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-white">{athlete.name}</h1>
+            <p className="mt-1 text-sm text-white/70">
+              {[
+                strokeLabel(athlete.primaryStroke),
+                athlete.gender === "M" || athlete.gender === "F" ? GENDER_LABEL[athlete.gender] : "",
+                age != null ? `${age} anos` : "",
+              ]
+                .filter(Boolean)
+                .join(" · ") || "Sem dados de perfil"}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/coach/provas?atleta=${athlete.id}`}
+              className="inline-flex min-h-10 items-center rounded-lg bg-white px-4 text-sm font-semibold text-aqua hover:bg-aqua-soft"
+            >
+              Ver análise
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Remover ${athlete.name} da equipa?\n\nPerde acesso à equipa na app, mas o histórico de treinos e provas fica guardado para análises.`,
+                  )
+                ) {
+                  void actions.removeAthlete(athlete.id).then(() => router.push("/coach/team"));
+                }
+              }}
+              className="min-h-10 rounded-lg border border-white/25 px-4 text-sm font-semibold text-white/85 hover:border-white/60"
+            >
+              Remover da equipa
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Link
-            href={`/coach/provas?atleta=${athlete.id}`}
-            className="btn-primary h-10"
-          >
-            Análise
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              if (
-                window.confirm(
-                  `Remover ${athlete.name} da equipa?\n\nPerde acesso à equipa na app, mas o histórico de treinos e provas fica guardado para análises.`,
-                )
-              ) {
-                void actions.removeAthlete(athlete.id).then(() => router.push("/coach/team"));
-              }
-            }}
-            className="btn-ghost h-10 text-coral"
-          >
-            Remover da equipa
-          </button>
-        </div>
-      </div>
-
-      <section className="card p-4">
-        <h2 className="text-lg font-semibold">Volume</h2>
-        {(() => {
-          const weeks = weeklyVolume(workouts, athlete.id, 8);
-          const thisWeek = weeks[weeks.length - 1]?.meters ?? 0;
-          const total = athleteVolumeM(workouts, athlete.id);
-          const max = Math.max(...weeks.map((week) => week.meters), 1);
-          return (
-            <>
-              <p className="mt-2 text-sm text-mute">
-                {formatMeters(total)} acumulados · {formatMeters(thisWeek)} esta semana ·{" "}
-                {raceSessions.filter((item) => item.athleteId === athlete.id).length} sessões de prova
-              </p>
-              <div className="mt-3 flex h-16 items-end gap-1">
-                {weeks.map((week) => (
-                  <div key={week.start} className="flex flex-1 flex-col items-center justify-end gap-1">
-                    <div
-                      className="w-full rounded-sm bg-aqua/80"
-                      style={{ height: `${Math.max(6, (week.meters / max) * 100)}%` }}
-                      title={`${week.start} · ${formatMeters(week.meters)}`}
-                    />
-                  </div>
-                ))}
-              </div>
-            </>
-          );
-        })()}
+        <dl className="grid grid-cols-2 border-t border-white/15 sm:grid-cols-4">
+          {[
+            { label: "Volume total", value: formatMeters(total) },
+            { label: "Esta semana", value: formatMeters(thisWeek) },
+            { label: "Treinos", value: String(mineWorkouts.length) },
+            { label: "Registos de prova", value: String(raceCount) },
+          ].map((item) => (
+            <div key={item.label} className="border-white/15 px-6 py-4 [&:not(:last-child)]:border-r">
+              <dt className="text-xs text-white/65">{item.label}</dt>
+              <dd className="font-display text-3xl font-bold tabular">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
-      <section className="card p-4">
-        <h2 className="text-lg font-semibold">Recordes pessoais</h2>
-        {records.length === 0 ? (
-          <p className="mt-2 text-sm text-mute">Ainda não há recordes pessoais.</p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {records.map((record) => (
-              <li key={`${record.course}-${record.stroke}-${record.distanceM}`} className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{formatEvent(record.distanceM, record.stroke)}</p>
-                  <p className="text-[11px] text-mute">
-                    {COURSE_LABEL[record.course]} · {record.date ? formatDatePt(record.date) : "—"}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="font-mono text-lg text-aqua">{formatTime(record.mm, record.ss, record.cc)}</p>
-                  {record.source === "seed" && record.splits?.length ? (
-                    <p className="mt-1 text-[11px] text-mute">
-                      {record.splits
-                        .map((split) => `${split.atM} m ${formatTime(split.mm, split.ss, split.cc)}`)
-                        .join(" · ")}
-                    </p>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="card p-4">
-        <h2 className="text-lg font-semibold">Competições</h2>
-        {mineResults.length === 0 ? (
-          <p className="mt-2 text-sm text-mute">Ainda não foi convocado.</p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {mineResults.map(({ entry, meet, result }) => (
-              <li key={entry.id}>
-                <Link
-                  href={`/coach/competicoes/${meet?.id}/resultados/${entry.id}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-line bg-ink-2 px-3 py-2"
-                >
-                  <div>
-                    <p className="font-semibold">{meet?.title}</p>
-                    <p className="text-[11px] text-mute">
-                      {formatDatePt(meet?.date ?? "")} · {formatEvent(entry.distanceM, entry.stroke)}
-                      {meet ? ` · ${COURSE_LABEL[meet.course]}` : ""}
-                    </p>
-                  </div>
-                  <p className="font-mono text-sm text-mist">
-                    {result && hasClockTime(result.mm, result.ss, result.cc)
-                      ? formatTime(result.mm, result.ss, result.cc)
-                      : "—"}
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="card p-4">
-        <h2 className="text-lg font-semibold">Treinos</h2>
-        {mineWorkouts.length === 0 ? (
-          <p className="mt-2 text-sm text-mute">Ainda não entrou em nenhum treino.</p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {mineWorkouts.map((workout) => {
-              const logs = timeLogs.filter((log) => log.workoutId === workout.id && log.athleteId === athlete.id);
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+        <section className="rounded-2xl border border-line bg-panel p-5">
+          <h2 className="font-display text-2xl font-bold">Volume semanal</h2>
+          <p className="text-sm text-mute">Últimas 10 semanas.</p>
+          <div className="mt-5 flex h-44 items-end gap-2">
+            {weeks.map((week, index) => {
+              const current = index === weeks.length - 1;
               return (
-                <li key={workout.id}>
-                  <Link href={`/coach/workouts/${workout.id}`} className="block rounded-lg border border-line bg-ink-2 px-3 py-2">
-                    <p className="font-semibold">{workout.title}</p>
-                    <p className="text-[11px] text-mute">
-                      {formatDatePt(workout.date)} · {formatMeters(workoutMeters(workout))} · {logs.length} tempos
-                    </p>
-                    <p className="mt-1 font-mono text-[11px] text-aqua">
-                      {workout.blocks.map((block) => formatSet(block)).join(" · ")}
-                    </p>
-                  </Link>
-                </li>
+                <div key={week.start} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
+                  <span className="text-[11px] tabular text-mute">{week.meters ? (week.meters / 1000).toFixed(1) : ""}</span>
+                  <div
+                    className={`w-full rounded-t-md ${current ? "bg-pool" : week.meters ? "bg-aqua" : "bg-line"}`}
+                    style={{ height: `${Math.max(3, (week.meters / maxWeek) * 100)}%` }}
+                    title={`${formatDatePt(week.start)} · ${formatMeters(week.meters)}`}
+                  />
+                  <span className={`text-[11px] tabular ${current ? "font-semibold text-pool" : "text-mute"}`}>
+                    {formatDatePt(week.start).slice(0, 5)}
+                  </span>
+                </div>
               );
             })}
-          </ul>
-        )}
-      </section>
+          </div>
+          <p className="mt-2 text-xs text-mute">Valores em km. A semana atual está destacada.</p>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-line bg-panel">
+          <div className="px-5 pb-3 pt-5">
+            <h2 className="font-display text-2xl font-bold">Recordes pessoais</h2>
+          </div>
+          {records.length === 0 ? (
+            <p className="px-5 pb-6 text-sm text-mute">Ainda não há recordes pessoais.</p>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead className="bg-panel-2 text-xs font-semibold text-mute">
+                <tr>
+                  <th className="px-5 py-2.5">Prova</th>
+                  <th className="px-3 py-2.5">Piscina</th>
+                  <th className="px-5 py-2.5 text-right">Tempo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((record) => (
+                  <tr key={`${record.course}-${record.stroke}-${record.distanceM}`} className="border-t border-line">
+                    <td className="px-5 py-3">
+                      <span className="font-semibold text-mist">{formatEvent(record.distanceM, record.stroke)}</span>
+                      <span className="block text-xs text-mute">{record.date ? formatDatePt(record.date) : "—"}</span>
+                    </td>
+                    <td className="px-3 py-3 text-mute">{COURSE_LABEL[record.course]}</td>
+                    <td className="px-5 py-3 text-right">
+                      <span className="font-display text-2xl font-bold tabular text-mist">
+                        {formatRaceClock(seconds(record.mm, record.ss, record.cc))}
+                      </span>
+                      {record.source === "seed" && record.splits?.length ? (
+                        <span className="block text-[11px] text-mute">
+                          {record.splits.map((split) => `${split.atM} m ${formatRaceClock(seconds(split.mm, split.ss, split.cc))}`).join(" · ")}
+                        </span>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <section className="overflow-hidden rounded-2xl border border-line bg-panel">
+          <h2 className="px-5 pb-3 pt-5 font-display text-2xl font-bold">Competições</h2>
+          {mineResults.length === 0 ? (
+            <p className="px-5 pb-6 text-sm text-mute">Ainda não foi convocado.</p>
+          ) : (
+            <ul>
+              {mineResults.map(({ entry, meet, result }) => (
+                <li key={entry.id} className="border-t border-line">
+                  <Link
+                    href={`/coach/competicoes/${meet?.id}/resultados/${entry.id}`}
+                    className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-panel-2"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold text-mist">
+                        {formatEvent(entry.distanceM, entry.stroke)} · {meet?.title}
+                      </span>
+                      <span className="block text-xs text-mute">
+                        {formatDatePt(meet?.date ?? "")}
+                        {meet ? ` · ${COURSE_LABEL[meet.course]}` : ""}
+                      </span>
+                    </span>
+                    <span className="font-display text-xl font-bold tabular text-mist">
+                      {result && hasClockTime(result.mm, result.ss, result.cc)
+                        ? formatRaceClock(seconds(result.mm, result.ss, result.cc))
+                        : "—"}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-line bg-panel">
+          <h2 className="px-5 pb-3 pt-5 font-display text-2xl font-bold">Treinos</h2>
+          {mineWorkouts.length === 0 ? (
+            <p className="px-5 pb-6 text-sm text-mute">Ainda não entrou em nenhum treino.</p>
+          ) : (
+            <ul className="max-h-[420px] overflow-auto">
+              {mineWorkouts.map((workout) => {
+                const logs = timeLogs.filter((log) => log.workoutId === workout.id && log.athleteId === athlete.id);
+                return (
+                  <li key={workout.id} className="border-t border-line">
+                    <Link href={`/coach/workouts/${workout.id}`} className="block px-5 py-3 hover:bg-panel-2">
+                      <span className="flex items-baseline justify-between gap-3">
+                        <span className="font-semibold text-mist">{workout.title}</span>
+                        <span className="font-display text-lg font-bold tabular">{formatMeters(workoutMeters(workout))}</span>
+                      </span>
+                      <span className="block text-xs text-mute">
+                        {formatDatePt(workout.date)} · {logs.length} tempos
+                      </span>
+                      <span className="mt-1 block truncate text-xs text-sand">{workout.blocks.map((block) => formatSet(block)).join(" · ")}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

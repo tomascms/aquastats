@@ -296,16 +296,17 @@ export function TreinoDashboard({
           <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
             <div>
               <h3 className="font-display text-2xl font-bold">Distribuição dos tempos</h3>
-              <p className="text-sm text-mute">Quantas repetições caíram em cada faixa de tempo, real e estimado.</p>
+              <p className="text-sm text-mute">Onde se concentram os tempos reais e os estimados. Passa o cursor para ler cada ponto.</p>
             </div>
             <Legend
               items={[
-                { swatch: <span className="h-2.5 w-2.5 rounded-sm bg-aqua" />, label: "Real" },
-                { swatch: <span className="h-2.5 w-2.5 rounded-sm border-2 border-pool bg-pool-soft" />, label: "Estimado" },
+                { swatch: <span className="h-0.5 w-5 bg-[#4f46c8]" />, label: "Real" },
+                { swatch: <span className="h-0.5 w-5 border-t-2 border-dashed border-pool" />, label: "Estimado" },
+                { swatch: <span className="h-3 w-0.5 bg-[#2fae4a]" />, label: "Referências" },
               ]}
             />
           </header>
-          <Histogram real={visible.map((row) => row.timeS)} estimated={paired.map((item) => item.target.targetS)} />
+          <DensityChart real={visible.map((row) => row.timeS)} estimated={paired.map((item) => item.target.targetS)} />
         </section>
 
         <section className="rounded-2xl border border-line bg-panel p-5">
@@ -649,81 +650,150 @@ function RepTimeline({ items, predictions }: { items: TrainingRep[]; predictions
   );
 }
 
-function Histogram({ real, estimated }: { real: number[]; estimated: number[] }) {
-  if (!real.length) return <EmptyChart text="Nenhuma repetição com estes filtros." />;
-  const all = [...real, ...estimated];
-  const min = Math.min(...all);
-  const max = Math.max(...all);
-  const span = Math.max(max - min, 0.4);
-  const binCount = Math.min(14, Math.max(5, Math.round(Math.sqrt(all.length) * 1.6)));
-  const rawWidth = span / binCount;
-  const binWidth = Math.ceil(rawWidth * 10) / 10 || 0.1;
-  const start = Math.floor(min * 10) / 10;
-  const bins = Array.from({ length: Math.ceil((max - start) / binWidth + 1e-9) || 1 }, (_, i) => ({
-    lo: start + i * binWidth,
-    hi: start + (i + 1) * binWidth,
-    real: 0,
-    est: 0,
-  }));
-  const place = (value: number, key: "real" | "est") => {
-    const idx = Math.min(bins.length - 1, Math.max(0, Math.floor((value - start) / binWidth)));
-    bins[idx][key] += 1;
-  };
-  real.forEach((value) => place(value, "real"));
-  estimated.forEach((value) => place(value, "est"));
-  const peak = Math.max(1, ...bins.map((bin) => Math.max(bin.real, bin.est)));
+const SPECTRUM_LINE = "#4f46c8";
+const MARKER = "#2fae4a";
 
-  const width = 820;
-  const height = 280;
-  const pad = { l: 40, r: 16, t: 16, b: 44 };
+function gaussianDensity(values: number[], bandwidth: number) {
+  const norm = 1 / (values.length * bandwidth * Math.sqrt(2 * Math.PI));
+  return (x: number) => values.reduce((sum, v) => sum + Math.exp(-0.5 * ((x - v) / bandwidth) ** 2), 0) * norm;
+}
+
+function silverman(values: number[]): number {
+  const s = statsOf(values);
+  return Math.max(0.12, 1.06 * (s.sd || 0.3) * Math.pow(values.length, -0.2));
+}
+
+function DensityChart({ real, estimated }: { real: number[]; estimated: number[] }) {
+  const [cursor, setCursor] = useState<number | null>(null);
+  if (!real.length) return <EmptyChart text="Nenhuma repetição com estes filtros." />;
+
+  const width = 860;
+  const height = 360;
+  const pad = { l: 58, r: 20, t: 22, b: 40 };
   const innerW = width - pad.l - pad.r;
   const innerH = height - pad.t - pad.b;
-  const slot = innerW / bins.length;
-  const barW = Math.min(26, slot * 0.36);
-  const y = (n: number) => pad.t + innerH - (n / peak) * innerH;
-  const every = Math.ceil(bins.length / 8);
+
+  const h = silverman(real);
+  const all = [...real, ...estimated];
+  const lo = Math.min(...all) - 3 * h;
+  const hi = Math.max(...all) + 3 * h;
+  // Density per 0.1 s: "how many reps land in a tenth of a second around this time".
+  const scale = 0.1;
+  const realFn = gaussianDensity(real, h);
+  const estFn = estimated.length ? gaussianDensity(estimated, silverman(estimated)) : null;
+  const samples = 220;
+  const xs = Array.from({ length: samples + 1 }, (_, i) => lo + ((hi - lo) * i) / samples);
+  const realY = xs.map((x) => realFn(x) * real.length * scale);
+  const estY = estFn ? xs.map((x) => estFn(x) * estimated.length * scale) : [];
+  const top = Math.max(...realY, ...estY) * 1.12 || 1;
+
+  const px = (t: number) => pad.l + ((t - lo) / (hi - lo)) * innerW;
+  const py = (v: number) => pad.t + innerH - (v / top) * innerH;
+  const path = (ys: number[]) => ys.map((v, i) => `${i ? "L" : "M"}${px(xs[i]).toFixed(1)} ${py(v).toFixed(1)}`).join(" ");
+
+  const realStats = statsOf(real);
+  const estStats = statsOf(estimated);
+  const markers = [
+    { t: realStats.best, label: "melhor" },
+    { t: realStats.mean, label: "média real" },
+    ...(estimated.length ? [{ t: estStats.mean, label: "média estimada" }] : []),
+  ];
+
+  const xTicks = niceTicks(lo, hi, 8);
+  const yTicks = niceTicks(0, top, 6);
+  const cursorT = cursor ?? realStats.mean;
+  const readReal = realFn(cursorT) * real.length * scale;
+  const readEst = estFn ? estFn(cursorT) * estimated.length * scale : null;
+
+  function onMove(event: React.PointerEvent<SVGSVGElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * width;
+    if (x < pad.l || x > width - pad.r) return;
+    setCursor(lo + ((x - pad.l) / innerW) * (hi - lo));
+  }
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label="Distribuição dos tempos reais e estimados">
-      {niceTicks(0, peak, Math.min(4, peak))
-        .filter((tick) => Number.isInteger(tick))
-        .map((tick) => (
-          <g key={tick}>
-            <line x1={pad.l} x2={width - pad.r} y1={y(tick)} y2={y(tick)} stroke={GRID} />
-            <text x={pad.l - 8} y={y(tick) + 4} textAnchor="end" fill={MUTE} fontSize="12">
-              {tick}
+    <div className="overflow-hidden rounded-lg border border-line">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-line bg-panel-2 px-3 py-2 text-xs text-mute">
+        <Readout label="Tempo" value={clock(cursorT)} />
+        <Readout label="Real" value={readReal.toFixed(2)} />
+        {readEst != null ? <Readout label="Estimado" value={readEst.toFixed(2)} /> : null}
+        <span>reps por 0,1 s</span>
+        <span className="ml-auto font-semibold text-mist tabular">
+          TOT {real.length} reps{estimated.length ? ` · ${estimated.length} estimadas` : ""}
+        </span>
+      </div>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-auto w-full touch-none bg-white"
+        role="img"
+        aria-label="Curva de distribuição dos tempos reais e estimados"
+        onPointerMove={onMove}
+        onPointerLeave={() => setCursor(null)}
+      >
+        {yTicks.map((tick) => (
+          <g key={`y${tick}`}>
+            <line x1={pad.l} x2={width - pad.r} y1={py(tick)} y2={py(tick)} stroke="#eef1f5" />
+            <text x={pad.l - 8} y={py(tick) + 4} textAnchor="end" fill={MUTE} fontSize="11" style={{ fontVariantNumeric: "tabular-nums" }}>
+              {tick.toFixed(tick < 1 ? 2 : 1)}
             </text>
           </g>
         ))}
-      {bins.map((bin, i) => {
-        const cx = pad.l + slot * i + slot / 2;
-        return (
-          <g key={i}>
-            <rect x={cx - barW - 1} y={y(bin.real)} width={barW} height={pad.t + innerH - y(bin.real)} rx={3} fill={NAVY}>
-              <title>{`${clock(bin.lo)}–${clock(bin.hi)} · real ${bin.real}`}</title>
-            </rect>
-            <rect
-              x={cx + 1}
-              y={y(bin.est)}
-              width={barW}
-              height={pad.t + innerH - y(bin.est)}
-              rx={3}
-              fill="#e6f0fa"
-              stroke={POOL}
-              strokeWidth={1.5}
-            >
-              <title>{`${clock(bin.lo)}–${clock(bin.hi)} · estimado ${bin.est}`}</title>
-            </rect>
-            {i % every === 0 ? (
-              <text x={cx} y={height - 16} textAnchor="middle" fill={MUTE} fontSize="12" style={{ fontVariantNumeric: "tabular-nums" }}>
-                {clock(bin.lo)}
-              </text>
-            ) : null}
+        {xTicks.map((tick) => (
+          <g key={`x${tick}`}>
+            <line x1={px(tick)} x2={px(tick)} y1={pad.t} y2={pad.t + innerH} stroke="#eef1f5" />
+            <text x={px(tick)} y={height - 16} textAnchor="middle" fill={MUTE} fontSize="11" style={{ fontVariantNumeric: "tabular-nums" }}>
+              {clock(tick)}
+            </text>
           </g>
-        );
-      })}
-      <line x1={pad.l} x2={width - pad.r} y1={pad.t + innerH} y2={pad.t + innerH} stroke="#bccad8" />
-    </svg>
+        ))}
+        <rect x={pad.l} y={pad.t} width={innerW} height={innerH} fill="none" stroke="#c9d3de" />
+        {[...markers]
+          .sort((a, b) => a.t - b.t)
+          .map((marker, index) => {
+            const x = px(marker.t);
+            const nearRight = x > width - pad.r - 150;
+            return (
+              <g key={marker.label}>
+                <line x1={x} x2={x} y1={pad.t} y2={pad.t + innerH} stroke={MARKER} strokeWidth={1.2} />
+                <text
+                  x={nearRight ? x - 5 : x + 5}
+                  y={pad.t + 14 + index * 15}
+                  textAnchor={nearRight ? "end" : "start"}
+                  fill={MARKER}
+                  fontSize="11"
+                  paintOrder="stroke"
+                  stroke="#fff"
+                  strokeWidth={3}
+                >
+                  {marker.label} {clock(marker.t)}
+                </text>
+              </g>
+            );
+          })}
+        {estY.length ? <path d={path(estY)} fill="none" stroke={POOL} strokeWidth={1.4} strokeDasharray="5 4" /> : null}
+        <path d={path(realY)} fill="none" stroke={SPECTRUM_LINE} strokeWidth={1.6} />
+        {cursor != null ? (
+          <g pointerEvents="none">
+            <line x1={px(cursor)} x2={px(cursor)} y1={pad.t} y2={pad.t + innerH} stroke="#8a97a8" strokeDasharray="3 3" />
+            <circle cx={px(cursor)} cy={py(readReal)} r={3.5} fill={SPECTRUM_LINE} />
+            {readEst != null ? <circle cx={px(cursor)} cy={py(readEst)} r={3.5} fill={POOL} /> : null}
+          </g>
+        ) : null}
+        <text x={width - pad.r} y={height - 2} textAnchor="end" fill={MUTE} fontSize="11">
+          tempo
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+function Readout({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {label}
+      <span className="min-w-16 rounded border border-line-strong bg-white px-1.5 py-0.5 font-semibold text-mist tabular">{value}</span>
+    </span>
   );
 }
 

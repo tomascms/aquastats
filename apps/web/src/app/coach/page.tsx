@@ -7,11 +7,12 @@ import { Suspense, useMemo, useState } from "react";
 import { MonthCalendar } from "@/components/ui/month-calendar";
 import { OnboardingBanner } from "@/components/coach/onboarding-banner";
 import { CalendarSkeleton } from "@/components/ui/skeleton";
-import { eachIsoDay, inDateRange, todayIso } from "@/lib/dates";
+import { WEEKDAYS, addDays, eachIsoDay, inDateRange, todayIso, weekStartMonday } from "@/lib/dates";
 import { COURSE_LABEL, SHIFT_LABEL, formatDatePt, formatDateRange } from "@/lib/labels";
 import { formatMeters, meetEnd, workoutMeters } from "@/lib/rankings";
 import { formatSet } from "@/lib/set";
 import { actions, useAppState, useAuthBoot } from "@/lib/store";
+import type { Competition, Workout } from "@/lib/types";
 
 const MONTH_SHORT = new Intl.DateTimeFormat("pt-PT", { month: "short" });
 
@@ -105,20 +106,18 @@ function CoachCalendar() {
         </div>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-3" aria-label="Resumo da equipa">
-        <div className="stat-card px-5 py-4">
-          <p className="metric-label">Treinos agendados</p>
-          <p className="metric-value mt-2">{upcomingWorkouts}</p>
-        </div>
-        <div className="stat-card px-5 py-4">
-          <p className="metric-label">Competições por vir</p>
-          <p className="metric-value mt-2">{upcomingCompetitions}</p>
-        </div>
-        <div className="stat-card px-5 py-4">
-          <p className="metric-label">Atletas ativos</p>
-          <p className="metric-value mt-2">{activeAthletes}</p>
-        </div>
-      </section>
+      <WeekStrip
+        selected={selected}
+        onSelect={(iso) => {
+          setSelected(iso);
+          setCursor(iso);
+        }}
+        workouts={workouts}
+        competitions={competitions}
+        summary={`${activeAthletes} ${activeAthletes === 1 ? "atleta" : "atletas"} · ${upcomingWorkouts} ${
+          upcomingWorkouts === 1 ? "treino agendado" : "treinos agendados"
+        } · ${upcomingCompetitions} ${upcomingCompetitions === 1 ? "competição por vir" : "competições por vir"}`}
+      />
 
       {nextEvents.length > 0 ? (
         <section className="data-panel overflow-hidden">
@@ -239,5 +238,128 @@ function CoachCalendar() {
         </section>
       </div>
     </div>
+  );
+}
+
+function WeekStrip({
+  selected,
+  onSelect,
+  workouts,
+  competitions,
+  summary,
+}: {
+  selected: string;
+  onSelect: (iso: string) => void;
+  workouts: Workout[];
+  competitions: Competition[];
+  summary: string;
+}) {
+  const start = weekStartMonday(selected);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const today = todayIso();
+  const perDay = days.map((iso) => ({
+    iso,
+    sessions: workouts.filter((workout) => workout.date === iso),
+    meets: competitions.filter((meet) => inDateRange(iso, meet.date, meetEnd(meet))),
+  }));
+  const weekMeters = perDay.reduce(
+    (sum, day) => sum + day.sessions.reduce((acc, workout) => acc + workoutMeters(workout), 0),
+    0,
+  );
+  const sessionCount = perDay.reduce((sum, day) => sum + day.sessions.length, 0);
+  const end = days[6];
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-line bg-panel" aria-label="Semana">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => onSelect(addDays(selected, -7))}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-mute hover:border-aqua hover:text-mist"
+            aria-label="Semana anterior"
+          >
+            ‹
+          </button>
+          <div>
+            <h2 className="font-display text-2xl font-bold leading-none">
+              Semana de {formatDatePt(start).slice(0, 5)} a {formatDatePt(end).slice(0, 5)}
+            </h2>
+            <p className="mt-1 text-xs text-mute">{summary}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onSelect(addDays(selected, 7))}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-mute hover:border-aqua hover:text-mist"
+            aria-label="Semana seguinte"
+          >
+            ›
+          </button>
+        </div>
+        <dl className="flex gap-6 text-right">
+          <div>
+            <dt className="text-xs text-mute">Sessões</dt>
+            <dd className="font-display text-2xl font-bold tabular">{sessionCount}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-mute">Volume</dt>
+            <dd className="font-display text-2xl font-bold tabular">{formatMeters(weekMeters)}</dd>
+          </div>
+        </dl>
+      </header>
+      <ol className="grid grid-cols-7 divide-x divide-line overflow-x-auto">
+        {perDay.map((day, index) => {
+          const isSelected = day.iso === selected;
+          const isToday = day.iso === today;
+          const meters = day.sessions.reduce((sum, workout) => sum + workoutMeters(workout), 0);
+          return (
+            <li key={day.iso} className="min-w-[92px]">
+              <button
+                type="button"
+                onClick={() => onSelect(day.iso)}
+                aria-pressed={isSelected}
+                className={`flex h-full min-h-32 w-full flex-col gap-1.5 px-2.5 py-3 text-left transition-colors ${
+                  isSelected ? "bg-aqua text-white" : "hover:bg-panel-2"
+                }`}
+              >
+                <span className="flex items-baseline justify-between gap-1">
+                  <span className={`text-xs font-semibold ${isSelected ? "text-white/70" : "text-mute"}`}>{WEEKDAYS[index]}</span>
+                  <span
+                    className={`font-display text-xl font-bold leading-none tabular ${
+                      isToday && !isSelected ? "rounded bg-pool px-1 text-white" : ""
+                    }`}
+                  >
+                    {Number(day.iso.slice(8, 10))}
+                  </span>
+                </span>
+                {day.meets.map((meet) => (
+                  <span
+                    key={meet.id}
+                    className={`truncate rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                      isSelected ? "bg-white/15 text-white" : "bg-[#fdecea] text-coral"
+                    }`}
+                  >
+                    {meet.title}
+                  </span>
+                ))}
+                {day.sessions.map((workout) => (
+                  <span
+                    key={workout.id}
+                    className={`truncate rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                      isSelected ? "bg-white/15 text-white" : "bg-pool-soft text-pool"
+                    }`}
+                  >
+                    {SHIFT_LABEL[workout.shift]} · {formatMeters(workoutMeters(workout))}
+                  </span>
+                ))}
+                {meters ? (
+                  <span className={`mt-auto text-xs tabular ${isSelected ? "text-white/70" : "text-mute"}`}>{formatMeters(meters)}</span>
+                ) : null}
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
