@@ -1,6 +1,6 @@
 import { BLOCK_LABEL, SHIFT_LABEL, formatDatePt } from "./labels";
 import { formatSendOff } from "./send-off";
-import { formatDistance } from "./distances";
+import { formatDistance, formatReps } from "./distances";
 import { INTENSITY_LABEL, formatGear, makeDetail, readySegments } from "./set";
 import type { RepDetail, SetSegment, Workout, WorkoutBlock } from "./types";
 
@@ -36,7 +36,7 @@ export type WrittenLine = {
 
 export function writtenSegmentLines(segment: SetSegment, noSendOff: boolean, showStart = true): WrittenLine[] {
   const details = segment.details.length ? segment.details : [makeDetail(segment)];
-  const head = `${segment.reps}×${formatDistance(segment.distanceM)}`;
+  const head = formatReps(segment.reps, segment.distanceM);
   if (details.every((detail) => sameDetail(detail, details[0]))) {
     return [{ text: `${head} ${formatDetail(details[0], noSendOff, showStart)}`.trim(), indent: 0 }];
   }

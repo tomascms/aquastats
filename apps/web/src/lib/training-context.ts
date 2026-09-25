@@ -1,5 +1,5 @@
 import { WEEKDAYS, parseIsoDate, weekStartMonday } from "./dates";
-import { formatDistance } from "./distances";
+import { formatDistance, formatReps } from "./distances";
 import { BLOCK_LABEL, SHIFT_LABEL, STROKE_LABEL, strokeLabel } from "./labels";
 import { workoutMeters } from "./rankings";
 import { formatSendOff } from "./send-off";
@@ -289,7 +289,7 @@ function walkWorkout(workout: Workout): SessionSlot[] {
           segmentIndex: inner.segmentIndex,
           segmentReps: segment?.reps ?? 1,
           itemIndex: inner.itemIndex,
-          setShape: `${segment?.reps ?? 1}×${formatDistance(inner.distanceM)}`,
+          setShape: formatReps(segment?.reps ?? 1, inner.distanceM),
           mixedIntensity: new Set(details.map((detail) => detail.intensity)).size > 1,
           easierMiddle: easierMiddleOf(details),
           meanRest: rests.length ? mean(rests) : inner.sendOffSeconds,
@@ -469,7 +469,7 @@ export function annotateTrainingReps(
         segmentReps: observedReps,
         repInSegment: observedPosition,
         distanceM: slot.distanceM,
-        setShape: `${observedReps}×${formatDistance(slot.distanceM)}`,
+        setShape: formatReps(observedReps, slot.distanceM),
         intensity: slot.intensity,
         restSeconds: slot.restSeconds,
         restLabel: formatSendOff(slot.restSeconds),

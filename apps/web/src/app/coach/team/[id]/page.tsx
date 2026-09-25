@@ -75,6 +75,32 @@ export default function AthletePage() {
                 .filter(Boolean)
                 .join(" · ") || "Sem dados de perfil"}
             </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-white/65">Género</span>
+              {(["M", "F"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={athlete.gender === value}
+                  onClick={() =>
+                    void actions.updateAthlete(athlete.id, {
+                      name: athlete.name,
+                      primaryStroke: athlete.primaryStroke || "",
+                      isPlaceholder: Boolean(athlete.isPlaceholder),
+                      gender: value,
+                    })
+                  }
+                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                    athlete.gender === value ? "bg-white text-aqua" : "border border-white/30 text-white/80 hover:border-white/70"
+                  }`}
+                >
+                  {GENDER_LABEL[value]}
+                </button>
+              ))}
+              {athlete.gender !== "M" && athlete.gender !== "F" ? (
+                <span className="text-xs text-[#ffd8a8]">Necessário para calcular os pontos FINA.</span>
+              ) : null}
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link

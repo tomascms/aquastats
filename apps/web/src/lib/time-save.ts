@@ -13,6 +13,15 @@ import type { CellRef, SplitTime, Stroke, TimeLog, TimeParts } from "./types";
 
 const DEBOUNCE_MS = 500;
 
+function contentHash(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 export type TimeSavePayload = {
   payload: Record<string, unknown>;
   logKey: string;
@@ -81,7 +90,12 @@ export function buildTimeDraft(
   const deleting = !hasFinal && splits.length === 0 && !skipped;
   const recordedAt = existing?.recordedAt ?? new Date().toISOString();
   const stableId = existing?.id ?? crypto.randomUUID();
-  const idempotencyKey = `time-${logKey}-${stableId}`;
+  // The key must change with the value: the API rejects a reused key carrying a different body (409),
+  // which silently dropped every edit of an already-saved time.
+  const fingerprint = contentHash(
+    deleting ? "delete" : JSON.stringify({ mm, ss, cc, splits, stroke: nextStroke, skipped }),
+  );
+  const idempotencyKey = `time-${logKey}-${stableId}-${fingerprint}`;
 
   const payload = deleting
     ? {

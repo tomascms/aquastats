@@ -1,4 +1,4 @@
-import { cleanSplitMarks, formatDistance, MIN_DISTANCE } from "./distances";
+import { cleanSplitMarks, formatDistance, formatReps, MIN_DISTANCE } from "./distances";
 import { DEFAULT_SEND_OFF, snapSendOff } from "./send-off";
 import type { BlockType, DraftBlock, Gear, Intensity, RepDetail, SetSegment, WorkoutBlock } from "./types";
 
@@ -138,7 +138,7 @@ export function formatSegment(segment: SetSegment): string {
   const gears = details.map((detail) => formatGear(detail.gear));
   const sameGear = gears.every((item) => item === gears[0]);
   const gear = sameGear ? gears[0] : "";
-  return `${segment.reps}×${formatDistance(segment.distanceM)} ${vel}${gear ? ` ${gear}` : ""}`;
+  return `${formatReps(segment.reps, segment.distanceM)} ${vel}${gear ? ` ${gear}` : ""}`;
 }
 
 export function formatSet(block: Pick<WorkoutBlock, "rounds" | "segments">): string {

@@ -31,48 +31,98 @@ export type RaceRecord = {
   meetTitle: string;
 };
 
+// World Aquatics Points base times (1000 points), official document "Points - Base Times SCM and LCM 2026".
+// SCM valid 01.09.2026–31.08.2027, LCM valid 01.01.2026–31.12.2026. Keyed gender:course:stroke:distance.
 const BASE: Record<string, number> = {
-  "lcm:free:50": 20.91,
-  "lcm:free:100": 46.4,
-  "lcm:free:200": 102.0,
-  "lcm:free:400": 220.0,
-  "lcm:free:800": 452.0,
-  "lcm:free:1500": 858.0,
-  "scm:free:50": 20.16,
-  "scm:free:100": 44.84,
-  "scm:free:200": 99.0,
-  "scm:free:400": 212.0,
-  "scm:free:800": 436.0,
-  "scm:free:1500": 833.0,
-  "lcm:back:50": 23.55,
-  "lcm:back:100": 51.6,
-  "lcm:back:200": 111.0,
-  "scm:back:50": 22.22,
-  "scm:back:100": 48.9,
-  "scm:back:200": 106.0,
-  "lcm:breast:50": 25.95,
-  "lcm:breast:100": 56.88,
-  "lcm:breast:200": 126.0,
-  "scm:breast:50": 24.95,
-  "scm:breast:100": 55.28,
-  "scm:breast:200": 121.0,
-  "lcm:fly:50": 22.27,
-  "lcm:fly:100": 49.45,
-  "lcm:fly:200": 110.0,
-  "scm:fly:50": 21.5,
-  "scm:fly:100": 47.78,
-  "scm:fly:200": 106.0,
-  "lcm:im:200": 114.0,
-  "lcm:im:400": 243.0,
-  "scm:im:100": 49.8,
-  "scm:im:200": 110.0,
-  "scm:im:400": 235.0,
+  "M:scm:free:50": 19.9,
+  "M:scm:free:100": 44.84,
+  "M:scm:free:200": 98.61,
+  "M:scm:free:400": 212.25,
+  "M:scm:free:800": 440.46,
+  "M:scm:free:1500": 846.88,
+  "M:scm:back:50": 22.11,
+  "M:scm:back:100": 48.16,
+  "M:scm:back:200": 105.12,
+  "M:scm:breast:50": 24.95,
+  "M:scm:breast:100": 55.28,
+  "M:scm:breast:200": 119.52,
+  "M:scm:fly:50": 21.32,
+  "M:scm:fly:100": 47.68,
+  "M:scm:fly:200": 106.85,
+  "M:scm:im:100": 49.28,
+  "M:scm:im:200": 108.88,
+  "M:scm:im:400": 234.81,
+  "F:scm:free:50": 22.83,
+  "F:scm:free:100": 49.93,
+  "F:scm:free:200": 109.36,
+  "F:scm:free:400": 230.25,
+  "F:scm:free:800": 474.0,
+  "F:scm:free:1500": 908.24,
+  "F:scm:back:50": 25.23,
+  "F:scm:back:100": 54.02,
+  "F:scm:back:200": 117.33,
+  "F:scm:breast:50": 28.37,
+  "F:scm:breast:100": 62.36,
+  "F:scm:breast:200": 132.5,
+  "F:scm:fly:50": 23.72,
+  "F:scm:fly:100": 52.71,
+  "F:scm:fly:200": 119.32,
+  "F:scm:im:100": 55.11,
+  "F:scm:im:200": 121.63,
+  "F:scm:im:400": 255.48,
+  "M:lcm:free:50": 20.91,
+  "M:lcm:free:100": 46.4,
+  "M:lcm:free:200": 102.0,
+  "M:lcm:free:400": 219.96,
+  "M:lcm:free:800": 452.12,
+  "M:lcm:free:1500": 870.67,
+  "M:lcm:back:50": 23.55,
+  "M:lcm:back:100": 51.6,
+  "M:lcm:back:200": 111.92,
+  "M:lcm:breast:50": 25.95,
+  "M:lcm:breast:100": 56.88,
+  "M:lcm:breast:200": 125.48,
+  "M:lcm:fly:50": 22.27,
+  "M:lcm:fly:100": 49.45,
+  "M:lcm:fly:200": 110.34,
+  "M:lcm:im:200": 112.69,
+  "M:lcm:im:400": 242.5,
+  "F:lcm:free:50": 23.61,
+  "F:lcm:free:100": 51.71,
+  "F:lcm:free:200": 112.23,
+  "F:lcm:free:400": 234.18,
+  "F:lcm:free:800": 484.12,
+  "F:lcm:free:1500": 920.48,
+  "F:lcm:back:50": 26.86,
+  "F:lcm:back:100": 57.13,
+  "F:lcm:back:200": 123.14,
+  "F:lcm:breast:50": 29.16,
+  "F:lcm:breast:100": 64.13,
+  "F:lcm:breast:200": 137.55,
+  "F:lcm:fly:50": 24.43,
+  "F:lcm:fly:100": 54.6,
+  "F:lcm:fly:200": 121.81,
+  "F:lcm:im:200": 125.7,
+  "F:lcm:im:400": 263.65,
 };
 
-export function finaPoints(timeS: number, course: PoolCourse, stroke: Stroke, distanceM: number): number {
-  const base = BASE[`${course}:${stroke}:${distanceM}`];
+/**
+ * World Aquatics points: floor(1000 × (base / time)³), truncated as the official tables do.
+ * Base times differ by gender, so points are only returned when the athlete's gender is known.
+ */
+export function finaPoints(
+  timeS: number,
+  course: PoolCourse,
+  stroke: Stroke,
+  distanceM: number,
+  gender: "M" | "F" | "" | undefined,
+): number {
+  if (gender !== "M" && gender !== "F") return 0;
+  const base = BASE[`${gender}:${course}:${stroke}:${distanceM}`];
   if (!base || timeS <= 0) return 0;
-  return Math.floor(1000 * (base / timeS) ** 3);
+  // Official tables work on hundredths; round first so e.g. 24.65 isn't 24.649999.
+  const time = Math.round(timeS * 100) / 100;
+  return Math.floor(1000 * (base / time) ** 3 + 1e-9);
 }
 
 export function meetEnd(meet: Competition): string {

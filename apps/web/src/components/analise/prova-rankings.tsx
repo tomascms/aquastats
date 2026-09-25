@@ -20,7 +20,7 @@ import {
 import { formatRaceClock } from "@/lib/race";
 import { annotateTrainingReps, isPlausibleRep } from "@/lib/training-context";
 import { useAppState } from "@/lib/store";
-import type { PoolCourse, Stroke } from "@/lib/types";
+import type { Gender, PoolCourse, Stroke } from "@/lib/types";
 
 function signed(seconds: number, pct: number) {
   const prefix = seconds > 0 ? "+" : "";
@@ -85,6 +85,7 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
       ) : recordId ? (
         <RecordDetail
           athleteName={athlete.name}
+          gender={athlete.gender}
           records={records}
           recordId={recordId}
           compareId={compareId}
@@ -96,6 +97,7 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
       ) : event ? (
         <EventBoard
           athleteName={athlete.name}
+          gender={athlete.gender}
           records={records}
           stroke={event.stroke}
           distanceM={event.distanceM}
@@ -107,6 +109,7 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
       ) : (
         <PersonalBestTable
           athleteName={athlete.name}
+          gender={athlete.gender}
           teamName={teamName}
           dob={athlete.dateOfBirth}
           groupName={athlete.groupName}
@@ -122,6 +125,7 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
 
 function PersonalBestTable({
   athleteName,
+  gender,
   teamName,
   dob,
   groupName,
@@ -131,6 +135,7 @@ function PersonalBestTable({
   onOpenEvent,
 }: {
   athleteName: string;
+  gender?: Gender | "";
   teamName: string;
   dob?: string;
   groupName?: string;
@@ -141,7 +146,7 @@ function PersonalBestTable({
 }) {
   const year = dob ? dob.slice(0, 4) : "";
   const scored = bests
-    .map((record) => ({ record, points: finaPoints(record.timeS, record.course, record.stroke, record.distanceM) || 0 }))
+    .map((record) => ({ record, points: finaPoints(record.timeS, record.course, record.stroke, record.distanceM, gender) || 0 }))
     .sort((a, b) => b.points - a.points);
   const top = scored[0]?.points ? scored[0] : undefined;
   const latest = bests.reduce<string>((max, record) => (record.date > max ? record.date : max), "");
@@ -169,7 +174,10 @@ function PersonalBestTable({
             <dd className="font-display text-3xl font-bold tabular">{recordCount}</dd>
           </div>
           <div>
-            <dt className="text-xs text-white/65">Melhor pontuação FINA</dt>
+            <dt className="text-xs text-white/65">
+              Melhor pontuação FINA
+              {gender !== "M" && gender !== "F" ? <span className="block text-[#ffd8a8]">define o género do atleta</span> : null}
+            </dt>
             <dd className="font-display text-3xl font-bold tabular">
               {top ? top.points : "—"}
               {top ? (
@@ -217,7 +225,7 @@ function PersonalBestTable({
                   <td className="px-3 py-2.5 text-mute">{COURSE_LABEL[record.course]}</td>
                   <td className="px-3 py-2.5 font-display text-xl font-bold text-mist tabular">{formatRaceClock(record.timeS)}</td>
                   <td className="px-3 py-2.5 font-mono text-sand">
-                    {finaPoints(record.timeS, record.course, record.stroke, record.distanceM) || "—"}
+                    {finaPoints(record.timeS, record.course, record.stroke, record.distanceM, gender) || "—"}
                   </td>
                   <td className="px-3 py-2.5 text-mute">{formatDatePt(record.date)}</td>
                 </tr>
@@ -232,6 +240,7 @@ function PersonalBestTable({
 
 function EventBoard({
   athleteName,
+  gender,
   records,
   stroke,
   distanceM,
@@ -241,6 +250,7 @@ function EventBoard({
   onOpen,
 }: {
   athleteName: string;
+  gender?: Gender | "";
   records: ReturnType<typeof raceRecords>;
   stroke: Stroke;
   distanceM: number;
@@ -288,19 +298,21 @@ function EventBoard({
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <CourseList title="Piscina de 50 m" course="lcm" rows={lcm} onOpen={onOpen} />
-        <CourseList title="Piscina de 25 m" course="scm" rows={scm} onOpen={onOpen} />
+        <CourseList gender={gender} title="Piscina de 50 m" course="lcm" rows={lcm} onOpen={onOpen} />
+        <CourseList gender={gender} title="Piscina de 25 m" course="scm" rows={scm} onOpen={onOpen} />
       </div>
     </div>
   );
 }
 
 function CourseList({
+  gender,
   title,
   course,
   rows,
   onOpen,
 }: {
+  gender?: Gender | "";
   title: string;
   course: PoolCourse;
   rows: ReturnType<typeof sliceRecords>;
@@ -327,7 +339,7 @@ function CourseList({
                   </span>
                 </span>
                 <span className="font-mono text-xs text-sand">
-                  {finaPoints(record.timeS, record.course, record.stroke, record.distanceM) || "—"}
+                  {finaPoints(record.timeS, record.course, record.stroke, record.distanceM, gender) || "—"}
                 </span>
               </button>
             </li>
@@ -340,6 +352,7 @@ function CourseList({
 
 function RecordDetail({
   athleteName,
+  gender,
   records,
   recordId,
   compareId,
@@ -349,6 +362,7 @@ function RecordDetail({
   onCompare,
 }: {
   athleteName: string;
+  gender?: Gender | "";
   records: ReturnType<typeof raceRecords>;
   recordId: string;
   compareId: string;
@@ -405,7 +419,7 @@ function RecordDetail({
           {formatDatePt(record.date)} · {COURSE_LABEL[record.course]}
         </p>
         <p className="mt-1 font-mono text-sm text-sand">
-          {finaPoints(record.timeS, record.course, record.stroke, record.distanceM) || "—"} pts
+          {finaPoints(record.timeS, record.course, record.stroke, record.distanceM, gender) || "—"} pts
         </p>
         {sameEvent.length ? (
           <button

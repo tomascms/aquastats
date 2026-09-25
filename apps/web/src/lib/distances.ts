@@ -17,6 +17,11 @@ export function formatDistance(meters: number): string {
   return String(rounded).replace(".", ",");
 }
 
+/** "4×50", but a single rep reads as just "1000". */
+export function formatReps(reps: number, meters: number): string {
+  return reps > 1 ? `${reps}×${formatDistance(meters)}` : formatDistance(meters);
+}
+
 export function snapDistance(value: number | null | undefined): number {
   if (!value || value < MIN_DISTANCE) return 0;
   const match = DISTANCES.find((item) => sameMeters(item, value));

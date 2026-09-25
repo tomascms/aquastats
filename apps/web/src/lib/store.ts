@@ -146,10 +146,10 @@ function restorePendingTimes() {
     const pending = JSON.parse(raw) as TimeLog[];
     if (!Array.isArray(pending)) return;
     setState((current) => {
-      const existing = new Set(current.timeLogs.map((log) => timeLogKey(log)));
+      const pendingKeys = new Set(pending.map((log) => timeLogKey(log)));
       return {
         ...current,
-        timeLogs: [...current.timeLogs, ...pending.filter((log) => !existing.has(timeLogKey(log)))],
+        timeLogs: [...current.timeLogs.filter((log) => !pendingKeys.has(timeLogKey(log))), ...pending],
       };
     });
   } catch {
@@ -167,8 +167,9 @@ function timeLogKey(log: Pick<TimeLog, "workoutId" | "blockId" | "athleteId" | "
 }
 
 function applySnapshot(snapshot: Snapshot, role: AppState["role"], swimmerId = "") {
-  const serverKeys = new Set(snapshot.timeLogs.map((log) => timeLogKey(log)));
-  const pendingLogs = state.timeLogs.filter((log) => log.pending && !serverKeys.has(timeLogKey(log)));
+  // Unsynced local edits win over the server copy until the save is confirmed.
+  const pendingLogs = state.timeLogs.filter((log) => log.pending);
+  const pendingKeys = new Set(pendingLogs.map((log) => timeLogKey(log)));
   setState({
     role,
     swimmerId: snapshot.swimmerId || swimmerId,
@@ -177,7 +178,9 @@ function applySnapshot(snapshot: Snapshot, role: AppState["role"], swimmerId = "
     athletes: snapshot.athletes,
     workouts: snapshot.workouts,
     timeLogs: [
-      ...snapshot.timeLogs.map((log) => ({ ...log, pending: false, stroke: (log.stroke || "") as TimeLog["stroke"] })),
+      ...snapshot.timeLogs
+        .filter((log) => !pendingKeys.has(timeLogKey(log)))
+        .map((log) => ({ ...log, pending: false, stroke: (log.stroke || "") as TimeLog["stroke"] })),
       ...pendingLogs,
     ],
     competitions: snapshot.competitions.map((meet) => ({ ...meet, endDate: meet.endDate || meet.date })),
@@ -244,6 +247,7 @@ async function hydrate() {
       });
     }
     bootError = null;
+    if (state.timeLogs.some((log) => log.pending)) void retryPendingTimeLogs();
   } catch (error) {
     const status = (error as { status?: number }).status;
     if (status === 401) {
