@@ -362,47 +362,6 @@ create table if not exists audit_logs (
 );
 create index if not exists audit_logs_org_created_idx on audit_logs (organization_id, created_at desc);
 
--- ── Pagamentos (Stripe ou outro; cents, nunca float) ────────────────────────
--- Nunca guardar PAN, CVV, validade, PIN ou IBAN. Só IDs do processador.
-
-create table if not exists billing_customers (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references organizations(id),
-  user_id uuid references users(id),
-  provider text not null,
-  provider_customer_id text not null,
-  extra jsonb not null default '{}',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (provider, provider_customer_id)
-);
-
-create table if not exists billing_subscriptions (
-  id uuid primary key default gen_random_uuid(),
-  customer_id uuid not null references billing_customers(id),
-  provider text not null,
-  provider_subscription_id text not null unique,
-  status text not null,
-  plan_code text not null,
-  amount_cents integer not null default 0,
-  currency text not null default 'eur',
-  current_period_end timestamptz,
-  extra jsonb not null default '{}',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists billing_events (
-  id uuid primary key default gen_random_uuid(),
-  provider text not null,
-  provider_event_id text not null,
-  event_type text not null,
-  payload jsonb not null,
-  processed_at timestamptz,
-  created_at timestamptz not null default now(),
-  unique (provider, provider_event_id)
-);
-
 do $$
 declare t text;
 begin
@@ -410,7 +369,7 @@ begin
     select unnest(array[
       'organizations','teams','users','oauth_accounts','profiles','athletes','workouts',
       'competitions','race_sessions','season_plans','attendance_sessions',
-      'saga_instances','billing_customers','billing_subscriptions'
+      'saga_instances'
     ])
   loop
     execute format('drop trigger if exists set_updated_at on %I', t);

@@ -35,7 +35,6 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     coach_signup_enabled: bool = False
-    billing_enabled: bool = False
     database_enable_rls: bool = False
     db_statement_timeout_ms: int = 30_000
     sentry_dsn: str = ""
@@ -43,12 +42,7 @@ class Settings(BaseSettings):
     recent_auth_seconds: int = 300
     edge_auth_token: str = ""
     outbox_batch_size: int = 20
-    stripe_publishable_key: str = ""
-    stripe_secret_key: str = ""
-    stripe_webhook_secret: str = ""
-    stripe_price_coach_monthly: str = ""
-    # ISO date. Coach organisations created before it are exempt from paying (existing clubs).
-    billing_enforced_from: str = ""
+    coach_request_email: str = "aquastats@outlook.com"
 
     @property
     def is_production(self) -> bool:

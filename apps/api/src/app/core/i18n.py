@@ -80,18 +80,6 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'time.distance': 'Distância',
         'time.time': 'Tempo',
 
-        # Billing
-        'billing.plans': 'Planos',
-        'billing.subscription': 'Subscrição',
-        'billing.free': 'Grátis',
-        'billing.starter': 'Iniciante',
-        'billing.professional': 'Profissional',
-        'billing.elite': 'Elite',
-        'billing.monthly': 'Por mês',
-        'billing.upgrade': 'Atualizar',
-        'billing.downgrade': 'Reduzir',
-        'billing.cancel': 'Cancelar Subscrição',
-        'billing.invoices': 'Faturas',
 
         # Errors
         'error.invalid_email': 'Email inválido',
@@ -182,18 +170,6 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'time.distance': 'Distance',
         'time.time': 'Time',
 
-        # Billing
-        'billing.plans': 'Plans',
-        'billing.subscription': 'Subscription',
-        'billing.free': 'Free',
-        'billing.starter': 'Starter',
-        'billing.professional': 'Professional',
-        'billing.elite': 'Elite',
-        'billing.monthly': 'Per month',
-        'billing.upgrade': 'Upgrade',
-        'billing.downgrade': 'Downgrade',
-        'billing.cancel': 'Cancel Subscription',
-        'billing.invoices': 'Invoices',
 
         # Errors
         'error.invalid_email': 'Invalid email',

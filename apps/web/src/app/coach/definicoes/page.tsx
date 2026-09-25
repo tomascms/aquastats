@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { SubscriptionPanel } from "@/components/billing/subscription-panel";
 import { ChangePasswordSection } from "@/components/settings/change-password";
 import { DeleteAccountSection } from "@/components/settings/delete-account";
 import { api } from "@/lib/api";
@@ -60,10 +59,8 @@ export default function DefinicoesPage() {
     <div className="mx-auto max-w-xl space-y-5">
       <div>
         <h1>Definições</h1>
-        <p className="mt-1 text-sm text-mute">Nome da equipa, convite, subscrição e dados da conta.</p>
+        <p className="mt-1 text-sm text-mute">Nome da equipa, convite e dados da conta.</p>
       </div>
-
-      <SubscriptionPanel />
 
       <form onSubmit={(event) => void saveTeam(event)} className="card space-y-3 p-4">
         <label className="block text-xs font-semibold text-mute">

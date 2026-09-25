@@ -150,24 +150,6 @@ class TestInternationalization:
         assert i18n.t("error.invalid_email") == "Invalid email"
         assert i18n.t("error.user_not_found") == "User not found"
 
-    def test_billing_translations_portuguese(self):
-        """Test billing translations in Portuguese."""
-        i18n = I18n("pt-PT")
-
-        assert i18n.t("billing.free") == "Grátis"
-        assert i18n.t("billing.starter") == "Iniciante"
-        assert i18n.t("billing.professional") == "Profissional"
-        assert i18n.t("billing.elite") == "Elite"
-
-    def test_billing_translations_english(self):
-        """Test billing translations in English."""
-        i18n = I18n("en")
-
-        assert i18n.t("billing.free") == "Free"
-        assert i18n.t("billing.starter") == "Starter"
-        assert i18n.t("billing.professional") == "Professional"
-        assert i18n.t("billing.elite") == "Elite"
-
     def test_coverage_all_keys_translated(self):
         """Test that all keys exist in both languages."""
         from app.core.i18n import TRANSLATIONS

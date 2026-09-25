@@ -35,16 +35,6 @@ def _load_member(session: Session, user: User) -> tuple[TeamMember, Team]:
     return member, team
 
 
-def _assert_billing_access(request: Request, session: Session, team: Team) -> None:
-    # Billing routes stay reachable so a lapsed coach can pay or fix the card.
-    if request.url.path.startswith("/api/v1/billing"):
-        return
-    from ..domain.billing import org_has_access
-
-    if not org_has_access(session, team.organization_id):
-        raise HTTPException(status_code=402, detail="A subscrição desta equipa não está ativa.")
-
-
 def require_coach(request: Request, session: Session = Depends(get_session)) -> dict:
     user = require_user(request, session)
     if user.role == "pending":
@@ -54,7 +44,6 @@ def require_coach(request: Request, session: Session = Depends(get_session)) -> 
     member, team = _load_member(session, user)
     if member.status not in {"owner", "coach"}:
         raise HTTPException(status_code=403, detail="Sem acesso a esta equipa.")
-    _assert_billing_access(request, session, team)
     set_tenant_context(session, team_id=team.id, user_id=user.id, role="coach")
     return {
         **current_user_payload(request),
@@ -82,7 +71,6 @@ def require_member(request: Request, session: Session = Depends(get_session)) ->
     if user.role == "coach":
         if member.status not in {"owner", "coach"}:
             raise HTTPException(status_code=403, detail="Sem acesso a esta equipa.")
-        _assert_billing_access(request, session, team)
         set_tenant_context(session, team_id=team.id, user_id=user.id, role="coach")
         return payload
     if member.status != "swimmer":

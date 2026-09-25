@@ -30,7 +30,7 @@ from .core.http_security import (
 from .routes.auth_routes import router as auth_router
 from .routes.data_routes import router as data_router
 from .routes.prediction_routes import router as prediction_router
-from .routes.billing_routes import router as billing_router
+from .routes.coach_request_routes import router as coach_request_router
 
 init_observability()
 settings = get_settings()
@@ -64,7 +64,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(data_router)
 app.include_router(prediction_router)
-app.include_router(billing_router)
+app.include_router(coach_request_router)
 
 
 @app.exception_handler(RuntimeError)

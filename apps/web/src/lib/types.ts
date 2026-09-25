@@ -288,9 +288,7 @@ export type AppState = {
   role: Role | null;
   swimmerId: string;
   online: boolean;
-  syncing: boolean;
-  billingLapsed?: boolean;
-  teamName: string;
+  syncing: boolean;  teamName: string;
   joinCode: string;
   athletes: Athlete[];
   workouts: Workout[];

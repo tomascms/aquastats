@@ -24,16 +24,9 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# Called by Stripe directly (no browser origin, no edge token); every request is authenticated
-# by verifying Stripe's signature over the raw body instead.
-SIGNED_WEBHOOK_PATHS = frozenset({"/api/v1/billing/webhook"})
-
-
 class EdgeAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         token = get_settings().edge_auth_token.strip()
-        if request.url.path in SIGNED_WEBHOOK_PATHS:
-            return await call_next(request)
         if token and not hmac.compare_digest(request.headers.get("x-edge-auth", ""), token):
             return JSONResponse({"detail": "Origem não autorizada."}, status_code=403)
         return await call_next(request)
@@ -139,7 +132,7 @@ class CsrfOriginMiddleware(BaseHTTPMiddleware):
     """Mutations must come from the app origin. Complements SameSite cookies."""
 
     async def dispatch(self, request: Request, call_next):
-        if request.method in {"GET", "HEAD", "OPTIONS"} or request.url.path in SIGNED_WEBHOOK_PATHS:
+        if request.method in {"GET", "HEAD", "OPTIONS"}:
             return await call_next(request)
         allowed = set(get_settings().cors_origins)
         origin = request.headers.get("origin") or ""

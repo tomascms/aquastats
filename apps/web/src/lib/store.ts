@@ -204,13 +204,8 @@ async function hydrate() {
   try {
     const me = await api<Me>("/api/v1/auth/me");
     if (me.role === "coach") {
-      try {
-        const snapshot = await api<Snapshot>("/api/v1/snapshot");
-        applySnapshot(snapshot, me.role, me.athleteId || "");
-      } catch (error) {
-        if ((error as { status?: number }).status !== 402) throw error;
-        setState({ role: "coach", teamName: me.teamName || "", billingLapsed: true });
-      }
+      const snapshot = await api<Snapshot>("/api/v1/snapshot");
+      applySnapshot(snapshot, me.role, me.athleteId || "");
     } else if (me.role === "swimmer") {
       if (me.teamId) {
         const snapshot = await api<Snapshot>("/api/v1/snapshot");

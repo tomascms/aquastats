@@ -239,13 +239,6 @@ class BulkheadPolicy:
 
 
 # Global circuit breakers for external services
-stripe_breaker = CircuitBreaker(
-    name='stripe',
-    fail_threshold=5,
-    success_threshold=2,
-    timeout_seconds=60
-)
-
 resend_breaker = CircuitBreaker(
     name='resend',
     fail_threshold=5,
@@ -274,7 +267,6 @@ email_retry = RetryPolicy(
 )
 
 # Bulkheads for resource isolation
-stripe_bulkhead = BulkheadPolicy(max_concurrent=5)
 resend_bulkhead = BulkheadPolicy(max_concurrent=3)
 s3_bulkhead = BulkheadPolicy(max_concurrent=10)
 db_bulkhead = BulkheadPolicy(max_concurrent=20)
@@ -308,50 +300,3 @@ async def with_bulkhead(
 ) -> T:
     """Convenience wrapper for bulkhead."""
     return await bulkhead.execute(func, *args, **kwargs)
-
-
-# Example usage:
-example_usage = """
-# In routes/data_routes.py
-
-from ..core.resilience import stripe_breaker, email_retry, stripe_bulkhead, resend_bulkhead
-
-async def charge_user(user_id: UUID, amount: int):
-    '''Charge user with resilience patterns.'''
-
-    async def _charge():
-        # Bulkhead: limit concurrent Stripe calls
-        async with stripe_bulkhead.semaphore:
-            # Circuit breaker: protect against Stripe outage
-            result = await stripe_breaker.call(
-                stripe.Charge.create,
-                amount=amount
-            )
-            return result
-
-    # Retry: handle transient failures
-    try:
-        return await email_retry.execute(_charge)
-    except Exception as e:
-        logger.error('charge_failed', user_id=str(user_id), error=str(e))
-        return None
-
-
-async def send_email(email: str, subject: str, body: str):
-    '''Send email with resilience patterns.'''
-
-    # Bulkhead + Circuit Breaker + Retry
-    try:
-        async with resend_bulkhead.semaphore:
-            result = await resend_breaker.call(
-                email_retry.execute,
-                resend.send,
-                email,
-                subject,
-                body
-            )
-            return result
-    except Exception as e:
-        logger.error('email_failed', email=email, error=str(e))
-        return None
-"""

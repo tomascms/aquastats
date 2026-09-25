@@ -1,23 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthFrame } from "@/components/auth/auth-frame";
 import { api, formatApiError, type ApiError } from "@/lib/api";
 import { homeFor } from "@/lib/auth";
 import { normalizeInvite, writeInviteCookie } from "@/lib/invite";
+import { formatDatePt } from "@/lib/labels";
 import { safeNext } from "@/lib/safe-next";
 import { actions, useAppState, useAuthBoot } from "@/lib/store";
 
-type BillingConfig = { enabled: boolean; amountCents?: number; currency?: string; interval?: string };
-
-function formatPrice(config: BillingConfig): string {
-  if (!config.amountCents) return "";
-  return new Intl.NumberFormat("pt-PT", { style: "currency", currency: (config.currency || "eur").toUpperCase() }).format(
-    config.amountCents / 100,
-  );
-}
+type CoachRequest = { requested: boolean; requestedAt?: string | null; teamName?: string | null };
 
 export default function ChooseRolePage() {
   const router = useRouter();
@@ -25,21 +18,17 @@ export default function ChooseRolePage() {
   const { bootstrapped, bootError } = useAuthBoot();
   const [busy, setBusy] = useState<"coach" | "swimmer" | null>(null);
   const [error, setError] = useState("");
-  const [teamName, setTeamName] = useState("");
-  const [askTeam, setAskTeam] = useState(false);
-  const [billing, setBilling] = useState<BillingConfig>({ enabled: false });
+  const [askCoach, setAskCoach] = useState(false);
   const [teamCode, setTeamCode] = useState("");
-  const [acceptTerms, setAcceptTerms] = useState(false);
-  const [immediateStart, setImmediateStart] = useState(false);
-  const [cancelled, setCancelled] = useState(false);
+  const [request, setRequest] = useState<CoachRequest | null>(null);
+  const [form, setForm] = useState({ name: "", contact: "", teamName: "", message: "" });
 
   useEffect(() => {
-    setCancelled(new URLSearchParams(window.location.search).get("pagamento") === "cancelado");
-    void fetch("/api/v1/billing/config")
-      .then((res) => res.json())
-      .then((config: BillingConfig) => setBilling(config))
-      .catch(() => setBilling({ enabled: false }));
-  }, []);
+    if (!bootstrapped || role !== "pending") return;
+    void api<CoachRequest>("/api/v1/auth/coach-request")
+      .then(setRequest)
+      .catch(() => setRequest({ requested: false }));
+  }, [bootstrapped, role]);
 
   useEffect(() => {
     if (!bootstrapped) return;
@@ -61,25 +50,20 @@ export default function ChooseRolePage() {
     }
   }
 
-  async function startCoachCheckout() {
-    if (!teamName.trim()) {
-      setError("Escreve o nome da equipa.");
-      return;
-    }
-    if (!acceptTerms || !immediateStart) {
-      setError("Para continuar, marca as duas confirmações.");
-      return;
-    }
+  async function sendCoachRequest(event: React.FormEvent) {
+    event.preventDefault();
     setBusy("coach");
     setError("");
     try {
-      const { url } = await api<{ url: string }>("/api/v1/billing/checkout", {
+      const result = await api<CoachRequest>("/api/v1/auth/coach-request", {
         method: "POST",
-        body: JSON.stringify({ teamName: teamName.trim(), acceptTerms, immediateStart }),
+        body: JSON.stringify(form),
       });
-      window.location.assign(url);
+      setRequest({ ...result, teamName: form.teamName });
+      setAskCoach(false);
     } catch (err) {
-      setError(formatApiError(err as ApiError) || "Não foi possível abrir o pagamento.");
+      setError(formatApiError(err as ApiError) || "Não foi possível enviar o pedido.");
+    } finally {
       setBusy(null);
     }
   }
@@ -88,123 +72,81 @@ export default function ChooseRolePage() {
     return <p className="px-5 py-16 text-center text-sm text-mute">A preparar…</p>;
   }
 
-  const price = formatPrice(billing);
+  const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm((current) => ({ ...current, [key]: event.target.value }));
 
   return (
     <AuthFrame>
-      {askTeam ? (
+      {askCoach ? (
         <>
-          <h1 className="text-3xl font-bold">Conta de treinador</h1>
-          <p className="mt-2 text-sm leading-6 text-mute">Cria o espaço da tua equipa: atletas, treinos, competições e análise.</p>
-
-          <div className="mt-5 flex items-baseline justify-between rounded-xl bg-aqua px-4 py-3 text-white">
-            <span className="text-sm text-white/75">Subscrição mensal</span>
-            <span className="font-display text-3xl font-bold tabular">
-              {price}
-              <span className="ml-1 font-sans text-sm font-medium text-white/70">/mês</span>
-            </span>
-          </div>
-          <ul className="mt-3 space-y-1 text-sm text-mute">
-            <li>Preço final, com IVA incluído quando aplicável.</li>
-            <li>Renova todos os meses. Cancelas quando quiseres e mantens o acesso até ao fim do mês pago.</li>
-            <li>Pagamento seguro no Stripe. O Aquastats nunca vê os dados do teu cartão.</li>
-          </ul>
-
-          <form
-            className="mt-5 space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void startCoachCheckout();
-            }}
-          >
+          <h1 className="text-3xl font-bold">Pedir conta de treinador</h1>
+          <p className="mt-2 text-sm leading-6 text-mute">
+            As contas de treinador são ativadas manualmente. Deixa os teus dados e respondemos por email.
+          </p>
+          <form className="mt-5 space-y-4" onSubmit={(event) => void sendCoachRequest(event)}>
             <label className="block text-sm font-medium text-mist">
-              Nome da equipa
-              <input
-                className="field mt-1.5"
-                value={teamName}
-                onChange={(event) => setTeamName(event.target.value)}
-                autoFocus
-                required
-                maxLength={80}
-              />
+              Nome
+              <input className="field mt-1.5" value={form.name} onChange={set("name")} required maxLength={80} autoFocus />
             </label>
-            <label className="flex gap-3 text-sm leading-5 text-mist">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[#0b2545]"
-                checked={acceptTerms}
-                onChange={(event) => setAcceptTerms(event.target.checked)}
-              />
-              <span>
-                Li e aceito os{" "}
-                <Link href="/termos" target="_blank" className="font-semibold text-pool underline">
-                  Termos
-                </Link>{" "}
-                e a{" "}
-                <Link href="/privacidade" target="_blank" className="font-semibold text-pool underline">
-                  Política de Privacidade
-                </Link>
-                .
-              </span>
+            <label className="block text-sm font-medium text-mist">
+              Telemóvel ou outro contacto
+              <input className="field mt-1.5" value={form.contact} onChange={set("contact")} required maxLength={80} />
             </label>
-            <label className="flex gap-3 text-sm leading-5 text-mist">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[#0b2545]"
-                checked={immediateStart}
-                onChange={(event) => setImmediateStart(event.target.checked)}
-              />
-              <span>
-                Peço que o serviço comece já. Sei que posso desistir nos primeiros 14 dias e que, nesse caso, pago apenas a parte
-                proporcional ao tempo usado.
-              </span>
+            <label className="block text-sm font-medium text-mist">
+              Equipa ou clube
+              <input className="field mt-1.5" value={form.teamName} onChange={set("teamName")} required maxLength={80} />
+            </label>
+            <label className="block text-sm font-medium text-mist">
+              Mensagem <span className="font-normal text-mute">(opcional)</span>
+              <textarea className="field mt-1.5 min-h-24" value={form.message} onChange={set("message")} maxLength={600} />
             </label>
             <button type="submit" disabled={busy !== null} className="btn-primary h-11 w-full">
-              {busy === "coach" ? "A abrir pagamento…" : `Subscrever por ${price}/mês`}
+              {busy === "coach" ? "A enviar…" : "Enviar pedido"}
             </button>
           </form>
-          <button type="button" className="mt-4 text-sm font-medium text-mute hover:text-mist" onClick={() => setAskTeam(false)}>
+          <button type="button" className="mt-4 text-sm font-medium text-mute hover:text-mist" onClick={() => setAskCoach(false)}>
             Voltar
           </button>
         </>
       ) : (
         <>
           <h1 className="text-3xl font-bold">Escolhe o teu perfil</h1>
-          <p className="mt-2 text-sm leading-6 text-mute">Podes entrar como treinador ou como atleta.</p>
-          {cancelled ? (
-            <p className="mt-4 rounded-lg bg-[#fff4e5] px-3 py-2 text-sm text-[#8a5300]">
-              O pagamento foi cancelado e nada foi cobrado. Podes tentar de novo quando quiseres.
-            </p>
-          ) : null}
+          <p className="mt-2 text-sm leading-6 text-mute">Podes entrar como atleta já, ou pedir uma conta de treinador.</p>
           <div className="mt-6 grid gap-3">
-            <button
-              type="button"
-              disabled={busy !== null || !billing.enabled}
-              onClick={() => {
-                setError("");
-                setAskTeam(true);
-              }}
-              className="rounded-xl border border-line bg-panel px-4 py-4 text-left transition-colors hover:border-aqua disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span className="flex items-baseline justify-between gap-3">
-                <span className="font-display text-xl font-bold text-mist">Treinador</span>
-                {price ? <span className="text-sm font-semibold text-pool tabular">{price}/mês</span> : null}
-              </span>
-              <span className="mt-1 block text-sm leading-5 text-mute">Planeia sessões, acompanha a equipa e analisa resultados.</span>
-            </button>
-            {!billing.enabled && <p className="-mt-1 text-xs text-mute">O registo de treinador abre em breve.</p>}
             <button
               type="button"
               disabled={busy !== null}
               onClick={() => void chooseSwimmer()}
               className="rounded-xl border border-line bg-panel px-4 py-4 text-left transition-colors hover:border-aqua disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span className="flex items-baseline justify-between gap-3">
-                <span className="font-display text-xl font-bold text-mist">Atleta</span>
-                <span className="text-sm font-semibold text-good">Gratuito</span>
-              </span>
+              <span className="font-display text-xl font-bold text-mist">Atleta</span>
               <span className="mt-1 block text-sm leading-5 text-mute">Consulta treinos, tempos, provas e evolução pessoal.</span>
             </button>
+            {request?.requested ? (
+              <div className="rounded-xl border border-line bg-aqua-soft px-4 py-4">
+                <p className="font-display text-xl font-bold text-mist">Pedido de treinador enviado</p>
+                <p className="mt-1 text-sm leading-5 text-mute">
+                  {request.teamName ? `${request.teamName} · ` : ""}
+                  {request.requestedAt ? `enviado a ${formatDatePt(request.requestedAt.slice(0, 10))}. ` : ""}
+                  Vais receber um email quando a conta for ativada.
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => {
+                  setError("");
+                  setAskCoach(true);
+                }}
+                className="rounded-xl border border-line bg-panel px-4 py-4 text-left transition-colors hover:border-aqua disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="font-display text-xl font-bold text-mist">Treinador</span>
+                <span className="mt-1 block text-sm leading-5 text-mute">
+                  Planeia sessões, acompanha a equipa e analisa resultados. Ativada após pedido.
+                </span>
+              </button>
+            )}
           </div>
           <label className="mt-5 block text-sm font-medium text-mist">
             Código da equipa <span className="font-normal text-mute">(opcional, para atletas)</span>
