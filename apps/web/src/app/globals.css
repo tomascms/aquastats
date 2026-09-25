@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Geist Font Variables */
 @supports (font-variation-settings: normal) {
   :root {

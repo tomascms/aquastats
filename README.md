@@ -52,13 +52,13 @@ npm run dev                               # http://localhost:3000
 
 ## Deploy
 
-Deploy contínuo a partir do branch `main`:
-
-| Serviço | Plataforma | Build |
+| Serviço | Plataforma | Comando (a partir da pasta indicada) |
 |---|---|---|
-| Web | Cloudflare Workers `aquastats-web` (Workers Builds ligado ao GitHub) | raiz `apps/web`, `npx opennextjs-cloudflare build`, deploy `npx opennextjs-cloudflare deploy` |
-| API | Google Cloud Run `aquastats-api` (us-central1, trigger Cloud Build ligado ao GitHub) | `apps/api/Dockerfile` |
+| Web | Cloudflare Workers `aquastats-web` → aquastats.net | `apps/web`: `npm run deploy` (com `APP_URL=https://aquastats.net`) |
+| API | Google Cloud Run `aquastats-api` (us-central1, projeto `gen-lang-client-0997549665`) | `apps/api`: `gcloud run deploy aquastats-api --source . --region us-central1` |
 | Base de dados | Neon Postgres | — |
+
+O Cloud Run mantém as variáveis de ambiente entre revisões e só muda o tráfego se a nova revisão arrancar.
 
 Variáveis de produção e segredos vivem apenas nas plataformas (Cloud Run → Variables & Secrets; Cloudflare → Worker → Settings). Ver [docs/production-hardening.md](docs/production-hardening.md) e [docs/security.md](docs/security.md).
 

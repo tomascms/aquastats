@@ -1,0 +1,10 @@
+.gcloudignore
+.venv/
+.env
+.env.*
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
