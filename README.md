@@ -55,7 +55,7 @@ npm run dev                               # http://localhost:3000
 | Serviço | Plataforma | Comando (a partir da pasta indicada) |
 |---|---|---|
 | Web | Cloudflare Workers `aquastats-web` → aquastats.net | `apps/web`: `npm run deploy` (com `APP_URL=https://aquastats.net`) |
-| API | Google Cloud Run `aquastats-api` (us-central1, projeto `gen-lang-client-0997549665`) | `apps/api`: `gcloud run deploy aquastats-api --source . --region us-central1` |
+| API | Google Cloud Run `aquastats-api` (europe-west3, ao lado da base Neon em Frankfurt; projeto `gen-lang-client-0997549665`) | `apps/api`: `gcloud run deploy aquastats-api --source . --region europe-west3` |
 | Base de dados | Neon Postgres | — |
 
 O Cloud Run mantém as variáveis de ambiente entre revisões e só muda o tráfego se a nova revisão arrancar.
