@@ -28,7 +28,6 @@ import { predictTrainingTargets, type TrainingTarget } from "@/lib/training-pred
 import type { TimeLog, WellnessEntry, Workout } from "@/lib/types";
 
 const INK = "#0b1d33";
-const NAVY = "#0b2545";
 const POOL = "#1668b8";
 const GOOD = "#138a64";
 const LANE = "#c93a2e";

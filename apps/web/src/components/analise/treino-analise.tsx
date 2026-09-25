@@ -8,11 +8,13 @@ import { AthleteChips, NoAthletes } from "@/components/analise/athlete-chips";
 import { MonthCalendar } from "@/components/ui/month-calendar";
 import { BLOCK_LABEL, SHIFT_LABEL, formatDatePt, strokeLabel } from "@/lib/labels";
 import { todayIso } from "@/lib/dates";
-import { athleteVolumeM, formatMeters, weeklyVolume, workoutMeters } from "@/lib/rankings";
+import { formatMeters, weeklyVolume, workoutMeters } from "@/lib/rankings";
 import { flattenInner, formatSegment, formatSet, innerCount, readySegments, splitRepNumber } from "@/lib/set";
+import { formatRaceClock } from "@/lib/race";
 import { useAppState } from "@/lib/store";
 import { annotateTrainingReps, type TrainingRep } from "@/lib/training-context";
-import { formatTime, toCentiseconds } from "@/lib/swim-time";
+import { predictTrainingTargets } from "@/lib/training-prediction";
+import { toCentiseconds } from "@/lib/swim-time";
 import type { TimeLog, WorkoutBlock } from "@/lib/types";
 
 function logSeconds(log: TimeLog): number {
@@ -71,6 +73,12 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
     () => (role === "coach" ? athletes.flatMap((item) => annotateTrainingReps(workouts, timeLogs, item.id, item.wellness)) : []),
     [athletes, role, timeLogs, workouts],
   );
+  const estimates = useMemo(() => {
+    const own = athleteId ? annotateTrainingReps(workouts, timeLogs, athleteId, athlete?.wellness) : [];
+    const byLog = new Map<string, number>();
+    for (const [logId, target] of predictTrainingTargets(own, teamRows.length ? teamRows : own)) byLog.set(logId, target.targetS);
+    return byLog;
+  }, [athlete?.wellness, athleteId, teamRows, timeLogs, workouts]);
   const dayWorkouts = useMemo(() => mine.filter((workout) => workout.date === selected), [mine, selected]);
   const workoutCountByDate = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -206,34 +214,17 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
                 }}
               />
 
-              <section className="rounded-xl border border-line bg-panel p-4">
-                <p className="text-xs font-semibold text-aqua">{formatDatePt(selected)}</p>
-                <p className="text-lg font-semibold">{athlete.name}</p>
-                {(() => {
-                  const weeks = weeklyVolume(workouts, athlete.id, 8);
-                  const thisWeek = weeks[weeks.length - 1]?.meters ?? 0;
-                  const dayMeters = dayWorkouts.reduce((sum, item) => sum + workoutMeters(item), 0);
-                  const max = Math.max(...weeks.map((week) => week.meters), 1);
-                  return (
-                    <div className="mt-2">
-                      <p className="text-xs text-mute">
-                        {formatMeters(athleteVolumeM(workouts, athlete.id))} acumulados · {formatMeters(thisWeek)} esta
-                        semana
-                        {dayMeters ? ` · ${formatMeters(dayMeters)} neste dia` : ""}
-                      </p>
-                      <div className="mt-2 flex h-12 items-end gap-1">
-                        {weeks.map((week) => (
-                          <div key={week.start} className="flex flex-1 flex-col justify-end">
-                            <div
-                              className="w-full rounded-sm bg-aqua/80"
-                              style={{ height: `${Math.max(6, (week.meters / max) * 100)}%` }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
+              <section className="rounded-2xl border border-line bg-panel p-5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2 className="text-2xl font-bold">{formatDatePt(selected)}</h2>
+                  <span className="text-sm text-mute">
+                    {(() => {
+                      const dayMeters = dayWorkouts.reduce((sum, item) => sum + workoutMeters(item), 0);
+                      const thisWeek = weeklyVolume(workouts, athlete.id, 1)[0]?.meters ?? 0;
+                      return `${dayMeters ? `${formatMeters(dayMeters)} neste dia · ` : ""}${formatMeters(thisWeek)} esta semana`;
+                    })()}
+                  </span>
+                </div>
 
                 {dayWorkouts.length === 0 ? (
                   <p className="mt-3 text-sm text-mute">Sem treino neste dia.</p>
@@ -322,17 +313,20 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
                     ) : null}
 
                     {workout && block ? (
-                      <article className="rounded-2xl border border-line bg-ink px-3 py-3">
-                        <p className="font-semibold">{segment ? formatSegment(segment) : formatSet(block)}</p>
-                        <p className="text-xs text-mute">
+                      <article className="border-t border-line pt-4">
+                        <p className="font-display text-2xl font-bold">{segment ? formatSegment(segment) : formatSet(block)}</p>
+                        <p className="text-sm text-mute">
                           {SHIFT_LABEL[workout.shift]} · {formatMeters(workoutMeters(workout))}
                           {block.rounds > 1 && roundPick !== "all" ? ` · série ${roundPick}` : ""}
                         </p>
                         {visibleLogs.length === 0 ? (
-                          <p className="mt-2 text-[11px] text-mute">Ainda sem tempos nesta série.</p>
+                          <p className="mt-3 rounded-xl border border-dashed border-line-strong px-3 py-6 text-center text-sm text-mute">
+                            Ainda sem tempos nesta série.
+                          </p>
                         ) : (
                           <SeriesTimes
                             logs={visibleLogs}
+                            estimates={estimates}
                             block={block}
                             compare={compare}
                             onToggle={toggleCompare}
@@ -344,20 +338,22 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
                 )}
 
                 {delta && picked.length === 2 ? (
-                  <div className="mt-4 rounded-2xl border border-line bg-ink px-3 py-3">
-                    <p className="text-xs font-semibold text-sand">Comparação</p>
-                    <p className="mt-1 font-mono text-sm">
-                      {formatTime(picked[0].mm, picked[0].ss, picked[0].cc)} →{" "}
-                      {formatTime(picked[1].mm, picked[1].ss, picked[1].cc)}
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-aqua px-4 py-3 text-white">
+                    <p className="font-display text-2xl font-bold tabular">
+                      {formatRaceClock(logSeconds(picked[0]))} <span className="text-white/60">→</span>{" "}
+                      {formatRaceClock(logSeconds(picked[1]))}
                     </p>
-                    <p className={`font-mono text-lg ${delta.seconds < 0 ? "text-aqua" : "text-coral"}`}>
+                    <p className={`font-display text-2xl font-bold tabular ${delta.seconds < 0 ? "text-[#7ee2b8]" : "text-[#ffb4a8]"}`}>
                       {delta.seconds > 0 ? "+" : ""}
-                      {delta.seconds.toFixed(2)} s · {delta.pct > 0 ? "+" : ""}
-                      {delta.pct.toFixed(2)} %
+                      {delta.seconds.toFixed(2)} s
+                      <span className="ml-2 text-sm font-medium text-white/70">
+                        {delta.pct > 0 ? "+" : ""}
+                        {delta.pct.toFixed(2)} %
+                      </span>
                     </p>
                   </div>
                 ) : (
-                  <p className="mt-4 text-[11px] text-mute">Clica em dois tempos desta série para os comparar.</p>
+                  <p className="mt-4 text-xs text-mute">Toca em dois tempos da série para os comparar.</p>
                 )}
               </section>
             </div>
@@ -370,59 +366,87 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
 
 function SeriesTimes({
   logs,
+  estimates,
   block,
   compare,
   onToggle,
 }: {
   logs: TimeLog[];
+  estimates: Map<string, number>;
   block: WorkoutBlock;
   compare: string[];
   onToggle: (id: string) => void;
 }) {
   const times = logs.map((log) => logSeconds(log));
-  const max = Math.max(...times, 0.01);
   const min = Math.min(...times);
+  const max = Math.max(...times);
+  const avg = times.reduce((sum, value) => sum + value, 0) / times.length;
+  const floor = min - Math.max(0.5, (max - min) * 0.5);
   const innerN = innerCount(block) || 1;
   const inners = flattenInner(block);
-  const span = Math.max(0.05, max - min * 0.98);
 
   return (
-    <div className="mt-2 space-y-2">
-      <div className="flex h-10 items-end gap-1">
-        {logs.map((log, index) => (
-          <div
-            key={log.id}
-            className="flex-1 rounded-sm bg-aqua/80"
-            style={{ height: `${Math.max(12, ((times[index] - min * 0.98) / span) * 100)}%` }}
-            title={formatTime(log.mm, log.ss, log.cc)}
-          />
+    <div className="mt-4 space-y-4">
+      <dl className="grid grid-cols-4 gap-2">
+        {[
+          { label: "Média", value: formatRaceClock(avg) },
+          { label: "Melhor", value: formatRaceClock(min) },
+          { label: "Pior", value: formatRaceClock(max) },
+          { label: "Amplitude", value: `${(max - min).toFixed(2)} s` },
+        ].map((item) => (
+          <div key={item.label} className="rounded-lg bg-panel-2 px-3 py-2">
+            <dt className="text-xs text-mute">{item.label}</dt>
+            <dd className="font-display text-xl font-bold tabular">{item.value}</dd>
+          </div>
         ))}
-      </div>
-      <ul className="space-y-1">
-        {logs.map((log) => {
+      </dl>
+      <ol className="space-y-1">
+        {logs.map((log, index) => {
           const split = splitRepNumber(log.repNumber, innerN);
           const inner = inners[split.innerRep - 1];
           const on = compare.includes(log.id);
+          const time = times[index];
+          const estimate = estimates.get(log.id);
+          const diff = time - (estimate ?? avg);
+          const width = 30 + ((time - floor) / Math.max(max - floor, 0.01)) * 70;
           return (
             <li key={log.id}>
               <button
                 type="button"
                 onClick={() => onToggle(log.id)}
-                className={`flex w-full items-center justify-between rounded-xl px-2 py-1.5 text-left ${
-                  on ? "bg-sand/20 ring-1 ring-sand" : "hover:bg-panel"
+                aria-pressed={on}
+                className={`grid w-full grid-cols-[5.5rem_minmax(0,1fr)_4.5rem_4rem] items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                  on ? "bg-aqua-soft ring-2 ring-aqua" : "hover:bg-panel-2"
                 }`}
               >
-                <span className="text-[11px] text-mute">
-                  {block.rounds > 1 ? `Série ${split.round} · ` : ""}
+                <span className="text-sm text-mute">
+                  {block.rounds > 1 ? `S${split.round} · ` : ""}
                   Rep {(inner?.itemIndex ?? split.innerRep - 1) + 1}
-                  {strokeLabel(log.stroke) ? ` · ${strokeLabel(log.stroke)}` : ""}
+                  {strokeLabel(log.stroke) ? <span className="block text-xs">{strokeLabel(log.stroke)}</span> : null}
                 </span>
-                <span className="font-mono text-sm text-aqua">{formatTime(log.mm, log.ss, log.cc)}</span>
+                <span className="h-5 overflow-hidden rounded bg-panel-2">
+                  <span
+                    className={`block h-full rounded ${diff <= 0 ? "bg-good" : "bg-coral"}`}
+                    style={{ width: `${width}%` }}
+                  />
+                </span>
+                <span className="text-right">
+                  <span className="block font-display text-xl font-bold leading-tight tabular text-mist">{formatRaceClock(time)}</span>
+                  {estimate ? <span className="block text-[11px] tabular text-mute">est. {formatRaceClock(estimate)}</span> : null}
+                </span>
+                <span className={`text-right text-xs font-semibold tabular ${diff <= 0 ? "text-good" : "text-coral"}`}>
+                  {diff > 0 ? "+" : diff < 0 ? "−" : ""}
+                  {Math.abs(diff).toFixed(2)}
+                </span>
               </button>
             </li>
           );
         })}
-      </ul>
+      </ol>
+      <p className="text-xs text-mute">
+        Barras mais curtas são repetições mais rápidas. Verde: mais rápido do que o estimado para essa intensidade e saída
+        (ou do que a média da série, quando não há histórico).
+      </p>
     </div>
   );
 }

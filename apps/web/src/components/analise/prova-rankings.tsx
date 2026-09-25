@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnaliseTabs } from "@/components/analise/analise-tabs";
 import { AthleteChips, NoAthletes } from "@/components/analise/athlete-chips";
 import { EvolutionChart } from "@/components/analise/evolution-chart";
-import { COURSE_LABEL, STROKE_LABEL, ageFromDob, formatDatePt, formatEvent, initials, strokeLabel } from "@/lib/labels";
+import { COURSE_LABEL, ageFromDob, formatDatePt, formatEvent, initials, strokeLabel } from "@/lib/labels";
 import {
   eventKey,
   eventRecords,
@@ -18,7 +18,7 @@ import {
   timeDelta,
 } from "@/lib/rankings";
 import { formatRaceClock } from "@/lib/race";
-import { annotateTrainingReps } from "@/lib/training-context";
+import { annotateTrainingReps, isPlausibleRep } from "@/lib/training-context";
 import { useAppState } from "@/lib/store";
 import type { PoolCourse, Stroke } from "@/lib/types";
 
@@ -359,6 +359,23 @@ function RecordDetail({
 }) {
   const record = findRecord(records, recordId);
   const other = compareId ? findRecord(records, compareId) : undefined;
+  const athleteIdForContext = record?.athleteId ?? "";
+  const recordDate = record?.date ?? "";
+  const recordDistance = record?.distanceM ?? 0;
+  const trainingContext = (() => {
+    const rows = athleteIdForContext
+      ? annotateTrainingReps(workouts, timeLogs, athleteIdForContext).filter((row) => {
+          const days = Math.round((Date.parse(recordDate) - Date.parse(row.date)) / 86_400_000);
+          return isPlausibleRep(row) && days >= 0 && days <= 42 && row.distanceM === recordDistance;
+        })
+      : [];
+    const recent = rows.slice(-12);
+    const recentDates = new Set(recent.map((row) => row.date));
+    const mean = recent.length ? recent.reduce((sum, row) => sum + row.timeS, 0) / recent.length : 0;
+    const fatigue = recent.length ? recent.reduce((sum, row) => sum + row.fatigue, 0) / recent.length : 0;
+    return { rows, recent, recentDates, mean, fatigue };
+  })();
+
   if (!record) {
     return (
       <p className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-mute">
@@ -374,17 +391,6 @@ function RecordDetail({
   );
   const delta = other ? timeDelta(record.timeS, other.timeS) : null;
   const signedDelta = delta ? signed(delta.seconds, delta.pct) : null;
-  const trainingContext = useMemo(() => {
-    const rows = annotateTrainingReps(workouts, timeLogs, record.athleteId).filter((row) => {
-      const days = Math.round((Date.parse(record.date) - Date.parse(row.date)) / 86_400_000);
-      return days >= 0 && days <= 42 && row.distanceM === record.distanceM;
-    });
-    const recent = rows.slice(-12);
-    const recentDates = new Set(recent.map((row) => row.date));
-    const mean = recent.length ? recent.reduce((sum, row) => sum + row.timeS, 0) / recent.length : 0;
-    const fatigue = recent.length ? recent.reduce((sum, row) => sum + row.fatigue, 0) / recent.length : 0;
-    return { rows, recent, recentDates, mean, fatigue };
-  }, [record.athleteId, record.date, record.distanceM, timeLogs, workouts]);
 
   return (
     <div className="space-y-4">
