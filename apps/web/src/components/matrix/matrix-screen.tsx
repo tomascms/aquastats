@@ -471,7 +471,7 @@ export function MatrixScreen() {
           type="button"
           onClick={() => void flushTimes()}
           disabled={saving}
-          className="h-9 rounded-xl bg-sand px-3 text-xs font-semibold text-ink disabled:opacity-60"
+          className="h-9 rounded-xl bg-aqua hover:bg-aqua-2 px-3 text-xs font-semibold text-white disabled:opacity-60"
         >
           {saving ? "A guardar…" : "Guardar"}
         </button>
@@ -533,7 +533,7 @@ export function MatrixScreen() {
               type="button"
               onClick={() => setRound(index + 1)}
               className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
-                round === index + 1 ? "bg-sand text-ink" : "border border-line text-mute"
+                round === index + 1 ? "bg-aqua text-white" : "border border-line text-mute"
               }`}
             >
               Série {index + 1}

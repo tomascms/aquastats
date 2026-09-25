@@ -15,7 +15,6 @@ export default function SwimmerHomePage() {
     return (
       <div className="space-y-5">
         <section className="rounded-xl border border-line bg-panel p-5">
-          <p className="text-xs font-semibold text-aqua">Equipa</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Ainda sem equipa</h1>
           <p className="mt-3 text-sm leading-relaxed text-mute">
             Enquanto esperas, podes preencher a tua ficha e recordes pessoais em Definições. Quando tiveres o código ou

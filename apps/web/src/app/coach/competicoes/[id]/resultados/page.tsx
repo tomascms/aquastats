@@ -42,7 +42,6 @@ export default function ResultadosPage() {
         ← Convocatória
       </Link>
       <div>
-        <p className="text-xs font-semibold text-sand">Resultados</p>
         <h1 className="text-2xl font-semibold tracking-tight">{meet.title}</h1>
         <p className="text-sm text-mute">
           {formatDateRange(meet.date, meetEnd(meet))} · {COURSE_LABEL[meet.course]}

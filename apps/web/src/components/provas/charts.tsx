@@ -114,17 +114,17 @@ export function RaceChart({
         </button>
       </div>
       <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label={title}>
-        <rect width={width} height={height} fill="#0c1c2a" rx="16" />
+        <rect width={width} height={height} fill="#0b2545" rx="16" />
         {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
           const y = pad.t + innerH * (1 - tick);
           return (
             <g key={tick}>
               <line x1={pad.l} x2={width - pad.r} y1={y} y2={y} stroke="rgba(125,211,201,0.1)" />
-              <text x={pad.l - 8} y={y + 3} textAnchor="end" fill="#7f9aa6" fontSize="9">
+              <text x={pad.l - 8} y={y + 3} textAnchor="end" fill="#a9bed3" fontSize="11">
                 {(maxL * tick).toFixed(tick === 0 || maxL >= 10 ? 0 : 2)}
               </text>
               {unitRight ? (
-                <text x={width - pad.r + 8} y={y + 3} fill="#7f9aa6" fontSize="9">
+                <text x={width - pad.r + 8} y={y + 3} fill="#a9bed3" fontSize="11">
                   {(maxR * tick).toFixed(2)}
                 </text>
               ) : null}
@@ -132,7 +132,7 @@ export function RaceChart({
           );
         })}
         {labels.map((label, index) => (
-          <text key={label + index} x={xAt(index)} y={height - 10} textAnchor="middle" fill="#7f9aa6" fontSize="10">
+          <text key={label + index} x={xAt(index)} y={height - 10} textAnchor="middle" fill="#a9bed3" fontSize="11">
             {label}
           </text>
         ))}
@@ -264,7 +264,7 @@ export function PieChart({
               />
             );
           })}
-          <circle cx={cx} cy={cy} r="36" fill="#0c1c2a" />
+          <circle cx={cx} cy={cy} r="36" fill="#0b2545" />
         </svg>
         <ul className="space-y-1 text-xs">
           {slices.map((slice) => (

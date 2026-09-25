@@ -55,7 +55,6 @@ export default function ConvocatoriaPage() {
       </Link>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold text-sand">Convocatória</p>
           <h1 className="text-2xl font-semibold tracking-tight">{meet.title}</h1>
           <p className="text-sm text-mute">
             {formatDateRange(meet.date, meetEnd(meet))} · {COURSE_LABEL[meet.course]}
@@ -126,14 +125,14 @@ export default function ConvocatoriaPage() {
                   key={item}
                   type="button"
                   onClick={() => setCourse(item)}
-                  className={`rounded-xl py-2 text-sm font-semibold ${course === item ? "bg-sand text-ink" : "text-mute"}`}
+                  className={`rounded-xl py-2 text-sm font-semibold ${course === item ? "bg-aqua text-white" : "text-mute"}`}
                 >
                   {COURSE_LABEL[item]}
                 </button>
               ))}
             </div>
           </div>
-          <button type="submit" className="h-12 rounded-2xl bg-sand text-sm font-medium text-ink sm:col-span-2">
+          <button type="submit" className="h-12 rounded-2xl bg-aqua hover:bg-aqua-2 text-sm font-semibold text-white sm:col-span-2">
             Guardar alterações
           </button>
         </form>
@@ -181,7 +180,7 @@ export default function ConvocatoriaPage() {
                         type="button"
                         onClick={() => actions.toggleMeetEntry(meet.id, athlete.id, event.stroke, event.distanceM)}
                         className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                          on ? "bg-sand text-ink" : "border border-line text-mute"
+                          on ? "bg-aqua text-white" : "border border-line text-mute"
                         }`}
                       >
                         {formatEvent(event.distanceM, event.stroke)}
@@ -197,7 +196,7 @@ export default function ConvocatoriaPage() {
 
       <Link
         href={`/coach/competicoes/${meet.id}/resultados`}
-        className="flex h-12 items-center justify-center rounded-2xl bg-sand text-sm font-medium text-ink"
+        className="flex h-12 items-center justify-center rounded-2xl bg-aqua hover:bg-aqua-2 text-sm font-semibold text-white"
       >
         Meter resultados
       </Link>

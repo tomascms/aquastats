@@ -138,7 +138,7 @@ export function SwimKeyboard({
                       }}
                       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                         activeSplit != null && Math.abs(activeSplit - mark.atM) < 0.05
-                          ? "bg-sand text-ink"
+                          ? "bg-aqua text-white"
                           : "border border-line text-mute"
                       }`}
                     >
@@ -180,7 +180,7 @@ export function SwimKeyboard({
                             type="button"
                             onClick={() => onToggleSplit(mark.atM)}
                             className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                              on ? "bg-sand text-ink" : "border border-line text-mute"
+                              on ? "bg-aqua text-white" : "border border-line text-mute"
                             }`}
                           >
                             {mark.label}

@@ -110,6 +110,14 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
         }
       : null;
 
+  const latestDate = mine[0]?.date;
+  const hasDateParam = Boolean(search.get("date"));
+  useEffect(() => {
+    if (hasDateParam || !latestDate) return;
+    setSelected(latestDate);
+    setCursor(latestDate);
+  }, [athleteId, hasDateParam, latestDate]);
+
   useEffect(() => {
     const first = dayWorkouts[0];
     setWorkoutId(first?.id ?? "");

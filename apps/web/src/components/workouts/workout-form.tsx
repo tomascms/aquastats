@@ -492,7 +492,7 @@ function StartToggle({
       <button
         type="button"
         onClick={() => onChange(true)}
-        className={`rounded-lg py-1.5 text-[11px] font-semibold ${fromBlock ? "bg-sand text-ink" : "text-mute"}`}
+        className={`rounded-lg py-1.5 text-[11px] font-semibold ${fromBlock ? "bg-aqua text-white" : "text-mute"}`}
       >
         Bloco
       </button>
@@ -516,7 +516,7 @@ function GearChip({
       type="button"
       onClick={onClick}
       className={`rounded-full font-semibold ${compact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]"} ${
-        active ? "bg-sand text-ink" : "border border-line text-mute"
+        active ? "bg-aqua text-white" : "border border-line text-mute"
       }`}
     >
       {GEAR_LABEL[gear]}

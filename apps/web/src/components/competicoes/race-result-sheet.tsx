@@ -576,7 +576,7 @@ export function RaceResultSheet({
                 Apagar
               </button>
             ) : null}
-            <button type="button" onClick={() => void save()} className="h-11 rounded-2xl bg-sand px-5 text-sm font-medium text-ink">
+            <button type="button" onClick={() => void save()} className="h-11 rounded-2xl bg-aqua hover:bg-aqua-2 px-5 text-sm font-semibold text-white">
               Guardar resultado
             </button>
           </div>

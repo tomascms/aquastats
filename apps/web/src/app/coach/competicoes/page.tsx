@@ -22,14 +22,13 @@ export default function CompeticoesPage() {
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold text-sand">Competição</p>
           <h1 className="text-3xl font-semibold tracking-tight">Competições</h1>
           <p className="text-sm text-mute">Convocatória e resultados. O painel de provas lê o que meteres aqui.</p>
         </div>
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
-          className="h-11 rounded-2xl bg-sand px-4 text-sm font-medium text-ink"
+          className="h-11 rounded-2xl bg-aqua hover:bg-aqua-2 px-4 text-sm font-semibold text-white"
         >
           Nova competição
         </button>
@@ -84,14 +83,14 @@ export default function CompeticoesPage() {
                   key={item}
                   type="button"
                   onClick={() => setCourse(item)}
-                  className={`rounded-xl py-2 text-sm font-semibold ${course === item ? "bg-sand text-ink" : "text-mute"}`}
+                  className={`rounded-xl py-2 text-sm font-semibold ${course === item ? "bg-aqua text-white" : "text-mute"}`}
                 >
                   {COURSE_LABEL[item]}
                 </button>
               ))}
             </div>
           </div>
-          <button type="submit" className="h-12 rounded-2xl bg-sand text-sm font-medium text-ink sm:col-span-2">
+          <button type="submit" className="h-12 rounded-2xl bg-aqua hover:bg-aqua-2 text-sm font-semibold text-white sm:col-span-2">
             Guardar e convocar
           </button>
         </form>
@@ -117,7 +116,7 @@ export default function CompeticoesPage() {
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   <Link
                     href={`/coach/competicoes/${meet.id}`}
-                    className="flex h-11 items-center justify-center rounded-2xl bg-sand text-sm font-medium text-ink"
+                    className="flex h-11 items-center justify-center rounded-2xl bg-aqua hover:bg-aqua-2 text-sm font-semibold text-white"
                   >
                     Convocar
                   </Link>
