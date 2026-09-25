@@ -112,6 +112,7 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
           groupName={athlete.groupName}
           stroke={athlete.primaryStroke || undefined}
           bests={bests}
+          recordCount={records.length}
           onOpenEvent={(stroke, distanceM) => setParams({ evento: eventKey(stroke, distanceM) })}
         />
       )}
@@ -126,6 +127,7 @@ function PersonalBestTable({
   groupName,
   stroke,
   bests,
+  recordCount,
   onOpenEvent,
 }: {
   athleteName: string;
@@ -134,6 +136,7 @@ function PersonalBestTable({
   groupName?: string;
   stroke?: Stroke | "";
   bests: ReturnType<typeof personalBests>;
+  recordCount: number;
   onOpenEvent: (stroke: Stroke, distanceM: number) => void;
 }) {
   const year = dob ? dob.slice(0, 4) : "";
@@ -162,8 +165,8 @@ function PersonalBestTable({
         </div>
         <dl className="mt-5 grid grid-cols-3 gap-3 border-t border-white/15 pt-4">
           <div>
-            <dt className="text-xs text-white/65">Provas com recorde</dt>
-            <dd className="font-display text-3xl font-bold tabular">{bests.length}</dd>
+            <dt className="text-xs text-white/65">Registos de prova</dt>
+            <dd className="font-display text-3xl font-bold tabular">{recordCount}</dd>
           </div>
           <div>
             <dt className="text-xs text-white/65">Melhor pontuação FINA</dt>

@@ -113,6 +113,7 @@ export type TrainingRep = {
 
 export type TrainingFilters = {
   distances: number[];
+  restRanges: string[];
   setShapes: string[];
   intensities: Intensity[];
   restBuckets: string[];
@@ -175,6 +176,7 @@ type SessionSlot = {
 
 export const EMPTY_TRAINING_FILTERS: TrainingFilters = {
   distances: [],
+  restRanges: [],
   setShapes: [],
   intensities: [],
   restBuckets: [],
@@ -502,8 +504,81 @@ function allows<T>(selected: T[], value: T): boolean {
   return selected.length === 0 || selected.includes(value);
 }
 
+/** Faster than 0.4 s/m beats world records; slower than 3 s/m is not a timed rep. Both are entry errors. */
+export function isPlausibleRep(row: Pick<TrainingRep, "timeS" | "distanceM">): boolean {
+  return row.timeS >= row.distanceM * 0.4 && row.timeS <= row.distanceM * 3;
+}
+
+export type RestRange = { key: string; label: string; count: number };
+
+const REST_FIXED_EDGES = [60, 65, 75, 90];
+const REST_STEP = 15;
+
+function clockLabel(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}'${String(seconds % 60).padStart(2, "0")}`;
+}
+
+/** key format: "lo-hi" in seconds, hi may be "inf"; "none" for reps without a send-off. */
+export function inRestRange(seconds: number | null, key: string): boolean {
+  if (key === "none") return seconds == null;
+  if (seconds == null) return false;
+  const [lo, hi] = key.split("-");
+  return seconds >= Number(lo) && (hi === "inf" || seconds < Number(hi));
+}
+
+/**
+ * Send-off ranges built from the data: fixed tight ranges up to 1'30, then 15" steps while
+ * reps exist. When a step is empty and little is left beyond it, the tail collapses into one
+ * open range so a lone 10' send-off doesn't spawn thirty empty buckets.
+ */
+export function restRanges(rows: TrainingRep[]): RestRange[] {
+  const values = rows.map((row) => row.restSeconds).filter((value): value is number => value != null);
+  const out: RestRange[] = [];
+  const noneCount = rows.length - values.length;
+  if (!values.length) return noneCount ? [{ key: "none", label: "Sem intervalo", count: noneCount }] : [];
+
+  const count = (lo: number, hi: number) => values.filter((value) => value >= lo && value < hi).length;
+  const push = (lo: number, hi: number, label: string) => {
+    const n = count(lo, hi);
+    if (n) out.push({ key: `${lo}-${Number.isFinite(hi) ? hi : "inf"}`, label, count: n });
+  };
+
+  push(0, REST_FIXED_EDGES[0], `< ${clockLabel(REST_FIXED_EDGES[0])}`);
+  for (let i = 0; i < REST_FIXED_EDGES.length - 1; i += 1) {
+    const lo = REST_FIXED_EDGES[i];
+    const hi = REST_FIXED_EDGES[i + 1];
+    push(lo, hi, `${clockLabel(lo)}–${clockLabel(hi)}`);
+  }
+
+  const max = Math.max(...values);
+  let lo = REST_FIXED_EDGES[REST_FIXED_EDGES.length - 1];
+  while (lo <= max) {
+    const hi = lo + REST_STEP;
+    const here = count(lo, hi);
+    const beyond = count(hi, Infinity);
+    if (!here) {
+      const tail = count(lo, Infinity);
+      if (tail <= 3 || tail <= values.length * 0.15) {
+        push(lo, Infinity, `≥ ${clockLabel(lo)}`);
+        break;
+      }
+    } else if (!beyond) {
+      push(lo, hi, `${clockLabel(lo)}–${clockLabel(hi)}`);
+      break;
+    } else {
+      push(lo, hi, `${clockLabel(lo)}–${clockLabel(hi)}`);
+    }
+    lo = hi;
+  }
+
+  if (noneCount) out.push({ key: "none", label: "Sem intervalo", count: noneCount });
+  return out;
+}
+
 export function matchTrainingFilters(row: TrainingRep, filters: TrainingFilters): boolean {
   if (!allows(filters.distances, row.distanceM)) return false;
+  if (filters.restRanges.length && !filters.restRanges.some((key) => inRestRange(row.restSeconds, key))) return false;
   if (!allows(filters.setShapes, row.setShape)) return false;
   if (!allows(filters.intensities, row.intensity)) return false;
   if (!allows(filters.restBuckets, row.restBucket)) return false;

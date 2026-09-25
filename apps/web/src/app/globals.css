@@ -116,27 +116,15 @@ table td {
   font-variant-numeric: tabular-nums;
 }
 
-/* Lane rope — the one decorative motif, used to mark "you are here" and edges. */
+/* Accent rule: marks the active section and the top edge of chrome. */
 .lane-rope {
   height: 4px;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--lane-red) 0 14px,
-    #ffffff 14px 22px,
-    var(--pool) 22px 36px,
-    #ffffff 36px 44px
-  );
+  background: var(--pool);
 }
 
 .lane-rope-v {
   width: 3px;
-  background: repeating-linear-gradient(
-    180deg,
-    var(--lane-red) 0 8px,
-    #ffffff 8px 11px,
-    var(--pool) 11px 19px,
-    #ffffff 19px 22px
-  );
+  background: var(--pool);
 }
 
 .field {
