@@ -103,7 +103,7 @@ export function RaceChart({
       <div className="mb-2 flex items-start justify-between gap-2">
         <div>
           <h3 className="text-sm font-medium text-mist">{title}</h3>
-          {unit ? <p className="text-[10px] uppercase tracking-wider text-mute">{unit}</p> : null}
+          {unit ? <p className="text-xs text-mute">{unit}</p> : null}
         </div>
         <button
           type="button"

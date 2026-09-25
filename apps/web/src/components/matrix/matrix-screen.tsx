@@ -556,7 +556,7 @@ export function MatrixScreen() {
           <button
             type="button"
             onClick={() => setPicker(true)}
-            className="sticky left-0 z-10 bg-ink px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-aqua"
+            className="sticky left-0 z-10 bg-ink px-2 py-2 text-left text-xs font-semibold tracking-[0.12em] text-aqua"
           >
             Editar atletas
           </button>
@@ -572,7 +572,7 @@ export function MatrixScreen() {
                 {block.noSendOff ? "—" : formatSendOff(item.sendOffSeconds)}
               </p>
               {item.fromBlock && (
-                <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-sand">bloco</p>
+                <p className="mt-0.5 text-xs font-semibold text-sand">bloco</p>
               )}
               {item.gear.length > 0 && (
                 <p className="mt-0.5 text-[9px] leading-tight text-mute">{formatGear(item.gear)}</p>

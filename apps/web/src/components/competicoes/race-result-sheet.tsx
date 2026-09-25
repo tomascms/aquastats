@@ -347,13 +347,13 @@ export function RaceResultSheet({
     <section className="space-y-3 rounded-xl border border-line bg-panel p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-sand">{athleteName}</p>
+          <p className="text-xs font-semibold text-sand">{athleteName}</p>
           <h2 className="text-xl font-semibold tracking-tight">{formatEvent(entry.distanceM, entry.stroke)}</h2>
           <p className="text-xs text-mute">{COURSE_LABEL[meet.course]}</p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
           {!readOnly && days.length > 1 ? (
-            <label className="text-[10px] font-semibold uppercase tracking-wide text-mute">
+            <label className="text-xs font-semibold text-mute">
               Date
               <select className="field mt-1" value={raceDate} onChange={(event) => setRaceDate(event.target.value)}>
                 {days.map((day) => (
@@ -366,7 +366,7 @@ export function RaceResultSheet({
           ) : (
             <p className="text-xs text-mute">{formatDatePt(raceDate)}</p>
           )}
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-mute">
+          <label className="text-xs font-semibold text-mute">
             Final
             <div className="mt-1">
               {readOnly ? (
@@ -425,10 +425,10 @@ export function RaceResultSheet({
                 <tr key={row.atM} className={row.isTurn ? "bg-sand/10" : "bg-white"}>
                   <td className={`${td} whitespace-nowrap font-semibold text-aqua`}>
                     <span>{row.atM}m</span>
-                    {row.isTurn ? <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-wide text-sand">viragem</span> : null}
-                    {row.isFinish ? <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-wide text-mute">meta</span> : null}
+                    {row.isTurn ? <span className="mt-0.5 block text-xs font-semibold text-sand">viragem</span> : null}
+                    {row.isFinish ? <span className="mt-0.5 block text-xs font-semibold text-mute">meta</span> : null}
                     {entry.stroke === "im" ? (
-                      <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-wide text-mute">
+                      <span className="mt-0.5 block text-xs font-semibold text-mute">
                         {STROKE_LABEL[row.stroke]}
                       </span>
                     ) : null}
@@ -501,7 +501,7 @@ export function RaceResultSheet({
                   <td className={td}>
                     {row.showNado ? (
                       <div className="flex flex-col items-center gap-0.5">
-                        <span className="whitespace-nowrap text-[9px] font-semibold uppercase tracking-wide text-mute">
+                        <span className="whitespace-nowrap text-xs font-semibold text-mute">
                           {row.sectorLabel}
                         </span>
                         {sectorEditable ? (

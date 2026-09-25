@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Barlow_Condensed, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastHost } from "@/components/ui/toast-host";
 
@@ -12,6 +12,16 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+const barlow = Barlow_Condensed({
+  variable: "--font-barlow",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+});
+
+// Render HTML per request: prerendered pages ship `s-maxage=31536000`, which lets browsers keep
+// serving an old app shell after a deploy. Hashed JS/CSS under /_next/static stay immutable.
+export const dynamic = "force-dynamic";
 
 const site = (process.env.APP_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
 
@@ -42,7 +52,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: "#0b2545",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -60,7 +70,7 @@ const jsonLd = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="pt" className={`${geist.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="pt" className={`${geist.variable} ${geistMono.variable} ${barlow.variable} h-full antialiased`}>
       <body className="min-h-full">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         <a

@@ -43,7 +43,7 @@ export function DeleteAccountSection({ hasPassword }: { hasPassword: boolean }) 
   return (
     <section className="card space-y-3 border-coral/30 p-4">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-coral">Zona perigosa</p>
+        <p className="text-xs font-semibold text-coral">Zona perigosa</p>
         <h2 className="text-lg font-semibold">Eliminar conta</h2>
         <p className="mt-1 text-sm text-mute">Remove o acesso e desactiva a conta. Os dados da equipa mantêm-se.</p>
       </div>

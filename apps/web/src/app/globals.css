@@ -2,51 +2,39 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Geist Font Variables */
-@supports (font-variation-settings: normal) {
-  :root {
-    --font-geist-sans: 'Geist', sans-serif;
-    --font-geist-mono: 'Geist Mono', monospace;
-  }
-}
-
-/* Light-only palette: surfaces are hard-coded white across the app, so a dark variant would make text unreadable. */
+/*
+ * Aquastats visual system — "pool deck & timing board".
+ * Light-only: surfaces are white across the app. Token names are historical:
+ * --aqua is the deep-water navy used for primary actions and emphasis,
+ * --ink is the page background, --mist is body text.
+ */
 :root {
   color-scheme: light;
-  /* Brand Colors */
-  --color-aqua-500: #0ea5e9;
-  --color-aqua-600: #0284c7;
 
-  /* UI */
-  --ink: #f5f7fb;
-  --ink-2: #edf3fb;
+  --ink: #f3f7fa;
+  --ink-2: #e7eef4;
   --panel: #ffffff;
-  --panel-2: #f3f6fb;
-  --line: #dfe7f2;
-  --aqua: #0f1f3d;
-  --aqua-2: #17375f;
-  --aqua-soft: #eaf1ff;
-  --sand: #4d6b8d;
-  --coral: #d95f48;
-  --mist: #10213d;
-  --mute: #61708a;
-  --shadow-soft: 0 16px 40px rgba(19, 39, 68, 0.08);
+  --panel-2: #f6f9fb;
+  --line: #d8e2eb;
+  --line-strong: #bccad8;
 
-  /* Semantic */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f3f6fb;
-  --bg-tertiary: #edf3fb;
-  --bg-muted: #f8fafc;
+  --aqua: #0b2545;
+  --aqua-2: #13406f;
+  --aqua-soft: #e4eef8;
+  --pool: #1668b8;
+  --pool-soft: #e6f0fa;
+  --lane-red: #e2463c;
+  --good: #138a64;
+  --good-soft: #e3f4ed;
 
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-tertiary: #64748b;
-  --text-muted: #94a3b8;
+  --sand: #46607d;
+  --coral: #c93a2e;
+  --mist: #0b1d33;
+  --mute: #56697f;
 
-  --border-color: #e2e8f0;
-  --border-light: #f1f5f9;
+  --shadow-soft: 0 1px 2px rgba(11, 37, 69, 0.06), 0 8px 24px rgba(11, 37, 69, 0.06);
+  --shadow-raise: 0 2px 4px rgba(11, 37, 69, 0.08), 0 16px 36px rgba(11, 37, 69, 0.12);
 
-  /* Zones */
   --zone-z1: #10b981;
   --zone-z2: #84cc16;
   --zone-z3: #eab308;
@@ -61,27 +49,57 @@
   --color-panel: var(--panel);
   --color-panel-2: var(--panel-2);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-aqua: var(--aqua);
   --color-aqua-2: var(--aqua-2);
+  --color-aqua-soft: var(--aqua-soft);
+  --color-pool: var(--pool);
+  --color-pool-soft: var(--pool-soft);
+  --color-lane: var(--lane-red);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
   --color-sand: var(--sand);
   --color-coral: var(--coral);
   --color-mist: var(--mist);
   --color-mute: var(--mute);
-  --font-display: var(--font-sans);
   --font-sans: var(--font-geist);
+  --font-display: var(--font-barlow);
   --font-mono: var(--font-geist-mono);
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--ink);
+    color: var(--mist);
+    font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+    min-height: 100%;
+  }
+
+  h1,
+  h2 {
+    font-family: var(--font-barlow), var(--font-geist), sans-serif;
+    letter-spacing: 0.005em;
+    color: var(--mist);
+  }
+
+  h1 {
+    font-size: clamp(1.75rem, 1.4rem + 1.2vw, 2.35rem);
+    line-height: 1.05;
+    font-weight: 700;
+  }
+
+  h2 {
+    line-height: 1.15;
+  }
+
+  h3 {
+    color: var(--mist);
+  }
 }
 
 * {
   -webkit-tap-highlight-color: transparent;
-}
-
-html,
-body {
-  background: linear-gradient(180deg, #f6f9ff 0%, #eef4fb 100%);
-  color: var(--mist);
-  font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
-  min-height: 100%;
 }
 
 button,
@@ -91,55 +109,103 @@ select {
   touch-action: manipulation;
 }
 
+/* Timing-board numerals: every time, split and count aligns column-wise. */
+.tabular,
+.metric-value,
+table td {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lane rope — the one decorative motif, used to mark "you are here" and edges. */
+.lane-rope {
+  height: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--lane-red) 0 14px,
+    #ffffff 14px 22px,
+    var(--pool) 22px 36px,
+    #ffffff 36px 44px
+  );
+}
+
+.lane-rope-v {
+  width: 3px;
+  background: repeating-linear-gradient(
+    180deg,
+    var(--lane-red) 0 8px,
+    #ffffff 8px 11px,
+    var(--pool) 11px 19px,
+    #ffffff 19px 22px
+  );
+}
+
 .field {
   width: 100%;
-  border-radius: 0.75rem;
-  border: 1px solid var(--line);
+  min-height: 2.75rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--line-strong);
   background: #fff;
-  padding: 0.7rem 0.9rem;
-  font-size: 0.925rem;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.95rem;
   color: var(--mist);
   outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.field::placeholder {
+  color: #8a9aac;
+}
+
+.field:hover {
+  border-color: #9fb1c4;
 }
 
 .field:focus {
-  border-color: #0f1f3d;
-  box-shadow: 0 0 0 3px rgba(15, 31, 61, 0.08);
+  border-color: var(--pool);
+  box-shadow: 0 0 0 3px rgba(22, 104, 184, 0.18);
 }
 
 .card {
   border-radius: 1rem;
-  border: 1px solid rgba(219, 228, 240, 0.9);
-  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--line);
+  background: var(--panel);
   box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(10px);
 }
 
 .stat-card {
-  border-radius: 1rem;
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.875rem;
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(244, 248, 255, 0.9) 100%);
-  box-shadow: 0 10px 25px rgba(16, 33, 61, 0.05);
+  background: var(--panel);
+  padding-top: 0.25rem;
+}
+
+.stat-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--aqua);
 }
 
 .data-panel {
   border-radius: 1rem;
-  border: 1px solid rgba(219, 228, 240, 0.85);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 10px 32px rgba(16, 33, 61, 0.04);
+  border: 1px solid var(--line);
+  background: var(--panel);
 }
 
 .metric-label {
-  font-size: 0.7rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 0.8rem;
+  font-weight: 500;
   color: var(--mute);
 }
 
 .metric-value {
-  font-size: clamp(1.6rem, 2vw, 2.2rem);
+  font-family: var(--font-barlow), var(--font-geist), sans-serif;
+  font-size: clamp(1.9rem, 1.6rem + 1vw, 2.5rem);
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1;
   color: var(--mist);
 }
 
@@ -147,7 +213,7 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   line-height: 1;
   color: var(--sand);
 }
@@ -156,7 +222,7 @@ select {
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 9999px;
-  background: #66b091;
+  background: var(--good);
 }
 
 .data-row {
@@ -166,62 +232,58 @@ select {
   align-items: center;
 }
 
-.list-row {
-  border-top: 1px solid var(--line);
-  padding-top: 0.9rem;
-  margin-top: 0.9rem;
-}
-
 .soft-pill {
   display: inline-flex;
   align-items: center;
   border-radius: 9999px;
-  border: 1px solid var(--line);
   background: var(--aqua-soft);
-  padding: 0.32rem 0.65rem;
-  font-size: 0.68rem;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--aqua);
+  color: var(--aqua-2);
 }
 
-.btn,
 .btn-primary,
 .btn-ghost {
   display: inline-flex;
-  height: 2.5rem;
+  min-height: 2.5rem;
   align-items: center;
   justify-content: center;
-  border-radius: 0.75rem;
-  padding: 0 1rem;
-  font-size: 0.875rem;
+  gap: 0.5rem;
+  border-radius: 0.625rem;
+  padding: 0 1.1rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  transition: all 180ms ease;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--aqua) 0%, var(--aqua-2) 100%);
+  background: var(--aqua);
   color: #fff;
-  box-shadow: 0 12px 20px rgba(15, 31, 61, 0.16);
 }
 
 .btn-primary:hover {
-  filter: brightness(1.03);
+  background: var(--aqua-2);
+}
+
+.btn-primary:active {
+  background: #07182e;
 }
 
 .btn-primary:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .btn-ghost {
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
   color: var(--mist);
 }
 
 .btn-ghost:hover {
-  background: var(--ink-2);
+  border-color: var(--aqua);
+  background: var(--panel-2);
 }
 
 .lane-stripe {
@@ -291,7 +353,7 @@ select {
 
 @keyframes cellFlash {
   0% {
-    background: rgba(11, 31, 58, 0.12);
+    background: rgba(22, 104, 184, 0.14);
   }
   100% {
     background: transparent;
@@ -337,7 +399,7 @@ select {
 }
 
 :focus-visible {
-  outline: 2px solid var(--aqua);
+  outline: 2px solid var(--pool);
   outline-offset: 3px;
 }
 
@@ -351,7 +413,7 @@ select {
 }
 
 ::selection {
-  background: rgba(15, 31, 61, 0.12);
+  background: rgba(22, 104, 184, 0.18);
   color: var(--mist);
 }
 
@@ -366,7 +428,7 @@ select {
   body,
   #conteudo {
     background: #fff !important;
-    color: #0b1f3a !important;
+    color: #0b1d33 !important;
     max-width: none !important;
     border: 0 !important;
   }

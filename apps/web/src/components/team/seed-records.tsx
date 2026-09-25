@@ -194,7 +194,7 @@ export function SeedRecordsEditor({
         <div className="space-y-4">
           {groups.map((group) => (
             <section key={group.course} className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-mute">Piscina de {COURSE_LABEL[group.course]}</p>
+              <p className="text-xs font-semibold text-mute">Piscina de {COURSE_LABEL[group.course]}</p>
               {group.rows.map(({ key, parsed }) => {
                 const marks = seedSplitMarks(parsed.distanceM);
                 return (

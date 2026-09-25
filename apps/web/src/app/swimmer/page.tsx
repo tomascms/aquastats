@@ -15,7 +15,7 @@ export default function SwimmerHomePage() {
     return (
       <div className="space-y-5">
         <section className="rounded-xl border border-line bg-panel p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-aqua">Equipa</p>
+          <p className="text-xs font-semibold text-aqua">Equipa</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Ainda sem equipa</h1>
           <p className="mt-3 text-sm leading-relaxed text-mute">
             Enquanto esperas, podes preencher a tua ficha e recordes pessoais em Definições. Quando tiveres o código ou
@@ -35,7 +35,7 @@ export default function SwimmerHomePage() {
   return (
     <div className="space-y-5">
       <section className="rounded-xl border border-aqua/20 bg-panel p-5">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-aqua">
+        <p className="text-xs font-semibold text-aqua">
           Olá{me?.name ? `, ${me.name.split(" ")[0]}` : ""}
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">{today?.title ?? "Ainda sem treino"}</h1>
@@ -47,11 +47,11 @@ export default function SwimmerHomePage() {
         </p>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-ink-2 px-3 py-3">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-mute">Volume</p>
+            <p className="text-xs tracking-[0.16em] text-mute">Volume</p>
             <p className="font-mono text-xl text-aqua">{formatMeters(me ? athleteVolumeM(workouts, me.id) : 0)}</p>
           </div>
           <div className="rounded-2xl bg-ink-2 px-3 py-3">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-mute">Tempos hoje</p>
+            <p className="text-xs tracking-[0.16em] text-mute">Tempos hoje</p>
             <p className="text-xl font-semibold tracking-tight">{mine.length}</p>
           </div>
         </div>

@@ -44,7 +44,7 @@ export function MonthCalendar({
 
       <div className="grid grid-cols-7 gap-1">
         {WEEKDAYS.map((day) => (
-          <p key={day} className="py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-mute">
+          <p key={day} className="py-1 text-center text-xs font-semibold text-mute">
             {day}
           </p>
         ))}

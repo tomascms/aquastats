@@ -72,7 +72,7 @@ export function WorkoutForm({
         });
       }}
     >
-      <label className="block text-xs font-semibold uppercase tracking-wide text-mute">
+      <label className="block text-xs font-semibold text-mute">
         Data
         <input
           type="date"
@@ -88,7 +88,7 @@ export function WorkoutForm({
       </label>
 
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-mute">Piscina</p>
+        <p className="text-xs font-semibold text-mute">Piscina</p>
         <div className="mt-1 grid grid-cols-2 gap-1 rounded-2xl border border-line bg-panel p-1">
           {(["scm", "lcm"] as const).map((item) => (
             <button
@@ -103,7 +103,7 @@ export function WorkoutForm({
         </div>
       </div>
 
-      <label className="block text-xs font-semibold uppercase tracking-wide text-mute">
+      <label className="block text-xs font-semibold text-mute">
         Título
         <input
           value={title}
@@ -113,7 +113,7 @@ export function WorkoutForm({
       </label>
 
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-mute">Turno</p>
+        <p className="text-xs font-semibold text-mute">Turno</p>
         <div className="mt-1 grid grid-cols-2 gap-1 rounded-2xl border border-line bg-panel p-1">
           {SHIFTS.map((item) => (
             <button
@@ -309,14 +309,14 @@ function GroupCard({
         <div className="mt-3 space-y-3">
           <div className="flex flex-wrap items-end gap-2">
             <div className="min-w-[180px] flex-1">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-mute">Velocidade</p>
+              <p className="mb-1 text-xs font-semibold text-mute">Velocidade</p>
               <IntensityPills
                 value={segment.intensity}
                 onChange={(intensity) => onChange((current) => applySegmentDefaults(current, { intensity }))}
               />
             </div>
             {!hideSendOff && (
-              <label className="w-[7.5rem] text-[10px] font-semibold uppercase tracking-wide text-mute">
+              <label className="w-[7.5rem] text-xs font-semibold text-mute">
                 Saída
                 <SendOffSelect
                   value={segment.sendOffSeconds || DEFAULT_SEND_OFF}
@@ -327,7 +327,7 @@ function GroupCard({
           </div>
 
           <div>
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-mute">Material</p>
+            <p className="mb-1 text-xs font-semibold text-mute">Material</p>
             <div className="flex flex-wrap gap-1">
               {GEARS.map((item) => (
                 <GearChip
@@ -342,7 +342,7 @@ function GroupCard({
 
           <div>
             {showStart ? (
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-mute">Partida</p>
+              <p className="mb-1 text-xs font-semibold text-mute">Partida</p>
             ) : null}
             <div className="flex flex-wrap items-center gap-2">
               {showStart ? (

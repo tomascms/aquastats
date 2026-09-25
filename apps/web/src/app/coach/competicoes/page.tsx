@@ -22,7 +22,7 @@ export default function CompeticoesPage() {
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-sand">Competição</p>
+          <p className="text-xs font-semibold text-sand">Competição</p>
           <h1 className="text-3xl font-semibold tracking-tight">Competições</h1>
           <p className="text-sm text-mute">Convocatória e resultados. O painel de provas lê o que meteres aqui.</p>
         </div>
@@ -46,7 +46,7 @@ export default function CompeticoesPage() {
             router.push(`/coach/competicoes/${id}`);
           }}
         >
-          <label className="text-xs font-semibold uppercase tracking-wide text-mute">
+          <label className="text-xs font-semibold text-mute">
             De
             <input
               type="date"
@@ -61,7 +61,7 @@ export default function CompeticoesPage() {
               required
             />
           </label>
-          <label className="text-xs font-semibold uppercase tracking-wide text-mute">
+          <label className="text-xs font-semibold text-mute">
             Até
             <input
               type="date"
@@ -72,12 +72,12 @@ export default function CompeticoesPage() {
               required
             />
           </label>
-          <label className="text-xs font-semibold uppercase tracking-wide text-mute">
+          <label className="text-xs font-semibold text-mute">
             Título
             <input className="field mt-1" value={title} onChange={(event) => setTitle(event.target.value)} />
           </label>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-mute">Piscina</p>
+            <p className="text-xs font-semibold text-mute">Piscina</p>
             <div className="mt-1 grid grid-cols-2 gap-1 rounded-2xl border border-line bg-ink p-1">
               {(["scm", "lcm"] as const).map((item) => (
                 <button
@@ -109,7 +109,7 @@ export default function CompeticoesPage() {
             const analyzed = raceSessions.filter((session) => session.competitionId === meet.id).length;
             return (
               <li key={meet.id} className="rounded-xl border border-line bg-panel p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-sand">{formatDateRange(meet.date, meetEnd(meet))}</p>
+                <p className="text-xs font-semibold text-sand">{formatDateRange(meet.date, meetEnd(meet))}</p>
                 <h2 className="text-xl font-semibold tracking-tight">{meet.title}</h2>
                 <p className="text-sm text-mute">
                   {COURSE_LABEL[meet.course]} · {meet.athleteIds.length} convocados · {provas.length} provas · {withTime} tempos · {analyzed} análises

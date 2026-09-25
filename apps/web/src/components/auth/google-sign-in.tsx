@@ -28,7 +28,7 @@ export function GoogleSignIn({
       <a
         href={startUrl}
         aria-disabled={disabled}
-        className={`mx-auto flex h-10 w-full max-w-[400px] items-center justify-center gap-3 rounded-md border border-line bg-white text-sm font-medium text-[#1f1f1f] shadow-sm transition hover:bg-[#f8f9fa] ${
+        className={`mx-auto flex h-11 w-full max-w-[400px] items-center justify-center gap-3 rounded-lg border border-line-strong bg-white text-sm font-medium text-[#1f1f1f] shadow-sm transition hover:bg-[#f8f9fa] ${
           disabled ? "pointer-events-none opacity-60" : ""
         }`}
       >

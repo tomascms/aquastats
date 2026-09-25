@@ -55,7 +55,7 @@ export default function ConvocatoriaPage() {
       </Link>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-sand">Convocatória</p>
+          <p className="text-xs font-semibold text-sand">Convocatória</p>
           <h1 className="text-2xl font-semibold tracking-tight">{meet.title}</h1>
           <p className="text-sm text-mute">
             {formatDateRange(meet.date, meetEnd(meet))} · {COURSE_LABEL[meet.course]}
@@ -89,7 +89,7 @@ export default function ConvocatoriaPage() {
             setEditing(false);
           }}
         >
-          <label className="text-xs font-semibold uppercase tracking-wide text-mute">
+          <label className="text-xs font-semibold text-mute">
             De
             <input
               type="date"
@@ -103,7 +103,7 @@ export default function ConvocatoriaPage() {
               required
             />
           </label>
-          <label className="text-xs font-semibold uppercase tracking-wide text-mute">
+          <label className="text-xs font-semibold text-mute">
             Até
             <input
               type="date"
@@ -114,12 +114,12 @@ export default function ConvocatoriaPage() {
               required
             />
           </label>
-          <label className="text-xs font-semibold uppercase tracking-wide text-mute">
+          <label className="text-xs font-semibold text-mute">
             Título
             <input className="field mt-1" value={title} onChange={(event) => setTitle(event.target.value)} />
           </label>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-mute">Piscina</p>
+            <p className="text-xs font-semibold text-mute">Piscina</p>
             <div className="mt-1 grid grid-cols-2 gap-1 rounded-2xl border border-line bg-ink p-1">
               {(["scm", "lcm"] as const).map((item) => (
                 <button

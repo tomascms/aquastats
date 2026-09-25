@@ -32,7 +32,7 @@ export default function TeamPage() {
       </div>
 
       <section className="card p-4">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-mute">Convite da equipa</p>
+        <p className="text-xs font-medium text-mute">Convite da equipa</p>
         <div className="mt-2 flex items-center gap-2">
           <p className="min-w-0 flex-1 truncate font-mono text-sm">{inviteUrl || "A carregar o código…"}</p>
           <button

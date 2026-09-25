@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnaliseTabs } from "@/components/analise/analise-tabs";
 import { TreinoDashboard } from "@/components/analise/treino-dashboard";
+import { AthleteChips, NoAthletes } from "@/components/analise/athlete-chips";
 import { MonthCalendar } from "@/components/ui/month-calendar";
 import { BLOCK_LABEL, SHIFT_LABEL, formatDatePt, strokeLabel } from "@/lib/labels";
 import { todayIso } from "@/lib/dates";
@@ -32,7 +33,7 @@ function Chip({
       type="button"
       onClick={onClick}
       className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-        on ? "bg-aqua text-ink" : "border border-line text-mute hover:text-mist"
+        on ? "bg-aqua text-white" : "border border-line text-mute hover:text-mist"
       }`}
     >
       {children}
@@ -46,7 +47,7 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
   const search = useSearchParams();
   const { athletes, workouts, timeLogs, swimmerId } = useAppState();
   const locked = role === "swimmer" ? swimmerId : "";
-  const athleteId = locked || search.get("atleta") || "";
+  const athleteId = locked || search.get("atleta") || athletes[0]?.id || "";
   const athlete = athletes.find((item) => item.id === athleteId);
   const initial = search.get("date") || todayIso();
   const [cursor, setCursor] = useState(initial);
@@ -139,44 +140,28 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-sand">Análise</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Análise de treino</h1>
-          <p className="text-sm text-mute">Escolhe a série do dia ou abre o modelo com todos os filtros de contexto.</p>
+          <h1>Análise de treino</h1>
+          <p className="mt-1 text-sm text-mute">A série do dia, repetição a repetição, ou o modelo com todo o contexto.</p>
         </div>
         <div className="w-full max-w-md">
           <AnaliseTabs role={role} />
         </div>
       </header>
 
-      {role === "coach" ? (
-        <label className="block text-xs font-semibold uppercase tracking-wide text-mute">
-          Atleta
-          <select className="field mt-1" value={athleteId} onChange={(event) => setAthlete(event.target.value)}>
-            <option value="">Selecionar atleta…</option>
-            {athletes.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
+      {role === "coach" ? <AthleteChips athletes={athletes} selectedId={athleteId} onSelect={setAthlete} /> : null}
 
       {!athlete ? (
-        <section className="rounded-xl border border-dashed border-line bg-panel/50 px-5 py-10 text-center">
-          <p className="text-xl font-semibold tracking-tight">Escolhe o atleta</p>
-          <p className="mt-1 text-sm text-mute">O calendário mostra os treinos e os tempos da água.</p>
-        </section>
+        <NoAthletes />
       ) : (
         <>
-          <div className="grid max-w-md grid-cols-2 gap-1 rounded-lg border border-line bg-ink-2 p-1">
+          <div className="grid max-w-xs grid-cols-2 gap-1 rounded-xl border border-line bg-panel p-1">
             <button
               type="button"
               onClick={() => setView("session")}
-              className={`rounded-md px-3 py-2 text-sm font-medium ${
-                view === "session" ? "bg-aqua text-ink" : "text-mute hover:text-mist"
+              className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                view === "session" ? "bg-aqua text-white" : "text-mute hover:text-mist"
               }`}
             >
               Sessão
@@ -184,8 +169,8 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
             <button
               type="button"
               onClick={() => setView("model")}
-              className={`rounded-md px-3 py-2 text-sm font-medium ${
-                view === "model" ? "bg-aqua text-ink" : "text-mute hover:text-mist"
+              className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                view === "model" ? "bg-aqua text-white" : "text-mute hover:text-mist"
               }`}
             >
               Modelo
@@ -214,7 +199,7 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
               />
 
               <section className="rounded-xl border border-line bg-panel p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-aqua">{formatDatePt(selected)}</p>
+                <p className="text-xs font-semibold text-aqua">{formatDatePt(selected)}</p>
                 <p className="text-lg font-semibold">{athlete.name}</p>
                 {(() => {
                   const weeks = weeklyVolume(workouts, athlete.id, 8);
@@ -352,7 +337,7 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
 
                 {delta && picked.length === 2 ? (
                   <div className="mt-4 rounded-2xl border border-line bg-ink px-3 py-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-sand">Comparação</p>
+                    <p className="text-xs font-semibold text-sand">Comparação</p>
                     <p className="mt-1 font-mono text-sm">
                       {formatTime(picked[0].mm, picked[0].ss, picked[0].cc)} →{" "}
                       {formatTime(picked[1].mm, picked[1].ss, picked[1].cc)}

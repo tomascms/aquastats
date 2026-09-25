@@ -55,7 +55,7 @@ function toggleValue<T>(list: T[], value: T): T[] {
 function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-mute">{label}</p>
+      <p className="text-xs font-semibold text-mute">{label}</p>
       <div className="flex flex-wrap gap-1">{children}</div>
     </div>
   );
@@ -450,7 +450,7 @@ export function TreinoDashboard({
           overlay={{ id: "target", label: "Objetivo", color: "#e7b84b", values: timelineTargets, dashed: true }}
         />
         <div className="space-y-3">
-          <label className="block text-xs font-semibold uppercase tracking-wide text-mute">
+          <label className="block text-xs font-semibold text-mute">
             Agrupar por
             <select
               className="field mt-1"
@@ -483,7 +483,7 @@ export function TreinoDashboard({
 
       <section className="overflow-x-auto rounded-xl border border-line bg-panel">
         <table className="min-w-[920px] w-full text-left text-[12px]">
-          <thead className="text-[10px] uppercase tracking-wide text-mute">
+          <thead className="text-xs text-mute">
             <tr>
               <th className="px-3 py-2 font-semibold">Data</th>
               <th className="px-3 py-2 font-semibold">Série</th>
@@ -592,7 +592,7 @@ function PredictionStat({ label, value, tone = "neutral" }: { label: string; val
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-xl border border-line bg-panel px-3 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-mute">{label}</p>
+      <p className="text-xs font-semibold text-mute">{label}</p>
       <p className="mt-1 font-mono text-lg text-aqua">
         {value}
         {hint ? <span className="ml-1 text-[11px] text-mute">{hint}</span> : null}
@@ -608,7 +608,7 @@ function CompareHint({ rows, picked }: { rows: TrainingRep[]; picked: string[] }
   const delta = b.timeS - a.timeS;
   return (
     <div className="rounded-xl border border-line bg-ink px-4 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-sand">Comparação</p>
+      <p className="text-xs font-semibold text-sand">Comparação</p>
       <p className="mt-1 font-mono text-sm">
         {formatTime(a.log.mm, a.log.ss, a.log.cc)} → {formatTime(b.log.mm, b.log.ss, b.log.cc)}
         <span className={`ml-2 ${delta < 0 ? "text-aqua" : "text-coral"}`}>

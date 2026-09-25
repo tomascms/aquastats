@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnaliseTabs } from "@/components/analise/analise-tabs";
+import { AthleteChips, NoAthletes } from "@/components/analise/athlete-chips";
 import { EvolutionChart } from "@/components/analise/evolution-chart";
 import { COURSE_LABEL, STROKE_LABEL, ageFromDob, formatDatePt, formatEvent, initials, strokeLabel } from "@/lib/labels";
 import {
@@ -36,7 +37,7 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
   const search = useSearchParams();
   const { athletes, competitions, meetEntries, meetResults, raceSessions, swimmerId, teamName, workouts, timeLogs } = useAppState();
   const locked = role === "swimmer" ? swimmerId : "";
-  const athleteId = locked || search.get("atleta") || "";
+  const athleteId = locked || search.get("atleta") || athletes[0]?.id || "";
   const event = parseEventKey(search.get("evento") || "");
   const mode = search.get("lista") === "best" ? "best" : "last";
   const recordId = search.get("registo") || "";
@@ -61,11 +62,10 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-aqua">Análise</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Análise de prova</h1>
-          <p className="text-sm text-mute">Recordes, evolução e comparação entre marcas.</p>
+          <h1>Análise de prova</h1>
+          <p className="mt-1 text-sm text-mute">Recordes, evolução e comparação entre marcas.</p>
         </div>
         <div className="w-full max-w-md">
           <AnaliseTabs role={role} />
@@ -73,28 +73,15 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
       </header>
 
       {role === "coach" ? (
-        <label className="block text-xs font-semibold uppercase tracking-wide text-mute">
-          Atleta
-          <select
-            className="field mt-1"
-            value={athleteId}
-            onChange={(event) => setParams({ atleta: event.target.value || null, evento: null, registo: null, comparar: null })}
-          >
-            <option value="">Selecionar atleta…</option>
-            {athletes.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <AthleteChips
+          athletes={athletes}
+          selectedId={athleteId}
+          onSelect={(id) => setParams({ atleta: id, evento: null, registo: null, comparar: null })}
+        />
       ) : null}
 
       {!athlete ? (
-        <section className="rounded-xl border border-dashed border-line bg-panel/50 px-5 py-10 text-center">
-          <p className="text-xl font-semibold tracking-tight">Escolhe o atleta</p>
-          <p className="mt-1 text-sm text-mute">Os melhores tempos abrem a partir daí.</p>
-        </section>
+        <NoAthletes />
       ) : recordId ? (
         <RecordDetail
           athleteName={athlete.name}
@@ -150,28 +137,53 @@ function PersonalBestTable({
   onOpenEvent: (stroke: Stroke, distanceM: number) => void;
 }) {
   const year = dob ? dob.slice(0, 4) : "";
+  const scored = bests
+    .map((record) => ({ record, points: finaPoints(record.timeS, record.course, record.stroke, record.distanceM) || 0 }))
+    .sort((a, b) => b.points - a.points);
+  const top = scored[0]?.points ? scored[0] : undefined;
+  const latest = bests.reduce<string>((max, record) => (record.date > max ? record.date : max), "");
+  const age = ageFromDob(dob);
   return (
-    <section className="overflow-hidden rounded-xl border border-line bg-panel">
-      <div className="flex flex-wrap items-center gap-4 border-b border-line px-4 py-4">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-ink text-xl font-semibold tracking-tight text-aqua">
-          {initials(athleteName)}
+    <section className="overflow-hidden rounded-2xl border border-line bg-panel">
+      <div className="bg-aqua px-5 py-5 text-white sm:px-6">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/12 font-display text-2xl font-bold">
+            {initials(athleteName)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-3xl font-bold leading-none">
+              {athleteName}
+              {year ? <span className="ml-2 text-lg font-medium text-white/60">{year}</span> : null}
+            </p>
+            <p className="mt-1.5 text-sm text-white/70">
+              {[teamName, groupName, strokeLabel(stroke), age != null ? `${age} anos` : ""].filter(Boolean).join(" · ")}
+            </p>
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-2xl font-semibold tracking-tight">
-            {athleteName}
-            {year ? <span className="ml-2 text-base text-mute">({year})</span> : null}
-          </p>
-          <p className="text-sm text-mute">
-            {teamName}
-            {groupName ? ` · ${groupName}` : ""}
-            {strokeLabel(stroke) ? ` · ${strokeLabel(stroke)}` : ""}
-            {ageFromDob(dob) != null ? ` · ${ageFromDob(dob)} anos` : ""}
-          </p>
-        </div>
-      </div>
-      <div className="overflow-x-auto">
+        <dl className="mt-5 grid grid-cols-3 gap-3 border-t border-white/15 pt-4">
+          <div>
+            <dt className="text-xs text-white/65">Provas com recorde</dt>
+            <dd className="font-display text-3xl font-bold tabular">{bests.length}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-white/65">Melhor pontuação FINA</dt>
+            <dd className="font-display text-3xl font-bold tabular">
+              {top ? top.points : "—"}
+              {top ? (
+                <span className="ml-2 align-middle font-sans text-xs font-medium text-white/65">
+                  {formatEvent(top.record.distanceM, top.record.stroke)}
+                </span>
+              ) : null}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-white/65">Última prova</dt>
+            <dd className="font-display text-3xl font-bold tabular">{latest ? formatDatePt(latest).slice(0, 5) : "—"}</dd>
+          </div>
+        </dl>
+      </div>      <div className="overflow-x-auto">
         <table className="min-w-[640px] w-full text-left text-sm">
-          <thead className="text-[10px] uppercase tracking-wider text-mute">
+          <thead className="bg-panel-2 text-xs font-semibold text-mute">
             <tr>
               <th className="px-4 py-3">Prova</th>
               <th className="px-3 py-3">Piscina</th>
@@ -189,7 +201,7 @@ function PersonalBestTable({
               </tr>
             ) : (
               bests.map((record) => (
-                <tr key={record.id} className="border-t border-line/70 hover:bg-ink-2">
+                <tr key={record.id} className="border-t border-line hover:bg-panel-2">
                   <td className="px-4 py-2.5">
                     <button
                       type="button"
@@ -200,7 +212,7 @@ function PersonalBestTable({
                     </button>
                   </td>
                   <td className="px-3 py-2.5 text-mute">{COURSE_LABEL[record.course]}</td>
-                  <td className="px-3 py-2.5 font-mono text-mist">{formatRaceClock(record.timeS)}</td>
+                  <td className="px-3 py-2.5 font-display text-xl font-bold text-mist tabular">{formatRaceClock(record.timeS)}</td>
                   <td className="px-3 py-2.5 font-mono text-sand">
                     {finaPoints(record.timeS, record.course, record.stroke, record.distanceM) || "—"}
                   </td>
@@ -240,34 +252,34 @@ function EventBoard({
   const chart = mode === "best" ? sliceRecords(all, "best") : sliceRecords(all, "last");
   return (
     <div className="space-y-4">
-      <button type="button" onClick={onBack} className="text-sm text-mute">
+      <button type="button" onClick={onBack} className="text-sm font-semibold text-pool hover:underline">
         ← Recordes de {athleteName}
       </button>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-sand">Ranking pessoal</p>
-          <h2 className="text-2xl font-semibold tracking-tight">{formatEvent(distanceM, stroke)}</h2>
+          <h2 className="text-3xl font-bold">{formatEvent(distanceM, stroke)}</h2>
+          <p className="text-sm text-mute">Ranking pessoal de {athleteName}</p>
         </div>
-        <div className="grid grid-cols-2 gap-1 rounded-2xl border border-line bg-ink p-1">
+        <div className="grid grid-cols-2 gap-1 rounded-xl border border-line bg-panel p-1">
           <button
             type="button"
             onClick={() => onMode("last")}
-            className={`rounded-xl px-3 py-2 text-sm font-semibold ${mode === "last" ? "bg-aqua text-ink" : "text-mute"}`}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === "last" ? "bg-aqua text-white" : "text-mute hover:text-mist"}`}
           >
             Últimas 10
           </button>
           <button
             type="button"
             onClick={() => onMode("best")}
-            className={`rounded-xl px-3 py-2 text-sm font-semibold ${mode === "best" ? "bg-sand text-ink" : "text-mute"}`}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === "best" ? "bg-aqua text-white" : "text-mute hover:text-mist"}`}
           >
             10 melhores
           </button>
         </div>
       </div>
 
-      <section className="rounded-xl border border-line bg-panel p-3">
-        <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-mute">Evolução</p>
+      <section className="rounded-2xl border border-line bg-panel p-4">
+        <h3 className="mb-2 px-1 font-display text-xl font-bold">Evolução</h3>
         <EvolutionChart records={chart} onSelect={onOpen} />
         <p className="mt-2 px-1 text-[11px] text-mute">Clica num ponto ou numa linha para abrir o detalhe.</p>
       </section>
@@ -292,8 +304,8 @@ function CourseList({
   onOpen: (id: string) => void;
 }) {
   return (
-    <section className="rounded-xl border border-line bg-panel p-3">
-      <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-sand">{title}</p>
+    <section className="rounded-2xl border border-line bg-panel p-4">
+      <h3 className="px-1 font-display text-xl font-bold">{title}</h3>
       {rows.length === 0 ? (
         <p className="px-1 py-6 text-sm text-mute">Sem registos em {COURSE_LABEL[course]}.</p>
       ) : (
@@ -303,10 +315,10 @@ function CourseList({
               <button
                 type="button"
                 onClick={() => onOpen(record.id)}
-                className="flex w-full items-center justify-between gap-2 rounded-2xl px-3 py-2 text-left hover:bg-ink"
+                className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left hover:bg-panel-2"
               >
                 <span className="min-w-0">
-                  <span className="block font-mono text-sm text-aqua">{formatRaceClock(record.timeS)}</span>
+                  <span className="block font-display text-xl font-bold text-mist tabular">{formatRaceClock(record.timeS)}</span>
                   <span className="block truncate text-[11px] text-mute">
                     {formatDatePt(record.date)}
                   </span>
@@ -373,13 +385,13 @@ function RecordDetail({
 
   return (
     <div className="space-y-4">
-      <button type="button" onClick={onBack} className="text-sm text-mute">
+      <button type="button" onClick={onBack} className="text-sm font-semibold text-pool hover:underline">
         ← {formatEvent(record.distanceM, record.stroke)}
       </button>
-      <section className="rounded-xl border border-sand/30 bg-panel p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-sand">{athleteName}</p>
+      <section className="rounded-2xl border border-line bg-panel p-5">
+        <p className="text-xs font-semibold text-sand">{athleteName}</p>
         <h2 className="text-2xl font-semibold tracking-tight">{formatEvent(record.distanceM, record.stroke)}</h2>
-        <p className="font-mono text-4xl text-aqua">{formatRaceClock(record.timeS)}</p>
+        <p className="mt-1 font-display text-6xl font-bold leading-none text-aqua tabular">{formatRaceClock(record.timeS)}</p>
         <p className="mt-1 text-sm text-mute">
           {formatDatePt(record.date)} · {COURSE_LABEL[record.course]}
         </p>
@@ -390,7 +402,7 @@ function RecordDetail({
           <button
             type="button"
             onClick={() => onCompare(other ? "" : sameEvent[0].id)}
-            className="mt-3 rounded-full bg-sand px-4 py-2 text-sm font-bold text-ink"
+            className="btn-primary mt-4"
           >
             {other ? "Fechar comparação" : "Comparar"}
           </button>
@@ -399,7 +411,7 @@ function RecordDetail({
 
       {other && signedDelta ? (
         <section className="rounded-xl border border-line bg-panel p-4">
-          <label className="text-xs font-semibold uppercase tracking-wide text-mute">
+          <label className="text-xs font-semibold text-mute">
             Comparar com outra marca do mesmo atleta
             <select className="field mt-1" value={other.id} onChange={(event) => onCompare(event.target.value)}>
               {sameEvent.map((item) => (
@@ -410,19 +422,19 @@ function RecordDetail({
             </select>
           </label>
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            <div className="rounded-2xl bg-ink px-3 py-3">
-              <p className="text-[10px] uppercase text-mute">Este</p>
-              <p className="font-mono text-lg text-aqua">{formatRaceClock(record.timeS)}</p>
+            <div className="rounded-xl bg-panel-2 px-3 py-3">
+              <p className="text-xs text-mute">Este</p>
+              <p className="font-display text-2xl font-bold text-mist tabular">{formatRaceClock(record.timeS)}</p>
               <p className="text-[11px] text-mute">{formatDatePt(record.date)}</p>
             </div>
-            <div className="rounded-2xl bg-ink px-3 py-3">
-              <p className="text-[10px] uppercase text-mute">Outro</p>
-              <p className="font-mono text-lg text-sand">{formatRaceClock(other.timeS)}</p>
+            <div className="rounded-xl bg-panel-2 px-3 py-3">
+              <p className="text-xs text-mute">Outro</p>
+              <p className="font-display text-2xl font-bold text-mist tabular">{formatRaceClock(other.timeS)}</p>
               <p className="text-[11px] text-mute">{formatDatePt(other.date)}</p>
             </div>
-            <div className={`rounded-2xl px-3 py-3 ${signedDelta.faster ? "bg-aqua/15" : "bg-coral/15"}`}>
-              <p className="text-[10px] uppercase text-mute">Diferença (outro − este)</p>
-              <p className="font-mono text-lg">{signedDelta.clock}</p>
+            <div className={`rounded-xl px-3 py-3 ${signedDelta.faster ? "bg-good-soft" : "bg-[#fdecea]"}`}>
+              <p className="text-xs text-mute">Diferença (outro − este)</p>
+              <p className={`font-display text-2xl font-bold tabular ${signedDelta.faster ? "text-good" : "text-coral"}`}>{signedDelta.clock}</p>
               <p className="text-sm text-mute">{signedDelta.pct}</p>
             </div>
           </div>

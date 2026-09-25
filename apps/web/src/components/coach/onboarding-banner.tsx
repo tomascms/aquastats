@@ -17,7 +17,7 @@ export function OnboardingBanner() {
     <section className="card border-aqua/20 bg-[linear-gradient(135deg,rgba(15,31,61,0.05),rgba(74,114,164,0.08))] p-4 sm:p-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-aqua">Primeiros passos</p>
+          <p className="text-xs font-semibold tracking-[0.14em] text-aqua">Primeiros passos</p>
           <h2 className="mt-1 text-lg font-semibold text-mist">Configura a tua equipa</h2>
         </div>
         <span className="soft-pill">Checklist</span>

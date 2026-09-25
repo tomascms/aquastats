@@ -4,7 +4,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
   return (
     <html lang="pt">
       <body className="min-h-dvh bg-[#061018] px-5 py-16 text-[#d7ece8]">
-        <p className="text-sm uppercase tracking-[0.22em] text-[#ff6b6b]">Erro</p>
+        <p className="text-sm tracking-[0.22em] text-[#ff6b6b]">Erro</p>
         <h1 className="mt-3 font-sans text-3xl font-bold">A app não conseguiu carregar</h1>
         <p className="mt-3 max-w-md text-sm text-[#7f9aa6]">Tenta recarregar. Os teus dados não são mostrados neste ecrã.</p>
         <button

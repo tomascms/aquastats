@@ -15,7 +15,7 @@
     "mode": "smart"
   },
   "vars": {
-    "API_URL": "https://aquastats-api-kijldbtoaq-uc.a.run.app",
+    "API_URL": "https://aquastats-api-445938662978.europe-west3.run.app",
     "APP_URL": "https://aquastats.net"
   },
   "routes": [

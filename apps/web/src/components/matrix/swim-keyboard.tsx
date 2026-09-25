@@ -105,7 +105,7 @@ export function SwimKeyboard({
 
       {(onStroke || availableSplits.length > 0 || onClear || onNotDone) && (
         <details className="mb-1.5 rounded-lg border border-line bg-panel/80">
-          <summary className="cursor-pointer px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-mute">
+          <summary className="cursor-pointer px-2 py-1.5 text-xs font-semibold text-mute">
             Estilo · parciais · apagar
           </summary>
           <div className="space-y-2 border-t border-line px-2 py-2">
@@ -284,7 +284,7 @@ function TimeField({
         invalid ? "border-coral bg-coral/10" : active ? "border-aqua bg-aqua/10" : "border-line bg-panel"
       }`}
     >
-      <span className="block text-[9px] font-semibold uppercase tracking-wide text-mute">{label}</span>
+      <span className="block text-xs font-semibold text-mute">{label}</span>
       <span className={`font-mono font-medium leading-none text-mist ${compact ? "text-xl" : "text-[28px]"}`}>{value}</span>
     </button>
   );

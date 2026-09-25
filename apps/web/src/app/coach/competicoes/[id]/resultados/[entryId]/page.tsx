@@ -35,7 +35,7 @@ export default function ResultViewPage() {
       </Link>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-sand">{meet.title}</p>
+          <p className="text-xs font-semibold text-sand">{meet.title}</p>
           <h1 className="text-2xl font-semibold tracking-tight">{formatEvent(entry.distanceM, entry.stroke)}</h1>
           <p className="text-sm text-mute">
             {formatDatePt(existing?.date || meet.date)} · {COURSE_LABEL[meet.course]}

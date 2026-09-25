@@ -12,7 +12,7 @@ export default function NotFound() {
       </header>
       <div className="my-8 h-1.5 w-full overflow-hidden rounded-full lane-stripe opacity-80" />
       <section className="flex-1">
-        <p className="text-sm uppercase tracking-[0.22em] text-aqua-2">404</p>
+        <p className="text-sm tracking-[0.22em] text-aqua-2">404</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight">Esta página não existe</h1>
         <p className="mt-3 text-sm leading-relaxed text-mute">
           O endereço está errado ou o conteúdo foi movido. Volta ao início e entra na tua área.

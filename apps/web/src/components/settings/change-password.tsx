@@ -57,7 +57,7 @@ export function ChangePasswordSection({
   return (
     <section id="seguranca" className="card space-y-3 p-4">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-mute">Segurança</p>
+        <p className="text-xs font-semibold text-mute">Segurança</p>
         <h2 className="text-lg font-semibold">{hasPassword ? "Alterar palavra-passe" : "Definir palavra-passe"}</h2>
         <p className="mt-1 text-sm text-mute">
           {hasPassword

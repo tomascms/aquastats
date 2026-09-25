@@ -15,7 +15,7 @@ export default function ErrorPage({
       </header>
       <div className="my-8 h-1.5 w-full overflow-hidden rounded-full lane-stripe opacity-80" />
       <section className="flex-1">
-        <p className="text-sm uppercase tracking-[0.22em] text-coral">Erro</p>
+        <p className="text-sm tracking-[0.22em] text-coral">Erro</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight">Algo correu mal</h1>
         <p className="mt-3 text-sm leading-relaxed text-mute">
           Não mostramos detalhes técnicos no ecrã. Tenta outra vez. Se persistir, volta mais tarde.

@@ -13,7 +13,7 @@ export function WaveMark({ className = "h-8 w-8" }: { className?: string }) {
   );
 }
 
-export function BrandLockup({ compact = false }: { compact?: boolean }) {
+export function BrandLockup({ compact = false, onDark = false }: { compact?: boolean; onDark?: boolean }) {
   return (
     <span className="inline-flex items-center gap-2">
       <Image
@@ -21,11 +21,15 @@ export function BrandLockup({ compact = false }: { compact?: boolean }) {
         alt=""
         width={40}
         height={40}
-        className={compact ? "h-7 w-7 object-contain" : "h-8 w-8 object-contain"}
+        className={`${compact ? "h-7 w-7" : "h-8 w-8"} object-contain ${onDark ? "brightness-0 invert" : ""}`}
         priority
       />
-      <span className={`font-semibold tracking-tight text-aqua ${compact ? "text-[15px]" : "text-lg"}`}>
-        Aquastats
+      <span
+        className={`font-display font-bold tracking-wide ${onDark ? "text-white" : "text-aqua"} ${
+          compact ? "text-xl" : "text-2xl"
+        }`}
+      >
+        aquastats
       </span>
     </span>
   );

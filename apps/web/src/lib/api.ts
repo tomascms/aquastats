@@ -2,6 +2,24 @@ export type ApiError = { status: number; detail: string; requestId?: string };
 
 let refreshPromise: Promise<boolean> | null = null;
 
+// Auth calls that establish or end a session; a 401 there is final, not an expired access token.
+const NO_REFRESH = [
+  "/api/v1/auth/refresh",
+  "/api/v1/auth/login",
+  "/api/v1/auth/register",
+  "/api/v1/auth/logout",
+  "/api/v1/auth/forgot",
+  "/api/v1/auth/reset",
+  "/api/v1/auth/confirm",
+  "/api/v1/auth/resend-confirmation",
+  "/api/v1/auth/google",
+  "/api/v1/auth/status",
+];
+
+function canRefresh(path: string): boolean {
+  return !NO_REFRESH.some((prefix) => path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`));
+}
+
 function idempotencyKey(seed?: string): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     if (!seed || seed.length > 120) return crypto.randomUUID();
@@ -73,7 +91,7 @@ export async function api<T>(
     throw { status: 0, detail: "Sem ligação à internet." } satisfies ApiError;
   }
 
-  if (res.status === 401 && !path.startsWith("/api/v1/auth/")) {
+  if (res.status === 401 && canRefresh(path)) {
     const refreshed = await refreshSession();
     if (refreshed) {
       try {

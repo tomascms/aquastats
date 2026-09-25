@@ -9,8 +9,8 @@ export function OfflinePill() {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-wide ${
-        online ? "border-aqua/20 bg-aqua/10 text-aqua" : "border-sand/25 bg-sand/10 text-sand"
+      className={`inline-flex items-center gap-1.5 self-start rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+        online ? "bg-good-soft text-good" : "bg-[#fdecea] text-coral"
       }`}
       title={pending > 0 ? `${pending} tempos por sincronizar` : undefined}
     >

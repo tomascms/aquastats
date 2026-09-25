@@ -58,21 +58,21 @@ export default function DefinicoesPage() {
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-mute">Conta</p>
+        <p className="text-xs font-semibold text-mute">Conta</p>
         <h1 className="text-3xl font-semibold tracking-tight">Definições</h1>
         <p className="mt-1 text-sm text-mute">Nome da equipa, convite e dados da conta.</p>
       </div>
 
       <form onSubmit={(event) => void saveTeam(event)} className="card space-y-3 p-4">
-        <label className="block text-xs font-semibold uppercase tracking-wide text-mute">
+        <label className="block text-xs font-semibold text-mute">
           Nome da equipa
           <input className="field mt-1" value={name} onChange={(event) => setName(event.target.value)} required />
         </label>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-mute">
+        <label className="block text-xs font-semibold text-mute">
           O teu nome
           <input className="field mt-1" value={coachName} onChange={(event) => setCoachName(event.target.value)} />
         </label>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-mute">
+        <label className="block text-xs font-semibold text-mute">
           Email
           <input className="field mt-1 bg-ink-2" value={email} readOnly />
         </label>
@@ -88,7 +88,7 @@ export default function DefinicoesPage() {
       </form>
 
       <section className="card space-y-3 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-mute">Convite</p>
+        <p className="text-xs font-semibold text-mute">Convite</p>
         <p className="break-all font-mono text-sm">{inviteUrl || "A carregar…"}</p>
         <p className="text-xs text-mute">Código: {joinCode || "—"}</p>
         <p className="text-xs text-mute">O código é gerado automaticamente e não pode ser alterado.</p>
