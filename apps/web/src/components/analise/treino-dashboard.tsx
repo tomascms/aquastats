@@ -19,12 +19,19 @@ import {
   restRanges,
   statsOf,
   uniqueSorted,
-  type FatigueBand,
   type TrainingFilters,
   type TrainingGroupBy,
   type TrainingRep,
 } from "@/lib/training-context";
-import { predictTrainingTargets, type TrainingTarget } from "@/lib/training-prediction";
+import {
+  formTimeline,
+  learnedPatterns,
+  predictTrainingTargets,
+  type FormBreak,
+  type FormPoint,
+  type LearnedEffect,
+  type TrainingTarget,
+} from "@/lib/training-prediction";
 import type { TimeLog, WellnessEntry, Workout } from "@/lib/types";
 
 const INK = "#0b1d33";
@@ -44,7 +51,6 @@ const GROUP_OPTIONS: TrainingGroupBy[] = [
   "trainedEarlier",
   "weekday",
   "gear",
-  "fatigueBand",
   "loadBeforeBucket",
   "month",
 ];
@@ -115,13 +121,11 @@ export function TreinoDashboard({
   athleteId,
   workouts,
   timeLogs,
-  teamRows,
   wellness,
 }: {
   athleteId: string;
   workouts: Workout[];
   timeLogs: TimeLog[];
-  teamRows?: TrainingRep[];
   wellness?: WellnessEntry[];
 }) {
   const allRows = useMemo(
@@ -138,7 +142,9 @@ export function TreinoDashboard({
   const [moreFilters, setMoreFilters] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
 
-  const predictions = useMemo(() => predictTrainingTargets(rows, teamRows ?? rows), [rows, teamRows]);
+  const predictions = useMemo(() => predictTrainingTargets(rows), [rows]);
+  const patterns = useMemo(() => learnedPatterns(rows), [rows]);
+  const form = useMemo(() => formTimeline(rows), [rows]);
   const atDistance = useMemo(() => rows.filter((row) => row.distanceM === activeDistance), [activeDistance, rows]);
   const visible = useMemo(() => filterTrainingReps(atDistance, filters), [atDistance, filters]);
   const ranges = useMemo(() => restRanges(atDistance), [atDistance]);
@@ -191,7 +197,6 @@ export function TreinoDashboard({
       months: uniqueSorted(atDistance.map((row) => row.month), (a, b) => a - b),
       loadBuckets: uniqueSorted(atDistance.map((row) => row.loadBeforeBucket)),
       weeklyBuckets: uniqueSorted(atDistance.map((row) => row.weeklyBucket)),
-      fatigueBands: uniqueSorted(atDistance.map((row) => row.fatigueBand)) as FatigueBand[],
     }),
     [atDistance],
   );
@@ -307,6 +312,11 @@ export function TreinoDashboard({
           </header>
           <DensityChart real={visible.map((row) => row.timeS)} estimated={paired.map((item) => item.target.targetS)} />
         </section>
+
+        <div className="grid gap-5 2xl:grid-cols-2">
+          <LearnedPanel effects={patterns.effects} n={patterns.n} />
+          <FormPanel points={form.points} breaks={form.breaks} />
+        </div>
 
         <section className="rounded-2xl border border-line bg-panel p-5">
           <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -461,13 +471,6 @@ export function TreinoDashboard({
                 {GEARS.map((gear) => (
                   <Toggle key={gear} on={filters.gears.includes(gear)} onClick={() => patch({ gears: toggleValue(filters.gears, gear) })}>
                     {GEAR_LABEL[gear]}
-                  </Toggle>
-                ))}
-              </FilterGroup>
-              <FilterGroup title="Cansaço acumulado">
-                {more.fatigueBands.map((band) => (
-                  <Toggle key={band} on={filters.fatigueBands.includes(band)} onClick={() => patch({ fatigueBands: toggleValue(filters.fatigueBands, band) })}>
-                    {band}
                   </Toggle>
                 ))}
               </FilterGroup>
@@ -882,7 +885,7 @@ function RepTable({
               <th className="px-3 py-2.5">Intensidade</th>
               <th className="px-3 py-2.5">Saída</th>
               <th className="px-3 py-2.5">Antes</th>
-              <th className="px-3 py-2.5">Cansaço</th>
+              <th className="px-3 py-2.5">Semana</th>
             </tr>
           </thead>
           <tbody>
@@ -949,10 +952,7 @@ function RepTable({
                         <span className="block text-xs text-mute">{REST_VS_LABEL[row.restVsSet]}</span>
                       </td>
                       <td className="px-3 py-2.5">{formatMeters(row.loadBeforeM)}</td>
-                      <td className="px-3 py-2.5">
-                        {row.fatigue}
-                        <span className="block text-xs text-mute">{row.fatigueBand}</span>
-                      </td>
+                      <td className="px-3 py-2.5">{formatMeters(row.weeklyLoadM)}</td>
                     </tr>
                   );
                 })
@@ -962,4 +962,137 @@ function RepTable({
       </div>
     </section>
   );
+}
+
+function LearnedPanel({ effects, n }: { effects: LearnedEffect[]; n: number }) {
+  const shown = [...effects].sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 12);
+  const scale = Math.max(1, ...shown.map((effect) => Math.abs(effect.pct)));
+  return (
+    <section className="rounded-2xl border border-line bg-panel p-5">
+      <h3 className="font-display text-2xl font-bold">O que o modelo aprendeu</h3>
+      <p className="text-sm text-mute">
+        Efeitos estimados só com os tempos deste atleta ({n} repetições comparáveis). Com poucos dados ficam perto de zero.
+      </p>
+      {shown.length === 0 ? (
+        <p className="mt-4 rounded-xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-mute">
+          Ainda não há repetições suficientes em condições diferentes para aprender padrões.
+        </p>
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {shown.map((effect) => {
+            const faster = effect.pct < 0;
+            const width = (Math.abs(effect.pct) / scale) * 50;
+            return (
+              <li key={effect.key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,11rem)_4.5rem] items-center gap-3">
+                <span className="text-sm text-mist">
+                  {effect.label}
+                  <span className="block text-xs text-mute">{effect.support} reps</span>
+                </span>
+                <span className="relative h-5 rounded bg-panel-2">
+                  <span className="absolute inset-y-0 left-1/2 w-px bg-line-strong" aria-hidden="true" />
+                  <span
+                    className={`absolute inset-y-0.5 rounded ${faster ? "bg-good" : "bg-coral"}`}
+                    style={faster ? { right: "50%", width: `${width}%` } : { left: "50%", width: `${width}%` }}
+                  />
+                </span>
+                <span className={`text-right text-sm font-semibold tabular ${faster ? "text-good" : "text-coral"}`}>
+                  {effect.pct > 0 ? "+" : "−"}
+                  {Math.abs(effect.pct).toFixed(1)}%
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <p className="mt-3 text-xs text-mute">Verde: tempos mais rápidos nessa condição. Vermelho: mais lentos.</p>
+    </section>
+  );
+}
+
+function FormPanel({ points, breaks }: { points: FormPoint[]; breaks: FormBreak[] }) {
+  if (points.length < 2) {
+    return (
+      <section className="rounded-2xl border border-line bg-panel p-5">
+        <h3 className="font-display text-2xl font-bold">Forma ao longo do tempo</h3>
+        <p className="mt-4 rounded-xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-mute">
+          Aparece a partir de duas semanas com repetições comparáveis.
+        </p>
+      </section>
+    );
+  }
+  const width = 620;
+  const height = 240;
+  const pad = { l: 52, r: 16, t: 16, b: 36 };
+  const innerW = width - pad.l - pad.r;
+  const innerH = height - pad.t - pad.b;
+  const values = points.map((p) => p.indexPct);
+  const lim = Math.max(1, ...values.map((v) => Math.abs(v))) * 1.2;
+  const x = (i: number) => pad.l + (i / Math.max(points.length - 1, 1)) * innerW;
+  // Faster (negative index) is drawn higher.
+  const y = (v: number) => pad.t + ((v + lim) / (2 * lim)) * innerH;
+  const path = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(p.indexPct).toFixed(1)}`).join(" ");
+  const breakIndex = (iso: string) => points.findIndex((p) => p.week >= weekStartMondayLocal(iso));
+
+  return (
+    <section className="rounded-2xl border border-line bg-panel p-5">
+      <h3 className="font-display text-2xl font-bold">Forma ao longo do tempo</h3>
+      <p className="text-sm text-mute">Tempo semanal face ao habitual do atleta, nas mesmas séries. Mais rápido fica em cima.</p>
+      <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 h-auto w-full" role="img" aria-label="Índice de forma semanal">
+        {[-lim / 1.2, 0, lim / 1.2].map((tick) => (
+          <g key={tick}>
+            <line x1={pad.l} x2={width - pad.r} y1={y(tick)} y2={y(tick)} stroke={tick === 0 ? "#bccad8" : GRID} />
+            <text x={pad.l - 8} y={y(tick) + 4} textAnchor="end" fill={MUTE} fontSize="11">
+              {tick > 0 ? "+" : ""}
+              {tick.toFixed(1)}%
+            </text>
+          </g>
+        ))}
+        {breaks.map((item) => {
+          const i = breakIndex(item.to);
+          if (i < 0) return null;
+          return (
+            <g key={item.to}>
+              <line x1={x(i)} x2={x(i)} y1={pad.t} y2={pad.t + innerH} stroke={LANE} strokeDasharray="4 4" />
+              <text x={x(i) + 4} y={pad.t + 12} fill={LANE} fontSize="11">
+                após {item.days} dias parado
+              </text>
+            </g>
+          );
+        })}
+        <path d={path} fill="none" stroke={POOL} strokeWidth={2} />
+        {points.map((p, i) => (
+          <circle key={p.week} cx={x(i)} cy={y(p.indexPct)} r={3.5} fill={p.indexPct <= 0 ? GOOD : LANE}>
+            <title>{`Semana de ${formatDatePt(p.week)} · ${p.indexPct > 0 ? "+" : ""}${p.indexPct.toFixed(1)}% · ${p.n} reps`}</title>
+          </circle>
+        ))}
+        <text x={x(0)} y={height - 12} textAnchor="start" fill={MUTE} fontSize="11">
+          {formatDatePt(points[0].week).slice(0, 5)}
+        </text>
+        <text x={x(points.length - 1)} y={height - 12} textAnchor="end" fill={MUTE} fontSize="11">
+          {formatDatePt(points[points.length - 1].week).slice(0, 5)}
+        </text>
+      </svg>
+      {breaks.length ? (
+        <ul className="mt-2 space-y-1 text-sm text-mist">
+          {breaks.map((item) => (
+            <li key={item.to}>
+              Paragem de {item.days} dias ({formatDatePt(item.from).slice(0, 5)} → {formatDatePt(item.to).slice(0, 5)}):{" "}
+              {item.recoveryWeeks == null
+                ? "ainda não voltou ao nível anterior."
+                : item.recoveryWeeks === 0
+                  ? "voltou ao nível anterior na primeira semana."
+                  : `voltou ao nível anterior em ${item.recoveryWeeks} semanas.`}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
+function weekStartMondayLocal(iso: string): string {
+  const date = new Date(`${iso}T12:00:00`);
+  const offset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - offset);
+  return date.toISOString().slice(0, 10);
 }

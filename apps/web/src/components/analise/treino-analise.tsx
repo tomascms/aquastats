@@ -12,7 +12,7 @@ import { formatMeters, weeklyVolume, workoutMeters } from "@/lib/rankings";
 import { flattenInner, formatSegment, formatSet, innerCount, readySegments, splitRepNumber } from "@/lib/set";
 import { formatRaceClock } from "@/lib/race";
 import { useAppState } from "@/lib/store";
-import { annotateTrainingReps, type TrainingRep } from "@/lib/training-context";
+import { annotateTrainingReps } from "@/lib/training-context";
 import { predictTrainingTargets } from "@/lib/training-prediction";
 import { toCentiseconds } from "@/lib/swim-time";
 import type { TimeLog, WorkoutBlock } from "@/lib/types";
@@ -69,16 +69,12 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
     [athleteId, workouts],
   );
   const logs = useMemo(() => timeLogs.filter((log) => log.athleteId === athleteId), [athleteId, timeLogs]);
-  const teamRows = useMemo<TrainingRep[]>(
-    () => (role === "coach" ? athletes.flatMap((item) => annotateTrainingReps(workouts, timeLogs, item.id, item.wellness)) : []),
-    [athletes, role, timeLogs, workouts],
-  );
   const estimates = useMemo(() => {
     const own = athleteId ? annotateTrainingReps(workouts, timeLogs, athleteId, athlete?.wellness) : [];
     const byLog = new Map<string, number>();
-    for (const [logId, target] of predictTrainingTargets(own, teamRows.length ? teamRows : own)) byLog.set(logId, target.targetS);
+    for (const [logId, target] of predictTrainingTargets(own)) byLog.set(logId, target.targetS);
     return byLog;
-  }, [athlete?.wellness, athleteId, teamRows, timeLogs, workouts]);
+  }, [athlete?.wellness, athleteId, timeLogs, workouts]);
   const dayWorkouts = useMemo(() => mine.filter((workout) => workout.date === selected), [mine, selected]);
   const workoutCountByDate = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -198,7 +194,6 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
               athleteId={athlete.id}
               workouts={workouts}
               timeLogs={timeLogs}
-              teamRows={teamRows}
               wellness={athlete.wellness}
             />
           ) : (

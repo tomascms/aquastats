@@ -386,8 +386,8 @@ function RecordDetail({
     const recent = rows.slice(-12);
     const recentDates = new Set(recent.map((row) => row.date));
     const mean = recent.length ? recent.reduce((sum, row) => sum + row.timeS, 0) / recent.length : 0;
-    const fatigue = recent.length ? recent.reduce((sum, row) => sum + row.fatigue, 0) / recent.length : 0;
-    return { rows, recent, recentDates, mean, fatigue };
+    const weekly = recent.length ? recent.reduce((sum, row) => sum + row.weeklyLoadM, 0) / recent.length : 0;
+    return { rows, recent, recentDates, mean, weekly };
   })();
 
   if (!record) {
@@ -400,10 +400,20 @@ function RecordDetail({
       </p>
     );
   }
-  const sameEvent = records.filter(
-    (item) => item.stroke === record.stroke && item.distanceM === record.distanceM && item.id !== record.id,
-  );
-  const delta = other ? timeDelta(record.timeS, other.timeS) : null;
+  // Only marks from the same event in the same pool are comparable; 25 m and 50 m times differ by turns.
+  const sameEvent = records
+    .filter(
+      (item) =>
+        item.stroke === record.stroke &&
+        item.distanceM === record.distanceM &&
+        item.course === record.course &&
+        item.id !== record.id,
+    )
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const previous = sameEvent.find((item) => item.date <= record.date) ?? sameEvent[0];
+  const comparable = other && other.course === record.course ? other : undefined;
+  // "This vs the other": negative means this mark is faster.
+  const delta = comparable ? timeDelta(comparable.timeS, record.timeS) : null;
   const signedDelta = delta ? signed(delta.seconds, delta.pct) : null;
 
   return (
@@ -424,40 +434,44 @@ function RecordDetail({
         {sameEvent.length ? (
           <button
             type="button"
-            onClick={() => onCompare(other ? "" : sameEvent[0].id)}
+            onClick={() => onCompare(comparable ? "" : previous.id)}
             className="btn-primary mt-4"
           >
-            {other ? "Fechar comparação" : "Comparar"}
+            {comparable ? "Fechar comparação" : "Comparar com outra marca"}
           </button>
-        ) : null}
+        ) : (
+          <p className="mt-4 text-sm text-mute">Sem outras marcas desta prova em {COURSE_LABEL[record.course]} para comparar.</p>
+        )}
       </section>
 
-      {other && signedDelta ? (
-        <section className="rounded-xl border border-line bg-panel p-4">
-          <label className="text-xs font-semibold text-mute">
-            Comparar com outra marca do mesmo atleta
-            <select className="field mt-1" value={other.id} onChange={(event) => onCompare(event.target.value)}>
+      {comparable && signedDelta ? (
+        <section className="rounded-2xl border border-line bg-panel p-5">
+          <label className="block text-sm font-semibold text-mist">
+            Comparar com
+            <select className="field mt-1.5" value={comparable.id} onChange={(event) => onCompare(event.target.value)}>
               {sameEvent.map((item) => (
                 <option key={item.id} value={item.id}>
                   {formatRaceClock(item.timeS)} · {formatDatePt(item.date)}
+                  {item.meetTitle ? ` · ${item.meetTitle}` : ""}
                 </option>
               ))}
             </select>
           </label>
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            <div className="rounded-xl bg-panel-2 px-3 py-3">
-              <p className="text-xs text-mute">Este</p>
-              <p className="font-display text-2xl font-bold text-mist tabular">{formatRaceClock(record.timeS)}</p>
-              <p className="text-[11px] text-mute">{formatDatePt(record.date)}</p>
+          <p className="mt-1 text-xs text-mute">Só marcas de {formatEvent(record.distanceM, record.stroke)} em {COURSE_LABEL[record.course]}.</p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <div className="rounded-xl bg-panel-2 px-4 py-3">
+              <p className="text-xs text-mute">Esta marca · {formatDatePt(record.date)}</p>
+              <p className="font-display text-3xl font-bold text-mist tabular">{formatRaceClock(record.timeS)}</p>
             </div>
-            <div className="rounded-xl bg-panel-2 px-3 py-3">
-              <p className="text-xs text-mute">Outro</p>
-              <p className="font-display text-2xl font-bold text-mist tabular">{formatRaceClock(other.timeS)}</p>
-              <p className="text-[11px] text-mute">{formatDatePt(other.date)}</p>
+            <div className="rounded-xl bg-panel-2 px-4 py-3">
+              <p className="text-xs text-mute">Comparada com · {formatDatePt(comparable.date)}</p>
+              <p className="font-display text-3xl font-bold text-mist tabular">{formatRaceClock(comparable.timeS)}</p>
             </div>
-            <div className={`rounded-xl px-3 py-3 ${signedDelta.faster ? "bg-good-soft" : "bg-[#fdecea]"}`}>
-              <p className="text-xs text-mute">Diferença (outro − este)</p>
-              <p className={`font-display text-2xl font-bold tabular ${signedDelta.faster ? "text-good" : "text-coral"}`}>{signedDelta.clock}</p>
+            <div className={`rounded-xl px-4 py-3 ${signedDelta.faster ? "bg-good-soft" : delta && delta.seconds === 0 ? "bg-panel-2" : "bg-[#fdecea]"}`}>
+              <p className="text-xs text-mute">
+                {signedDelta.faster ? "Esta marca é mais rápida" : delta && delta.seconds === 0 ? "Tempos iguais" : "Esta marca é mais lenta"}
+              </p>
+              <p className={`font-display text-3xl font-bold tabular ${signedDelta.faster ? "text-good" : "text-coral"}`}>{signedDelta.clock}</p>
               <p className="text-sm text-mute">{signedDelta.pct}</p>
             </div>
           </div>
@@ -468,7 +482,7 @@ function RecordDetail({
         recordDate={record.date}
         distanceM={record.distanceM}
         mean={trainingContext.mean}
-        fatigue={trainingContext.fatigue}
+        weekly={trainingContext.weekly}
         reps={trainingContext.recent.length}
         sessions={trainingContext.recentDates.size}
       />
@@ -480,19 +494,18 @@ function TrainingContextPanel({
   recordDate,
   distanceM,
   mean,
-  fatigue,
+  weekly,
   reps,
   sessions,
 }: {
   recordDate: string;
   distanceM: number;
   mean: number;
-  fatigue: number;
+  weekly: number;
   reps: number;
   sessions: number;
 }) {
   const hasData = reps > 0;
-  const readiness = fatigue < 35 ? "Fresco" : fatigue < 60 ? "Carga intermédia" : "Carga elevada";
   return (
     <section className="data-panel p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -501,7 +514,7 @@ function TrainingContextPanel({
           <h3 className="mt-1 text-lg font-semibold text-mist">O que preparou este resultado</h3>
           <p className="mt-1 text-xs text-mute">Repetições de {distanceM} m nos 42 dias anteriores a {formatDatePt(recordDate)}.</p>
         </div>
-        <span className="soft-pill">{hasData ? readiness : "Sem dados"}</span>
+        
       </div>
       {hasData ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -516,9 +529,9 @@ function TrainingContextPanel({
             <p className="mt-1 text-xs text-mute">mesma distância</p>
           </div>
           <div className="stat-card p-3">
-            <p className="metric-label">Fadiga média</p>
-            <p className="mt-2 metric-value">{Math.round(fatigue)}<span className="ml-1 text-sm font-normal text-mute">/100</span></p>
-            <p className="mt-1 text-xs text-mute">antes da prova</p>
+            <p className="metric-label">Volume semanal médio</p>
+            <p className="mt-2 metric-value">{(weekly / 1000).toFixed(1)}<span className="ml-1 text-sm font-normal text-mute">km</span></p>
+            <p className="mt-1 text-xs text-mute">nas semanas antes da prova</p>
           </div>
         </div>
       ) : (

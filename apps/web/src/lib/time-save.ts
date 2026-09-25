@@ -95,7 +95,8 @@ export function buildTimeDraft(
   const fingerprint = contentHash(
     deleting ? "delete" : JSON.stringify({ mm, ss, cc, splits, stroke: nextStroke, skipped }),
   );
-  const idempotencyKey = `time-${logKey}-${stableId}-${fingerprint}`;
+  // Keep it short: the API caps keys, and a truncated key would drop the fingerprint.
+  const idempotencyKey = `t-${stableId}-${fingerprint}`;
 
   const payload = deleting
     ? {

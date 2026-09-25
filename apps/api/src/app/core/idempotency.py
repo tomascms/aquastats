@@ -26,7 +26,10 @@ def require_key(request: Request) -> str:
     key = (request.headers.get("idempotency-key") or request.headers.get("x-request-id") or "").strip()
     if not key:
         key = f"request-{secrets.token_urlsafe(24)}"
-    return key[:128]
+    if len(key) <= 128:
+        return key
+    # Truncating would merge distinct long keys that only differ at the end; hash them instead.
+    return "h:" + hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
 def run_idempotent(
