@@ -24,7 +24,7 @@ import {
   updateRepDetail,
 } from "@/lib/set";
 import { writtenBlockLines } from "@/lib/workout-text";
-import { FOCUS_SUGGESTIONS, GROUPS, GROUP_LABEL, type TrainingGroup } from "@/lib/groups";
+import { GROUPS, GROUP_LABEL, type TrainingGroup } from "@/lib/groups";
 import type { BlockType, DraftBlock, Gear, Intensity, PoolCourse, SetSegment, Shift, WorkoutInput } from "@/lib/types";
 import { useT } from "@/i18n/provider";
 
@@ -61,7 +61,8 @@ export function WorkoutForm({
   const [shift, setShift] = useState<Shift>(initial?.shift ?? "afternoon");
   const [course, setCourse] = useState<PoolCourse | "">(initial?.course ?? "");
   const [groups, setGroups] = useState<TrainingGroup[]>((initial?.groups ?? []) as TrainingGroup[]);
-  const [focus, setFocus] = useState(initial?.focus ?? "");
+  // Focus is no longer asked for; an existing value is kept untouched.
+  const focus = initial?.focus ?? "";
   const [blocks, setBlocks] = useState<DraftBlock[]>(
     initial?.blocks?.length ? orderDraftBlocks(initial.blocks.map(normalizeDraft)) : [emptyBlock("warmup"), emptyBlock("main"), emptyBlock("recovery")],
   );
@@ -121,24 +122,6 @@ export function WorkoutForm({
               onChange={setCourse}
               missing={!course}
             />
-          </div>
-
-          <div>
-            <p className="text-xs font-semibold text-mute">{t("Foco do treino")}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              {FOCUS_SUGGESTIONS.map((item) => (
-                <Chip key={item} active={focus === item} onClick={() => setFocus((current) => (current === item ? "" : item))}>
-                  {item}
-                </Chip>
-              ))}
-              <input
-                value={FOCUS_SUGGESTIONS.includes(focus) ? "" : focus}
-                maxLength={40}
-                placeholder={t("outro…")}
-                onChange={(event) => setFocus(event.target.value)}
-                className="h-8 w-28 rounded-full border border-dashed border-line bg-panel px-3 text-xs text-mist outline-none focus:border-aqua"
-              />
-            </div>
           </div>
 
           <div>
