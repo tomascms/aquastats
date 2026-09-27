@@ -1200,5 +1200,21 @@ export const en = {
   "Sono (7 noites antes)": "Sleep (7 nights before)",
   "Recuperação sentida (7 dias, 1–5)": "Felt recovery (7 days, 1–5)",
   "Ginásio nos 7 dias antes": "Gym in the 7 days before",
+  // Workout form
+  "outro…": "other…",
+  "(opcional — sem grupo é para todos)": "(optional — no group means everyone)",
+  "Nome do treino": "Session name",
+  "mudar": "change",
+  "Outra série": "Another set",
+  "Treino escrito": "Written session",
+  "Escreve a primeira série para ver o treino aqui.": "Write the first set to see the session here.",
+  "Escolhe a piscina (25 m ou 50 m).": "Pick the pool (25 m or 50 m).",
+  "Suave entre repetições": "Easy between repeats",
+  "juntar outra distância a esta série": "add another distance to this set",
+  "a": "on",
+  "mais": "more",
+  "escolhe os metros": "pick the distance",
+  "Fechar repetições": "Close reps",
+  "Mudar repetições individuais (ritmo, saída, material)": "Change individual reps (pace, send-off, gear)",
   // @@APPEND@@
 } as const;
