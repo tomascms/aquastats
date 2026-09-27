@@ -5,6 +5,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .goals import team_goals
+from .heart_rate import team_hr_sessions
 from .models import Athlete, AttendanceSession, Competition, MeetEntry, MeetResult, RaceSession, SeasonPlan, Team, TimeLog, Workout
 from .serializers import (
     athlete_out,
@@ -61,6 +63,8 @@ def team_snapshot(session: Session, team_id: UUID) -> dict:
         "seasonPlans": [season_plan_out(row) for row in plans],
         "attendance": [attendance_out(row) for row in attendance],
         "personalRecords": personal_records(entries, results, meets, active_athletes),
+        "goals": team_goals(session, team_id),
+        "hrSessions": team_hr_sessions(session, team_id),
     }
 
 
@@ -88,6 +92,8 @@ def filter_swimmer_snapshot(data: dict, athlete_id: str) -> dict:
             if any(mark.get("athleteId") == athlete_id for mark in (item.get("marks") or []))
         ],
         "personalRecords": [item for item in data["personalRecords"] if item.get("athleteId") == athlete_id],
+        "goals": [item for item in data.get("goals", []) if item.get("athleteId") == athlete_id],
+        "hrSessions": [item for item in data.get("hrSessions", []) if item.get("athleteId") == athlete_id],
     }
 
 

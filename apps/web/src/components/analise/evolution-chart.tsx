@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/i18n/provider";
 import { formatDatePt } from "@/lib/labels";
 import { formatRaceClock } from "@/lib/race";
 import type { RaceRecord } from "@/lib/rankings";
@@ -13,10 +14,11 @@ export function EvolutionChart({
   selectedId?: string;
   onSelect: (id: string) => void;
 }) {
+  const t = useT();
   const chronological = [...records].sort((a, b) => a.date.localeCompare(b.date) || a.timeS - b.timeS);
 
   if (!chronological.length) {
-    return <p className="px-4 py-8 text-center text-sm text-mute">Ainda sem tempos nesta prova.</p>;
+    return <p className="px-4 py-8 text-center text-sm text-mute">{t("Ainda sem tempos nesta prova.")}</p>;
   }
 
   const width = 720;
@@ -40,7 +42,7 @@ export function EvolutionChart({
     .join(" ");
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label="Evolução de tempos: mais rápido em cima">
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label={t("Evolução de tempos: mais rápido em cima")}>
       <rect x="0" y="0" width={width} height={height} rx="14" fill="#0b2545" />
       {[0, 0.5, 1].map((tick) => {
         const value = lo + (hi - lo) * tick;

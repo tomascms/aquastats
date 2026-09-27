@@ -22,9 +22,11 @@ import {
   timeKeyForOffset,
   writeCalculatedRates,
 } from "@/lib/race";
+import { parsePastedTimes, raceCompleteness } from "@/lib/race-analysis";
 import { actions } from "@/lib/store";
 import { EMPTY_PARTS, hasClockTime } from "@/lib/swim-time";
 import type { Competition, DayPart, MeetEntry, MeetResult, RaceLap, RaceSession, TimeParts } from "@/lib/types";
+import { useT } from "@/i18n/provider";
 
 function clockToSeconds(parts: TimeParts): number {
   const committed = {
@@ -191,6 +193,43 @@ function resultSeconds(result?: MeetResult): number {
   return roundHundredths(result.mm * 60 + result.ss + result.cc / 100);
 }
 
+/**
+ * Official splits (from the organiser's file) placed on the sheet's marks, so "Adicionar informação"
+ * starts from the published data. Detailed races take cumulative times; 50 m-block races take sectors.
+ */
+function officialSplitClocks(
+  result: MeetResult | undefined,
+  distanceM: number,
+  course: Competition["course"],
+  detailed: boolean,
+): Record<number, TimeParts> {
+  const splits = (result?.splits ?? [])
+    .map((split) => ({ atM: split.atM, sec: split.mm * 60 + split.ss + split.cc / 100 }))
+    .filter((split) => split.sec > 0)
+    .sort((a, b) => a.atM - b.atM);
+  if (!splits.length) return {};
+  const marks = new Set(raceMarks(distanceM, course));
+  const out: Record<number, TimeParts> = {};
+  let previous = 0;
+  for (const split of splits) {
+    if (!marks.has(split.atM)) continue;
+    const value = detailed ? split.sec : roundHundredths(split.sec - previous);
+    out[split.atM] = toClock(value);
+    previous = split.sec;
+  }
+  return out;
+}
+
+function fillEmpty(base: Record<number, TimeParts>, extra: Record<number, TimeParts>): Record<number, TimeParts> {
+  const out = { ...base };
+  for (const [key, value] of Object.entries(extra)) {
+    const atM = Number(key);
+    const current = out[atM];
+    if (!current || (!current.mm && !current.ss && !current.cc)) out[atM] = value;
+  }
+  return out;
+}
+
 function withOfficialClocks(
   clocks: Record<number, TimeParts>,
   distanceM: number,
@@ -219,18 +258,22 @@ export function RaceResultSheet({
   result?: MeetResult;
   mode: "view" | "edit";
 }) {
+  const t = useT();
   const days = useMemo(() => eachIsoDay(meet.date, meetEnd(meet)), [meet.date, meet.endDate]);
   const detailed = isDetailedRace(entry.distanceM);
   const course = meet.course;
   const seedOfficial = existing?.officialTimeS || resultSeconds(result);
   const [raceDate, setRaceDate] = useState(existing?.date && days.includes(existing.date) ? existing.date : meet.date);
   const [dayPart] = useState<DayPart>(existing?.dayPart ?? "am");
-  const [reaction, setReaction] = useState<TimeParts>(() => toClock(existing?.reactionS ?? 0));
+  const [reaction, setReaction] = useState<TimeParts>(() => toClock(existing?.reactionS || result?.reactionS || 0));
   const [flight, setFlight] = useState<TimeParts>(() => toClock(existing?.flightS ?? 0));
   const [laps, setLaps] = useState<RaceLap[]>(() => hydrateLaps(existing?.laps, entry.distanceM, course));
   const [clocks, setClocks] = useState<Record<number, TimeParts>>(() =>
     withOfficialClocks(
-      clocksFromSession(entry.distanceM, course, hydrateLaps(existing?.laps, entry.distanceM, course), detailed, entry.stroke),
+      fillEmpty(
+        clocksFromSession(entry.distanceM, course, hydrateLaps(existing?.laps, entry.distanceM, course), detailed, entry.stroke),
+        officialSplitClocks(result, entry.distanceM, course, detailed),
+      ),
       entry.distanceM,
       course,
       seedOfficial,
@@ -243,6 +286,8 @@ export function RaceResultSheet({
   const [saved, setSaved] = useState("");
   const [error, setError] = useState("");
   const [sessionId, setSessionId] = useState(existing?.id ?? crypto.randomUUID());
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
   const [manualOfficial, setManualOfficial] = useState<TimeParts>(() => (seedOfficial ? toClock(seedOfficial) : { ...EMPTY_PARTS }));
   const readOnly = mode === "view";
 
@@ -252,7 +297,10 @@ export function RaceResultSheet({
     setLaps(blank);
     setClocks(
       withOfficialClocks(
-        clocksFromSession(entry.distanceM, course, blank, isDetailedRace(entry.distanceM), entry.stroke),
+        fillEmpty(
+          clocksFromSession(entry.distanceM, course, blank, isDetailedRace(entry.distanceM), entry.stroke),
+          officialSplitClocks(result, entry.distanceM, course, isDetailedRace(entry.distanceM)),
+        ),
         entry.distanceM,
         course,
         official,
@@ -260,7 +308,7 @@ export function RaceResultSheet({
       ),
     );
     setBreakClocks(breakClocksFromLaps(blank, entry.distanceM, course, entry.stroke));
-    setReaction(toClock(existing?.reactionS ?? 0));
+    setReaction(toClock(existing?.reactionS || result?.reactionS || 0));
     setFlight(toClock(existing?.flightS ?? 0));
     setRaceDate(existing?.date && days.includes(existing.date) ? existing.date : meet.date);
     setSaved("");
@@ -321,18 +369,37 @@ export function RaceResultSheet({
     );
   }
 
+  const completeness = raceCompleteness(draft);
+
+  function applyPaste() {
+    const values = parsePastedTimes(pasteText);
+    const marks = raceMarks(entry.distanceM, course);
+    setClocks((current) => {
+      const next = { ...current };
+      marks.forEach((atM, index) => {
+        const value = values[index];
+        if (!value) return;
+        if (finishLocked && atM === entry.distanceM) return;
+        next[atM] = toClock(value);
+      });
+      return next;
+    });
+    setPasteOpen(false);
+    setPasteText("");
+  }
+
   function patchClock(atM: number, parts: TimeParts) {
     setClocks((current) => ({ ...current, [atM]: parts }));
   }
 
   async function save() {
     if (!officialTimeS) {
-      setError("O tempo final é a soma dos tempos — preenche as passagens até à meta.");
+      setError(t("O tempo final é a soma dos tempos — preenche as passagens até à meta."));
       return;
     }
     setError("");
     await actions.saveCompetitionAnalysis(entry.id, draft);
-    setSaved("Guardado");
+    setSaved(t("Guardado"));
     window.setTimeout(() => setSaved(""), 1800);
   }
 
@@ -354,7 +421,7 @@ export function RaceResultSheet({
         <div className="flex flex-wrap items-end gap-3">
           {!readOnly && days.length > 1 ? (
             <label className="text-xs font-semibold text-mute">
-              Date
+              {t("Data")}
               <select className="field mt-1" value={raceDate} onChange={(event) => setRaceDate(event.target.value)}>
                 {days.map((day) => (
                   <option key={day} value={day}>
@@ -367,7 +434,7 @@ export function RaceResultSheet({
             <p className="text-xs text-mute">{formatDatePt(raceDate)}</p>
           )}
           <label className="text-xs font-semibold text-mute">
-            Final
+            {t("Final")}
             <div className="mt-1">
               {readOnly ? (
                 <p className="font-mono text-lg text-aqua">{displayFinal ? formatRaceClock(displayFinal) : "—"}</p>
@@ -393,12 +460,56 @@ export function RaceResultSheet({
       </div>
 
       <p className="text-[11px] text-mute">
-        Piscina de {pool} m
-        {entry.distanceM > pool ? ` · viragem a cada ${pool} m` : " · sem viragem"}.
+        {t("Piscina de {course}", { course: `${pool} m` })}
+        {entry.distanceM > pool ? ` · ${t("viragem a cada {pool} m", { pool })}` : ` · ${t("sem viragem")}`}.{" "}
         {detailed
-          ? " Tempo = passagem. 15 a 25… = nado, calculado. SR a partir das braçadas e do nado (crol/costas: ciclo = 2 braçadas)."
-          : " Parciais a cada 50 m. O último parcial fecha o tempo final."}
+          ? t("Tempo = passagem. 15 a 25… = nado, calculado. SR a partir das braçadas e do nado (crol/costas: ciclo = 2 braçadas).")
+          : t("Parciais a cada 50 m. O último parcial fecha o tempo final.")}
       </p>
+
+      {readOnly ? null : (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-panel-2 px-3 py-2">
+          <div className="flex min-w-48 flex-1 items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-mute">{t("Preenchido")}</span>
+            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+              <span
+                className={`block h-full rounded-full ${completeness.filled === completeness.total ? "bg-good" : "bg-pool"}`}
+                style={{ width: `${completeness.total ? (completeness.filled / completeness.total) * 100 : 0}%` }}
+              />
+            </span>
+            <span className="font-mono text-xs text-mist">
+              {completeness.filled}/{completeness.total}
+            </span>
+          </div>
+          <button type="button" onClick={() => setPasteOpen((open) => !open)} className="btn-ghost h-9 px-3 text-xs">
+            {t("Colar tempos")}
+          </button>
+        </div>
+      )}
+      {!readOnly && pasteOpen ? (
+        <div className="space-y-2 rounded-lg border border-line bg-panel p-3">
+          <p className="text-xs text-mute">
+            {detailed
+              ? t("Cola as passagens por ordem (15 m, 25 m, …), uma por linha ou numa linha separada por tabs. Aceita 12.34, 1:02.34 ou 1'02\"34.")
+              : t("Cola os parciais de 50 m por ordem, um por linha ou separados por tabs. Aceita 32.10, 1:02.34 ou 1'02\"34.")}
+          </p>
+          <textarea
+            className="field min-h-24 font-mono text-sm"
+            value={pasteText}
+            onChange={(event) => setPasteText(event.target.value)}
+            placeholder={"7.12\n12.48\n…"}
+            aria-label={t("Colar tempos")}
+          />
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn-ghost h-9 px-3 text-xs" onClick={() => setPasteOpen(false)}>
+              {t("Cancelar")}
+            </button>
+            <button type="button" className="btn-primary h-9 px-3 text-xs" onClick={applyPaste} disabled={!pasteText.trim()}>
+              {t("Preencher tabela")}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="overflow-x-auto rounded-lg border border-line">
         <table className="w-full min-w-[760px] border-collapse text-xs">
@@ -410,8 +521,8 @@ export function RaceResultSheet({
               <th className={th}>UWk</th>
               <th className={th}>UWd</th>
               <th className={th}>Break</th>
-              <th className={th}>Tempo</th>
-              <th className={th}>Nado</th>
+              <th className={th}>{t("Tempo")}</th>
+              <th className={th}>{t("Nado")}</th>
               <th className={th}>SC</th>
               <th className={th}>SR</th>
             </tr>
@@ -425,8 +536,8 @@ export function RaceResultSheet({
                 <tr key={row.atM} className={row.isTurn ? "bg-sand/10" : "bg-white"}>
                   <td className={`${td} whitespace-nowrap font-semibold text-aqua`}>
                     <span>{row.atM}m</span>
-                    {row.isTurn ? <span className="mt-0.5 block text-xs font-semibold text-sand">viragem</span> : null}
-                    {row.isFinish ? <span className="mt-0.5 block text-xs font-semibold text-mute">meta</span> : null}
+                    {row.isTurn ? <span className="mt-0.5 block text-xs font-semibold text-sand">{t("viragem")}</span> : null}
+                    {row.isFinish ? <span className="mt-0.5 block text-xs font-semibold text-mute">{t("meta")}</span> : null}
                     {entry.stroke === "im" ? (
                       <span className="mt-0.5 block text-xs font-semibold text-mute">
                         {STROKE_LABEL[row.stroke]}
@@ -551,7 +662,7 @@ export function RaceResultSheet({
                 type="button"
                 className="h-11 rounded-2xl border border-coral/40 px-4 text-sm font-semibold text-coral"
                 onClick={() => {
-                  if (!window.confirm("Apagar este resultado?")) return;
+                  if (!window.confirm(t("Apagar este resultado?"))) return;
                   void actions.deleteCompetitionResult(entry.id, existing.id).then(() => {
                     const blank = emptyLaps(entry.distanceM, course);
                     setLaps(blank);
@@ -568,16 +679,16 @@ export function RaceResultSheet({
                     setManualOfficial(resultSeconds(result) ? toClock(resultSeconds(result)) : { ...EMPTY_PARTS });
                     setReaction({ ...EMPTY_PARTS });
                     setFlight({ ...EMPTY_PARTS });
-                    setSaved("Apagado");
+                    setSaved(t("Apagado"));
                     window.setTimeout(() => setSaved(""), 1800);
                   });
                 }}
               >
-                Apagar
+                {t("Apagar")}
               </button>
             ) : null}
             <button type="button" onClick={() => void save()} className="h-11 rounded-2xl bg-aqua hover:bg-aqua-2 px-5 text-sm font-semibold text-white">
-              Guardar resultado
+              {t("Guardar resultado")}
             </button>
           </div>
         </div>

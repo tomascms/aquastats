@@ -210,6 +210,7 @@ create table if not exists meet_entries (
   athlete_id uuid not null references athletes(id),
   stroke text not null,
   distance_m integer not null,
+  extra jsonb not null default '{}',
   unique (competition_id, athlete_id, stroke, distance_m)
 );
 
@@ -220,6 +221,7 @@ create table if not exists meet_results (
   ss smallint not null default 0,
   cc smallint not null default 0,
   splits jsonb not null default '[]',
+  extra jsonb not null default '{}',
   recorded_by uuid not null references users(id),
   recorded_at timestamptz not null default now(),
   unique (entry_id)
@@ -382,3 +384,61 @@ revoke all on all sequences in schema public from public;
 grant usage on schema public to current_user;
 grant all on all tables in schema public to current_user;
 grant all on all sequences in schema public to current_user;
+
+create table if not exists goals (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id),
+  athlete_id uuid not null references athletes(id),
+  author_role text not null check (author_role in ('coach', 'athlete')),
+  author_user_id uuid not null references users(id),
+  kind text not null default 'time' check (kind in ('time', 'technical', 'other')),
+  stroke text,
+  distance_m integer,
+  course text,
+  metric text,
+  target_value double precision,
+  target_date date,
+  competition_id uuid references competitions(id),
+  text text not null default '',
+  response text not null default '',
+  status text not null default 'active' check (status in ('active', 'achieved', 'dropped')),
+  achieved_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+create index if not exists goals_team_athlete_idx on goals (team_id, athlete_id) where deleted_at is null;
+
+-- Migration 007: heart-rate sessions from watches, attached to workouts.
+create table if not exists hr_sessions (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id),
+  athlete_id uuid not null references athletes(id),
+  workout_id uuid references workouts(id),
+  source text not null check (source in ('file', 'polar', 'whoop')),
+  external_id text not null,
+  started_at timestamptz not null,
+  ended_at timestamptz,
+  avg_hr smallint,
+  max_hr smallint,
+  samples jsonb not null default '[]',
+  laps jsonb not null default '[]',
+  summary jsonb not null default '{}',
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  unique (athlete_id, source, external_id)
+);
+create index if not exists hr_sessions_team_started_idx on hr_sessions (team_id, started_at) where deleted_at is null;
+
+-- Migration 008: Polar AccessLink authorisations (one per athlete, token encrypted by the API).
+create table if not exists polar_links (
+  athlete_id uuid primary key references athletes(id),
+  team_id uuid not null references teams(id),
+  user_id uuid not null references users(id),
+  polar_user_id text not null,
+  token text not null default '',
+  last_sync_at timestamptz,
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+create index if not exists polar_links_team_idx on polar_links (team_id) where deleted_at is null;

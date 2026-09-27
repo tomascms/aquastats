@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { useT } from "@/i18n/provider";
 import { BLOCK_LABEL } from "@/lib/labels";
 import { formatMeters, workoutMeters } from "@/lib/rankings";
 import { workoutPlainText, writtenBlockLines } from "@/lib/workout-text";
@@ -39,12 +40,13 @@ function Line({ text }: { text: string }) {
 }
 
 export function WorkoutSheet({ workout }: { workout: Workout }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
 
   return (
     <section className="overflow-hidden rounded-2xl border border-line bg-panel">
       <header className="flex items-center justify-between gap-3 border-b border-line bg-panel-2 px-5 py-3">
-        <h2 className="font-display text-xl font-bold">Plano</h2>
+        <h2 className="font-display text-xl font-bold">{t("Plano")}</h2>
         <button
           type="button"
           onClick={async () => {
@@ -58,7 +60,7 @@ export function WorkoutSheet({ workout }: { workout: Workout }) {
           }}
           className="text-sm font-semibold text-pool hover:underline"
         >
-          {copied ? "Copiado" : "Copiar como texto"}
+          {copied ? t("Copiado") : t("Copiar como texto")}
         </button>
       </header>
       <ol>
@@ -72,7 +74,7 @@ export function WorkoutSheet({ workout }: { workout: Workout }) {
               </div>
               <div className="space-y-1.5">
                 {writtenBlockLines(block).map((line, index) => {
-                  const mute = line.text === "Sem saídas" || line.text.startsWith("Suave");
+                  const mute = line.text === t("Sem saídas") || line.text.startsWith(t("Suave"));
                   return (
                     <p
                       key={`${block.id}-${index}`}

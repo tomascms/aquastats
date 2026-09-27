@@ -31,6 +31,17 @@ export function IconCalendar({ className = "h-5 w-5" }: IconProps) {
   );
 }
 
+export function IconSeason({ className = "h-5 w-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+      <path d="M3.5 19.5h17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <rect x="4.5" y="11" width="3.5" height="6" rx="1" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="10.25" y="7" width="3.5" height="10" rx="1" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="16" y="4" width="3.5" height="13" rx="1" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
 export function IconHome({ className = "h-5 w-5" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>

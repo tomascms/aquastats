@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { actions, useAppState } from "@/lib/store";
 import { IconMinus, IconPlus } from "@/components/ui/icons";
+import { useT } from "@/i18n/provider";
 
 export function AthletePicker({
   workoutId,
@@ -11,6 +12,7 @@ export function AthletePicker({
   workoutId: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const { athletes, workouts } = useAppState();
   const workout = workouts.find((item) => item.id === workoutId);
   const [query, setQuery] = useState("");
@@ -25,15 +27,15 @@ export function AthletePicker({
     <div className="fixed inset-0 z-50 flex items-end bg-black/55 p-3 sm:items-center sm:justify-center">
       <div className="safe-bottom flex max-h-[80dvh] w-full max-w-lg flex-col rounded-xl border border-line bg-ink-2 p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xl font-semibold tracking-tight">Editar atletas</h2>
+          <h2 className="text-xl font-semibold tracking-tight">{t("Editar atletas")}</h2>
           <button type="button" onClick={onClose} className="text-sm text-mute">
-            Fechar
+            {t("Fechar")}
           </button>
         </div>
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Filtrar A–Z"
+          placeholder={t("Filtrar A–Z")}
           className="mb-3 w-full rounded-2xl border border-line bg-panel px-3 py-3 text-sm outline-none focus:border-aqua"
         />
         <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto">
@@ -53,7 +55,7 @@ export function AthletePicker({
                     className={`flex h-9 w-9 items-center justify-center rounded-xl ${
                       inWorkout ? "bg-coral/15 text-coral" : "bg-aqua/15 text-aqua"
                     }`}
-                    aria-label={inWorkout ? `Tirar ${athlete.name}` : `Meter ${athlete.name}`}
+                    aria-label={inWorkout ? t("Tirar {name}", { name: athlete.name }) : t("Meter {name}", { name: athlete.name })}
                   >
                     {inWorkout ? <IconMinus className="h-4 w-4" /> : <IconPlus className="h-4 w-4" />}
                   </button>

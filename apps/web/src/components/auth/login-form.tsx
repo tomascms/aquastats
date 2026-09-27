@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AuthFrame } from "@/components/auth/auth-frame";
 import { GoogleSignIn } from "@/components/auth/google-sign-in";
 import { PasswordStrength } from "@/components/ui/password-strength";
+import { useT, useTDynamic } from "@/i18n/provider";
 import { homeFor } from "@/lib/auth";
 import { api, formatApiError, type ApiError } from "@/lib/api";
 import { normalizeInvite, writeInviteCookie } from "@/lib/invite";
@@ -15,6 +16,8 @@ import { useAppState, useAuthBoot } from "@/lib/store";
 type AuthStatus = { apiAvailable: boolean; database: boolean; google: boolean; clientId?: string };
 
 export function LoginForm() {
+  const t = useT();
+  const td = useTDynamic();
   const router = useRouter();
   const { role } = useAppState();
   const { bootstrapped, bootError } = useAuthBoot();
@@ -82,19 +85,19 @@ export function LoginForm() {
       }
       window.location.assign(safeNext(result.next, homeFor(result.role || "pending")));
     } catch (err) {
-      setError(formatApiError(err as ApiError) || "Não foi possível entrar.");
+      setError(formatApiError(err as ApiError) || t("Não foi possível entrar."));
       setBusy(false);
     }
   }
 
   const banner =
     status && !status.apiAvailable
-      ? "O serviço está temporariamente indisponível. Tenta novamente dentro de instantes."
+      ? t("O serviço está temporariamente indisponível. Tenta novamente dentro de instantes.")
       : status && !status.database
-        ? "A base de dados está temporariamente indisponível."
-        : error || bootError;
+        ? t("A base de dados está temporariamente indisponível.")
+        : td(error || bootError || "");
 
-  const title = invite ? "Convite" : mode === "login" ? "Entrar" : "Criar conta";
+  const title = invite ? t("Convite") : mode === "login" ? t("Entrar") : t("Criar conta");
 
   return (
     <AuthFrame>
@@ -104,7 +107,7 @@ export function LoginForm() {
         {mode === "register" && (
           <>
             <label className="block text-base font-medium text-mist" htmlFor="auth-name">
-              Nome
+              {t("Nome")}
               <input
                 id="auth-name"
                 value={name}
@@ -115,7 +118,7 @@ export function LoginForm() {
             </label>
             {!invite ? (
               <label className="block text-base font-medium text-mist" htmlFor="auth-team-code">
-                Código da equipa <span className="text-mute text-sm">(opcional)</span>
+                {t("Código da equipa")} <span className="text-mute text-sm">{t("(opcional)")}</span>
                 <input
                   id="auth-team-code"
                   value={teamCode}
@@ -133,7 +136,7 @@ export function LoginForm() {
           </>
         )}
         <label className="block text-base font-medium text-mist" htmlFor="auth-email">
-          Email
+          {t("Email")}
           <input
             id="auth-email"
             type="email"
@@ -147,7 +150,7 @@ export function LoginForm() {
           />
         </label>
         <label className="block text-base font-medium text-mist" htmlFor="auth-password">
-          Palavra-passe
+          {t("Palavra-passe")}
           <span className="relative mt-1.5 block">
             <input
               id="auth-password"
@@ -164,7 +167,7 @@ export function LoginForm() {
               className="absolute inset-y-0 right-1.5 my-auto h-8 rounded-md px-2.5 text-xs text-mute hover:text-mist"
               onClick={() => setShowPassword((value) => !value)}
             >
-              {showPassword ? "Ocultar" : "Mostrar"}
+              {showPassword ? t("Ocultar") : t("Mostrar")}
             </button>
           </span>
           {mode === "register" ? <PasswordStrength password={password} /> : null}
@@ -177,20 +180,20 @@ export function LoginForm() {
         )}
 
         <button type="submit" disabled={busy} className="btn-primary mt-2 h-11 w-full font-semibold text-base">
-          {busy ? "A entrar…" : mode === "register" ? "Criar conta" : "Entrar"}
+          {busy ? t("A entrar…") : mode === "register" ? t("Criar conta") : t("Entrar")}
         </button>
       </form>
 
       <div className="mt-6 flex items-center justify-between text-sm font-medium">
         {mode === "login" ? (
           <Link href="/repor" className="text-sand hover:text-aqua transition-colors">
-            Recuperar
+            {t("Recuperar")}
           </Link>
         ) : (
           <span />
         )}
         <button type="button" className="text-sand hover:text-aqua transition-colors" onClick={() => setMode(mode === "login" ? "register" : "login")}>
-          {mode === "login" ? "Criar conta" : "Já tenho conta"}
+          {mode === "login" ? t("Criar conta") : t("Já tenho conta")}
         </button>
       </div>
 

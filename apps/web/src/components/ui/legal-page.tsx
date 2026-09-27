@@ -1,7 +1,11 @@
+"use client";
+
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { BrandLockup } from "@/components/ui/brand";
+import { LanguageSwitch } from "@/components/ui/language-switch";
 import { SiteFooter } from "@/components/ui/site-footer";
+import { useT } from "@/i18n/provider";
 
 export function LegalPage({
   title,
@@ -12,17 +16,19 @@ export function LegalPage({
   updated: string;
   children: ReactNode;
 }) {
+  const t = useT();
   return (
     <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-5 pb-8 lg:max-w-2xl">
-      <header className="safe-top pt-8">
-        <Link href="/" aria-label="Ir para a página inicial">
+      <header className="safe-top flex items-center justify-between gap-4 pt-8">
+        <Link href="/" aria-label={t("Ir para a página inicial")}>
           <BrandLockup />
         </Link>
+        <LanguageSwitch />
       </header>
       <article className="mt-10 flex-1 space-y-4 text-sm leading-relaxed text-mist">
-        <p className="text-sm text-mute">Informação</p>
+        <p className="text-sm text-mute">{t("Informação")}</p>
         <h1 className="text-4xl font-semibold tracking-tight">{title}</h1>
-        <p className="text-xs text-mute">Atualizado em {updated}</p>
+        <p className="text-xs text-mute">{t("Atualizado em {date}", { date: updated })}</p>
         {children}
       </article>
       <SiteFooter />

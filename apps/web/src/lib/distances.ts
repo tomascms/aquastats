@@ -1,3 +1,5 @@
+import { getLocale, tx } from "@/i18n";
+
 export const MIN_DISTANCE = 5;
 export const MAX_DISTANCE = 2000;
 
@@ -14,7 +16,7 @@ export function sameMeters(a: number, b: number): boolean {
 
 export function formatDistance(meters: number): string {
   const rounded = Number.isInteger(meters) ? meters : Math.round(meters * 10) / 10;
-  return String(rounded).replace(".", ",");
+  return getLocale() === "pt" ? String(rounded).replace(".", ",") : String(rounded);
 }
 
 /** "4×50", but a single rep reads as just "1000". */
@@ -50,7 +52,7 @@ export function splitChoices(distanceM: number): SplitChoice[] {
   }
   return marks.map((atM) => ({
     atM,
-    label: lastFive != null && sameMeters(atM, lastFive) ? "últ. 5" : `${formatDistance(atM)}m`,
+    label: lastFive != null && sameMeters(atM, lastFive) ? tx("últ. 5") : `${formatDistance(atM)}m`,
   }));
 }
 

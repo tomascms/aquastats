@@ -127,7 +127,8 @@ def request_coach_account(body: dict, request: Request, session: Session = Depen
     link = f"{get_settings().app_url.rstrip('/')}/aprovar-treinador?t={_make_token(user.id, nonce)}"
     sent = send_mail(
         get_settings().coach_request_email,
-        f"Aquastats — pedido de conta de treinador: {team}",
+        # Unique tag per request so mail clients don't fold repeat requests into one conversation.
+        f"Aquastats — pedido de conta de treinador #{nonce[:6]}: {team} — {name}",
         "Novo pedido de conta de treinador.\n\n"
         f"Nome: {name}\nEmail: {user.email}\nContacto: {contact}\nEquipa: {team}\n"
         f"Mensagem: {message or '—'}\n\n"

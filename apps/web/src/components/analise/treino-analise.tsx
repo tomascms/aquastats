@@ -6,7 +6,7 @@ import { AnaliseTabs } from "@/components/analise/analise-tabs";
 import { TreinoDashboard } from "@/components/analise/treino-dashboard";
 import { AthleteChips, NoAthletes } from "@/components/analise/athlete-chips";
 import { MonthCalendar } from "@/components/ui/month-calendar";
-import { BLOCK_LABEL, SHIFT_LABEL, formatDatePt, strokeLabel } from "@/lib/labels";
+import { BLOCK_LABEL, SHIFT_LABEL, displayTitle, formatDatePt, strokeLabel } from "@/lib/labels";
 import { todayIso } from "@/lib/dates";
 import { formatMeters, weeklyVolume, workoutMeters } from "@/lib/rankings";
 import { flattenInner, formatSegment, formatSet, innerCount, readySegments, splitRepNumber } from "@/lib/set";
@@ -16,6 +16,7 @@ import { annotateTrainingReps } from "@/lib/training-context";
 import { predictTrainingTargets } from "@/lib/training-prediction";
 import { toCentiseconds } from "@/lib/swim-time";
 import type { TimeLog, WorkoutBlock } from "@/lib/types";
+import { useT } from "@/i18n/provider";
 
 function logSeconds(log: TimeLog): number {
   return toCentiseconds(log.mm, log.ss, log.cc) / 100;
@@ -44,6 +45,7 @@ function Chip({
 }
 
 export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }) {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -70,7 +72,7 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
   );
   const logs = useMemo(() => timeLogs.filter((log) => log.athleteId === athleteId), [athleteId, timeLogs]);
   const estimates = useMemo(() => {
-    const own = athleteId ? annotateTrainingReps(workouts, timeLogs, athleteId, athlete?.wellness) : [];
+    const own = athleteId ? annotateTrainingReps(workouts, timeLogs, athleteId, athlete?.wellness, athlete?.groupName) : [];
     const byLog = new Map<string, number>();
     for (const [logId, target] of predictTrainingTargets(own)) byLog.set(logId, target.targetS);
     return byLog;
@@ -154,8 +156,8 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Análise de treino</h1>
-          <p className="mt-1 text-sm text-mute">A série do dia, repetição a repetição, ou o modelo com todo o contexto.</p>
+          <h1>{t("Análise de treino")}</h1>
+          <p className="mt-1 text-sm text-mute">{t("A série do dia, repetição a repetição, ou o modelo com todo o contexto.")}</p>
         </div>
         <div className="w-full max-w-md">
           <AnaliseTabs role={role} />
@@ -176,7 +178,7 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
                 view === "session" ? "bg-aqua text-white" : "text-mute hover:text-mist"
               }`}
             >
-              Sessão
+              {t("Sessão")}
             </button>
             <button
               type="button"
@@ -185,7 +187,7 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
                 view === "model" ? "bg-aqua text-white" : "text-mute hover:text-mist"
               }`}
             >
-              Modelo
+              {t("Modelo")}
             </button>
           </div>
 
@@ -195,6 +197,7 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
               workouts={workouts}
               timeLogs={timeLogs}
               wellness={athlete.wellness}
+              groupName={athlete.groupName}
             />
           ) : (
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] lg:items-start">
@@ -216,13 +219,13 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
                     {(() => {
                       const dayMeters = dayWorkouts.reduce((sum, item) => sum + workoutMeters(item), 0);
                       const thisWeek = weeklyVolume(workouts, athlete.id, 1)[0]?.meters ?? 0;
-                      return `${dayMeters ? `${formatMeters(dayMeters)} neste dia · ` : ""}${formatMeters(thisWeek)} esta semana`;
+                      return `${dayMeters ? `${t("{volume} neste dia", { volume: formatMeters(dayMeters) })} · ` : ""}${t("{volume} esta semana", { volume: formatMeters(thisWeek) })}`;
                     })()}
                   </span>
                 </div>
 
                 {dayWorkouts.length === 0 ? (
-                  <p className="mt-3 text-sm text-mute">Sem treino neste dia.</p>
+                  <p className="mt-3 text-sm text-mute">{t("Sem treino neste dia.")}</p>
                 ) : (
                   <div className="mt-3 space-y-3">
                     <div className="flex flex-wrap gap-1">
@@ -240,7 +243,7 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
                           }}
                         >
                           {SHIFT_LABEL[item.shift]}
-                          {item.title ? ` · ${item.title}` : ""}
+                          {item.title ? ` · ${displayTitle(item.title)}` : ""}
                         </Chip>
                       ))}
                     </div>
@@ -290,7 +293,7 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
                             setCompare([]);
                           }}
                         >
-                          Todas as séries
+                          {t("Todas as séries")}
                         </Chip>
                         {Array.from({ length: block.rounds }, (_, index) => (
                           <Chip
@@ -301,7 +304,7 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
                               setCompare([]);
                             }}
                           >
-                            Série {index + 1}
+                            {t("Série {n}", { n: index + 1 })}
                           </Chip>
                         ))}
                       </div>
@@ -312,11 +315,11 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
                         <p className="font-display text-2xl font-bold">{segment ? formatSegment(segment) : formatSet(block)}</p>
                         <p className="text-sm text-mute">
                           {SHIFT_LABEL[workout.shift]} · {formatMeters(workoutMeters(workout))}
-                          {block.rounds > 1 && roundPick !== "all" ? ` · série ${roundPick}` : ""}
+                          {block.rounds > 1 && roundPick !== "all" ? ` · ${t("série {n}", { n: roundPick })}` : ""}
                         </p>
                         {visibleLogs.length === 0 ? (
                           <p className="mt-3 rounded-xl border border-dashed border-line-strong px-3 py-6 text-center text-sm text-mute">
-                            Ainda sem tempos nesta série.
+                            {t("Ainda sem tempos nesta série.")}
                           </p>
                         ) : (
                           <SeriesTimes
@@ -348,7 +351,7 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
                     </p>
                   </div>
                 ) : (
-                  <p className="mt-4 text-xs text-mute">Toca em dois tempos da série para os comparar.</p>
+                  <p className="mt-4 text-xs text-mute">{t("Toca em dois tempos da série para os comparar.")}</p>
                 )}
               </section>
             </div>
@@ -372,6 +375,7 @@ function SeriesTimes({
   compare: string[];
   onToggle: (id: string) => void;
 }) {
+  const t = useT();
   const times = logs.map((log) => logSeconds(log));
   const min = Math.min(...times);
   const max = Math.max(...times);
@@ -384,10 +388,10 @@ function SeriesTimes({
     <div className="mt-4 space-y-4">
       <dl className="grid grid-cols-4 gap-2">
         {[
-          { label: "Média", value: formatRaceClock(avg) },
-          { label: "Melhor", value: formatRaceClock(min) },
-          { label: "Pior", value: formatRaceClock(max) },
-          { label: "Amplitude", value: `${(max - min).toFixed(2)} s` },
+          { label: t("Média"), value: formatRaceClock(avg) },
+          { label: t("Melhor"), value: formatRaceClock(min) },
+          { label: t("Pior"), value: formatRaceClock(max) },
+          { label: t("Amplitude"), value: `${(max - min).toFixed(2)} s` },
         ].map((item) => (
           <div key={item.label} className="rounded-lg bg-panel-2 px-3 py-2">
             <dt className="text-xs text-mute">{item.label}</dt>
@@ -416,7 +420,7 @@ function SeriesTimes({
               >
                 <span className="text-sm text-mute">
                   {block.rounds > 1 ? `S${split.round} · ` : ""}
-                  Rep {(inner?.itemIndex ?? split.innerRep - 1) + 1}
+                  {t("Rep {n}", { n: (inner?.itemIndex ?? split.innerRep - 1) + 1 })}
                   {strokeLabel(log.stroke) ? <span className="block text-xs">{strokeLabel(log.stroke)}</span> : null}
                 </span>
                 <span className="h-5 overflow-hidden rounded bg-panel-2">
@@ -427,7 +431,7 @@ function SeriesTimes({
                 </span>
                 <span className="text-right">
                   <span className="block font-display text-xl font-bold leading-tight tabular text-mist">{formatRaceClock(time)}</span>
-                  {estimate ? <span className="block text-[11px] tabular text-mute">est. {formatRaceClock(estimate)}</span> : null}
+                  {estimate ? <span className="block text-[11px] tabular text-mute">{t("est. {time}", { time: formatRaceClock(estimate) })}</span> : null}
                 </span>
                 <span className={`text-right text-xs font-semibold tabular ${diff <= 0 ? "text-good" : "text-coral"}`}>
                   {diff > 0 ? "+" : diff < 0 ? "−" : ""}
@@ -439,8 +443,7 @@ function SeriesTimes({
         })}
       </ol>
       <p className="text-xs text-mute">
-        Barras mais curtas são repetições mais rápidas. Verde: mais rápido do que o estimado para essa intensidade e saída
-        (ou do que a média da série, quando não há histórico).
+        {t("Barras mais curtas são repetições mais rápidas. Verde: mais rápido do que o estimado para essa intensidade e saída (ou do que a média da série, quando não há histórico).")}
       </p>
     </div>
   );

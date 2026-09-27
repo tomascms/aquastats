@@ -4,9 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { api, formatApiError, type ApiError } from "@/lib/api";
+import { useT } from "@/i18n/provider";
 import { actions } from "@/lib/store";
 
 export function DeleteAccountSection({ hasPassword }: { hasPassword: boolean }) {
+  const t = useT();
+  // The API always expects the Portuguese keyword; the user types it in their own language.
+  const keyword = t("ELIMINAR");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -17,11 +21,11 @@ export function DeleteAccountSection({ hasPassword }: { hasPassword: boolean }) 
 
   async function confirmDelete() {
     if (hasPassword && password.length < 8) {
-      setError("Escreve a tua palavra-passe.");
+      setError(t("Escreve a tua palavra-passe."));
       return;
     }
-    if (confirm.trim().toUpperCase() !== "ELIMINAR") {
-      setError("Escreve ELIMINAR para confirmar.");
+    if (confirm.trim().toUpperCase() !== keyword) {
+      setError(t("Escreve {word} para confirmar.", { word: keyword }));
       return;
     }
     setConfirmOpen(false);
@@ -35,7 +39,7 @@ export function DeleteAccountSection({ hasPassword }: { hasPassword: boolean }) 
       await actions.logout();
       router.replace("/");
     } catch (err) {
-      setError(formatApiError(err as ApiError) || "Não foi possível eliminar a conta.");
+      setError(formatApiError(err as ApiError) || t("Não foi possível eliminar a conta."));
       setBusy(false);
     }
   }
@@ -43,19 +47,19 @@ export function DeleteAccountSection({ hasPassword }: { hasPassword: boolean }) 
   return (
     <section className="card space-y-3 border-coral/30 p-4">
       <div>
-        <p className="text-xs font-semibold text-coral">Zona perigosa</p>
-        <h2 className="text-lg font-semibold">Eliminar conta</h2>
-        <p className="mt-1 text-sm text-mute">Remove o acesso e desactiva a conta. Os dados da equipa mantêm-se.</p>
+        <p className="text-xs font-semibold text-coral">{t("Zona perigosa")}</p>
+        <h2 className="text-lg font-semibold">{t("Eliminar conta")}</h2>
+        <p className="mt-1 text-sm text-mute">{t("Remove o acesso e desactiva a conta. Os dados da equipa mantêm-se.")}</p>
       </div>
       {!open ? (
         <button type="button" onClick={() => setOpen(true)} className="btn-ghost h-11 w-full text-coral">
-          Eliminar conta
+          {t("Eliminar conta")}
         </button>
       ) : (
         <div className="space-y-3">
           {hasPassword ? (
             <label className="block text-sm">
-              Palavra-passe
+              {t("Palavra-passe")}
               <input
                 type="password"
                 className="field mt-1.5"
@@ -66,7 +70,7 @@ export function DeleteAccountSection({ hasPassword }: { hasPassword: boolean }) 
             </label>
           ) : null}
           <label className="block text-sm">
-            Escreve <span className="font-semibold">ELIMINAR</span> para confirmar
+            {t("Escreve")} <span className="font-semibold">{keyword}</span> {t("para confirmar")}
             <input
               type="text"
               className="field mt-1.5"
@@ -78,7 +82,7 @@ export function DeleteAccountSection({ hasPassword }: { hasPassword: boolean }) 
           </label>
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-11">
-              Cancelar
+              {t("Cancelar")}
             </button>
             <button
               type="button"
@@ -86,7 +90,7 @@ export function DeleteAccountSection({ hasPassword }: { hasPassword: boolean }) 
               onClick={() => setConfirmOpen(true)}
               className="h-11 rounded-md bg-coral text-sm font-semibold text-white disabled:opacity-60"
             >
-              {busy ? "A eliminar…" : "Continuar"}
+              {busy ? t("A eliminar…") : t("Continuar")}
             </button>
           </div>
           {error ? (
@@ -97,14 +101,14 @@ export function DeleteAccountSection({ hasPassword }: { hasPassword: boolean }) 
         </div>
       )}
 
-      <Modal open={confirmOpen} title="Eliminar conta?" onClose={() => setConfirmOpen(false)}>
-        <p className="text-sm text-mute">Esta acção não se pode desfazer. Perdes acesso imediato à app.</p>
+      <Modal open={confirmOpen} title={t("Eliminar conta?")} onClose={() => setConfirmOpen(false)}>
+        <p className="text-sm text-mute">{t("Esta acção não se pode desfazer. Perdes acesso imediato à app.")}</p>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button type="button" className="btn-ghost h-11" onClick={() => setConfirmOpen(false)}>
-            Voltar
+            {t("Voltar")}
           </button>
           <button type="button" disabled={busy} className="h-11 rounded-md bg-coral text-sm font-semibold text-white" onClick={() => void confirmDelete()}>
-            {busy ? "A eliminar…" : "Eliminar"}
+            {busy ? t("A eliminar…") : t("Eliminar")}
           </button>
         </div>
       </Modal>

@@ -193,6 +193,7 @@ class MeetEntry(Base):
     athlete_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("athletes.id"))
     stroke: Mapped[str] = mapped_column(Text)
     distance_m: Mapped[int] = mapped_column(Integer)
+    extra: Mapped[dict] = mapped_column(JSONB, default=dict)
 
 
 class MeetResult(Base):
@@ -203,6 +204,7 @@ class MeetResult(Base):
     ss: Mapped[int] = mapped_column(SmallInteger, default=0)
     cc: Mapped[int] = mapped_column(SmallInteger, default=0)
     splits: Mapped[list] = mapped_column(JSONB, default=list)
+    extra: Mapped[dict] = mapped_column(JSONB, default=dict)
     recorded_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -344,6 +346,67 @@ class PersonalRecord(Base):
     meet_date: Mapped[datetime] = mapped_column(Date)
     source: Mapped[str] = mapped_column(Text, default="meet")
     splits: Mapped[list] = mapped_column(JSONB, default=list)
+
+
+class Goal(Base):
+    """A target for one athlete, set by the coach ("o que espero de ti") or by the athlete ("o que quero")."""
+
+    __tablename__ = "goals"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid_pk)
+    team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"))
+    athlete_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("athletes.id"))
+    author_role: Mapped[str] = mapped_column(Text)
+    author_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    kind: Mapped[str] = mapped_column(Text, default="time")
+    stroke: Mapped[str | None] = mapped_column(Text, nullable=True)
+    distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    course: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metric: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_date: Mapped[datetime | None] = mapped_column(Date, nullable=True)
+    competition_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    response: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(Text, default="active")
+    achieved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class HrSession(Base):
+    """Heart rate from a watch (FIT/TCX upload, Polar, Whoop), attached to the workout it belongs to."""
+
+    __tablename__ = "hr_sessions"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid_pk)
+    team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"))
+    athlete_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("athletes.id"))
+    workout_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    source: Mapped[str] = mapped_column(Text)
+    external_id: Mapped[str] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    avg_hr: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    max_hr: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    samples: Mapped[list] = mapped_column(JSONB, default=list)
+    laps: Mapped[list] = mapped_column(JSONB, default=list)
+    summary: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class PolarLink(Base):
+    """An athlete's Polar AccessLink authorisation (token encrypted at rest)."""
+
+    __tablename__ = "polar_links"
+    athlete_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("athletes.id"), primary_key=True)
+    team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    polar_user_id: Mapped[str] = mapped_column(Text)
+    token: Mapped[str] = mapped_column(Text)
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class TeamInvite(Base):

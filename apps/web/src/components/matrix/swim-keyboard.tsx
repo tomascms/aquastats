@@ -6,6 +6,7 @@ import { formatDraft } from "@/lib/swim-time";
 import type { Stroke, TimeParts } from "@/lib/types";
 import { STROKE_LABEL, STROKES } from "@/lib/labels";
 import { IconBackspace, IconChevron, IconPlus } from "@/components/ui/icons";
+import { useT } from "@/i18n/provider";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
@@ -64,6 +65,7 @@ export function SwimKeyboard({
   stroke,
   onStroke,
 }: SwimKeyboardProps) {
+  const t = useT();
   const display = formatDraft(parts, field);
   const [picker, setPicker] = useState(false);
   const chips: SplitChoice[] = [];
@@ -73,7 +75,7 @@ export function SwimKeyboard({
 
   if (collapsed) {
     return (
-      <section className="safe-bottom border-t border-line bg-panel px-3 py-2" aria-label="Teclado oculto">
+      <section className="safe-bottom border-t border-line bg-panel px-3 py-2" aria-label={t("Teclado oculto")}>
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1 truncate text-xs text-mute">
             <span className="font-semibold text-mist">{athleteName}</span>
@@ -81,7 +83,7 @@ export function SwimKeyboard({
             {repLabel}
           </div>
           <button type="button" onClick={onToggleCollapse} className="btn-primary h-9 shrink-0 px-4 text-xs">
-            Teclado
+            {t("Teclado")}
           </button>
         </div>
       </section>
@@ -89,12 +91,12 @@ export function SwimKeyboard({
   }
 
   return (
-    <section className="safe-bottom border-t border-line bg-ink-2/95 px-2 pt-2 backdrop-blur-md" aria-label="Teclado de tempos">
+    <section className="safe-bottom border-t border-line bg-ink-2/95 px-2 pt-2 backdrop-blur-md" aria-label={t("Teclado de tempos")}>
       <div className="mb-1.5 flex items-center gap-2">
         <div className="min-w-0 flex-1 truncate text-[11px] font-semibold text-mist">{athleteName}</div>
         <div className="min-w-0 flex-1 truncate text-center text-[10px] text-mute">{repLabel}</div>
         <button type="button" onClick={onToggleCollapse} className="shrink-0 rounded-md border border-line bg-panel px-2 py-1 text-[10px] font-semibold text-mute">
-          Esconder
+          {t("Esconder")}
         </button>
       </div>
 
@@ -106,7 +108,7 @@ export function SwimKeyboard({
       {(onStroke || availableSplits.length > 0 || onClear || onNotDone) && (
         <details className="mb-1.5 rounded-lg border border-line bg-panel/80">
           <summary className="cursor-pointer px-2 py-1.5 text-xs font-semibold text-mute">
-            Estilo · parciais · apagar
+            {t("Estilo · parciais · apagar")}
           </summary>
           <div className="space-y-2 border-t border-line px-2 py-2">
             {onStroke && (
@@ -163,7 +165,7 @@ export function SwimKeyboard({
                     className={`flex h-6 items-center gap-1 rounded-full px-2 ${
                       picker ? "bg-aqua text-ink" : "border border-line text-mute"
                     }`}
-                    aria-label="Parciais"
+                    aria-label={t("Parciais")}
                   >
                     <IconPlus className="h-3 w-3" />
                     <span className="text-[10px] font-semibold">+</span>
@@ -194,12 +196,12 @@ export function SwimKeyboard({
             )}
             {onClear ? (
               <button type="button" onClick={onClear} className="text-[10px] font-semibold text-coral">
-                Apagar tempo
+                {t("Apagar tempo")}
               </button>
             ) : null}
             {onNotDone ? (
               <button type="button" onClick={onNotDone} className="text-[10px] font-semibold text-coral">
-                Não fez esta repetição
+                {t("Não fez esta repetição")}
               </button>
             ) : null}
           </div>
@@ -210,7 +212,7 @@ export function SwimKeyboard({
         className={`mb-2 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-end gap-0.5 ${invalid ? "shake" : ""}`}
         role="group"
         aria-live="polite"
-        aria-label={`Tempo ${display.mm} minutos ${display.ss} segundos ${display.cc} centésimos`}
+        aria-label={t("Tempo {mm} minutos {ss} segundos {cc} centésimos", { mm: display.mm, ss: display.ss, cc: display.cc })}
       >
         <TimeField label="MM" value={display.mm} active={field === 0} compact onClick={() => onField(0)} />
         <span className="pb-1 text-lg text-aqua/70">{"'"}</span>
@@ -219,13 +221,13 @@ export function SwimKeyboard({
         <TimeField label="CC" value={display.cc} active={field === 2} compact onClick={() => onField(2)} />
       </div>
 
-      <div className="grid grid-cols-3 gap-1.5 pb-1" role="group" aria-label="Teclas numéricas">
+      <div className="grid grid-cols-3 gap-1.5 pb-1" role="group" aria-label={t("Teclas numéricas")}>
         {KEYS.map((key) => (
           <button
             key={key}
             type="button"
             className="keycap keycap-sm"
-            aria-label={`Dígito ${key}`}
+            aria-label={t("Dígito {digit}", { digit: key })}
             onPointerDown={(event) => {
               event.preventDefault();
               onDigit(key);
@@ -237,7 +239,7 @@ export function SwimKeyboard({
         <button
           type="button"
           className="keycap keycap-sm text-coral"
-          aria-label="Apagar dígito"
+          aria-label={t("Apagar dígito")}
           onPointerDown={(event) => {
             event.preventDefault();
             onBackspace();
@@ -248,7 +250,7 @@ export function SwimKeyboard({
         <button
           type="button"
           className="keycap keycap-sm col-span-2"
-          aria-label="Dígito 0"
+          aria-label={t("Dígito {digit}", { digit: 0 })}
           onPointerDown={(event) => {
             event.preventDefault();
             onDigit("0");
@@ -303,12 +305,13 @@ function NavCluster({
   axis: "horizontal" | "vertical";
   compact?: boolean;
 }) {
+  const t = useT();
   return (
     <div className="flex min-w-0 flex-1 items-center gap-1">
       <button
         type="button"
         onClick={onPrev}
-        aria-label={axis === "vertical" ? "Atleta anterior" : "Repetição anterior"}
+        aria-label={axis === "vertical" ? t("Atleta anterior") : t("Repetição anterior")}
         className={`rounded-lg border border-line bg-panel text-mute ${compact ? "min-h-9 min-w-9 p-1.5" : "min-h-11 min-w-11 p-2"}`}
       >
         <IconChevron dir={axis === "vertical" ? "up" : "left"} aria-hidden="true" />
@@ -323,7 +326,7 @@ function NavCluster({
       <button
         type="button"
         onClick={onNext}
-        aria-label={axis === "vertical" ? "Atleta seguinte" : "Repetição seguinte"}
+        aria-label={axis === "vertical" ? t("Atleta seguinte") : t("Repetição seguinte")}
         className={`rounded-lg border border-line bg-panel text-mute ${compact ? "min-h-9 min-w-9 p-1.5" : "min-h-11 min-w-11 p-2"}`}
       >
         <IconChevron dir={axis === "vertical" ? "down" : "right"} aria-hidden="true" />

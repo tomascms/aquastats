@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useT } from "@/i18n/provider";
 
 export function Modal({
   open,
@@ -13,6 +14,7 @@ export function Modal({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const t = useT();
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
@@ -26,7 +28,7 @@ export function Modal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <button type="button" className="absolute inset-0" aria-label="Fechar" onClick={onClose} />
+      <button type="button" className="absolute inset-0" aria-label={t("Fechar")} onClick={onClose} />
       <div className="relative w-full max-w-md rounded-2xl border border-line bg-panel p-5 shadow-xl">
         <h2 id="modal-title" className="text-lg font-semibold">
           {title}

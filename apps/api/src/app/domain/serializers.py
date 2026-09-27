@@ -30,9 +30,12 @@ def profile_out(row: Profile) -> dict:
         "primaryStroke": row.primary_stroke if row.primary_stroke in {"free", "back", "breast", "fly", "im"} else "",
         "teamId": "",
         "gender": extra.get("gender") if extra.get("gender") in {"M", "F"} else "",
-        "groupName": extra.get("groupName") or "",
+        # Only the current groups; old free-text groups (A, B, C…) are dropped.
+        "groupName": extra.get("groupName") if extra.get("groupName") in ("velocidade", "intermedio", "fundo") else "",
         "seedRecords": extra.get("seedRecords") if isinstance(extra.get("seedRecords"), list) else [],
         "wellness": extra.get("wellness") if isinstance(extra.get("wellness"), list) else [],
+        "swimrankingsUrl": extra.get("swimrankingsUrl") or "",
+        "swimrankingsSyncedAt": extra.get("swimrankingsSyncedAt"),
     }
 
 
@@ -46,9 +49,12 @@ def athlete_out(row: Athlete) -> dict:
         "primaryStroke": row.primary_stroke if row.primary_stroke in {"free", "back", "breast", "fly", "im"} else "",
         "teamId": str(row.team_id),
         "gender": extra.get("gender") if extra.get("gender") in {"M", "F"} else "",
-        "groupName": extra.get("groupName") or "",
+        # Only the current groups; old free-text groups (A, B, C…) are dropped.
+        "groupName": extra.get("groupName") if extra.get("groupName") in ("velocidade", "intermedio", "fundo") else "",
         "seedRecords": extra.get("seedRecords") if isinstance(extra.get("seedRecords"), list) else [],
         "wellness": extra.get("wellness") if isinstance(extra.get("wellness"), list) else [],
+        "swimrankingsUrl": extra.get("swimrankingsUrl") or "",
+        "swimrankingsSyncedAt": extra.get("swimrankingsSyncedAt"),
         "active": row.deleted_at is None,
     }
 
@@ -64,6 +70,8 @@ def workout_out(row: Workout) -> dict:
         "course": course if course in {"scm", "lcm"} else "",
         "athleteIds": _uuid_list(row.athlete_ids),
         "blocks": row.blocks or [],
+        "groups": [group for group in extra.get("groups") or [] if isinstance(group, str)],
+        "focus": extra.get("focus") or "",
     }
 
 
@@ -98,6 +106,10 @@ def competition_out(row: Competition) -> dict:
         "course": row.course,
         "venue": row.venue or "",
         "athleteIds": _uuid_list(row.athlete_ids),
+        "rules": extra.get("rules") if isinstance(extra.get("rules"), list) else None,
+        "live": (
+            {key: extra["live"].get(key) for key in ("url", "status", "lastSyncAt")} if isinstance(extra.get("live"), dict) else None
+        ),
     }
 
 
@@ -108,6 +120,18 @@ def entry_out(row: MeetEntry) -> dict:
         "athleteId": str(row.athlete_id),
         "stroke": row.stroke,
         "distanceM": row.distance_m,
+        # Filled from official files: heat/lane once the start list is out, seed time, schedule.
+        "heat": (row.extra or {}).get("heat"),
+        "lane": (row.extra or {}).get("lane"),
+        "entryTimeS": (row.extra or {}).get("entryTimeS"),
+        "eventNumber": (row.extra or {}).get("eventNumber"),
+        "date": (row.extra or {}).get("date"),
+        "sessionTime": (row.extra or {}).get("sessionTime"),
+        "entryCourse": (row.extra or {}).get("entryCourse"),
+        "finalHeat": (row.extra or {}).get("finalHeat"),
+        "finalLane": (row.extra or {}).get("finalLane"),
+        "finalDate": (row.extra or {}).get("finalDate"),
+        "finalTime": (row.extra or {}).get("finalTime"),
     }
 
 
@@ -119,6 +143,10 @@ def result_out(row: MeetResult) -> dict:
         "ss": row.ss,
         "cc": row.cc,
         "splits": row.splits or [],
+        "reactionS": (row.extra or {}).get("reactionS"),
+        "source": (row.extra or {}).get("source") or "manual",
+        # Official swims per round ("heat", "final"): time, reaction, heat, lane.
+        "swims": (row.extra or {}).get("swims") or {},
         "recordedAt": row.recorded_at.isoformat() if row.recorded_at else "",
     }
 

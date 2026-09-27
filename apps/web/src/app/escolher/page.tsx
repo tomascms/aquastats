@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthFrame } from "@/components/auth/auth-frame";
+import { useT, useTDynamic } from "@/i18n/provider";
 import { api, formatApiError, type ApiError } from "@/lib/api";
 import { homeFor } from "@/lib/auth";
 import { normalizeInvite, writeInviteCookie } from "@/lib/invite";
@@ -13,6 +14,8 @@ import { actions, useAppState, useAuthBoot } from "@/lib/store";
 type CoachRequest = { requested: boolean; requestedAt?: string | null; teamName?: string | null };
 
 export default function ChooseRolePage() {
+  const t = useT();
+  const td = useTDynamic();
   const router = useRouter();
   const { role } = useAppState();
   const { bootstrapped, bootError } = useAuthBoot();
@@ -45,7 +48,7 @@ export default function ChooseRolePage() {
       const path = await actions.chooseRole("swimmer", "", invite);
       window.location.assign(safeNext(path, homeFor("swimmer")));
     } catch (err) {
-      setError(formatApiError(err as ApiError) || "Não foi possível guardar a escolha.");
+      setError(formatApiError(err as ApiError) || t("Não foi possível guardar a escolha."));
       setBusy(null);
     }
   }
@@ -62,14 +65,14 @@ export default function ChooseRolePage() {
       setRequest({ ...result, teamName: form.teamName });
       setAskCoach(false);
     } catch (err) {
-      setError(formatApiError(err as ApiError) || "Não foi possível enviar o pedido.");
+      setError(formatApiError(err as ApiError) || t("Não foi possível enviar o pedido."));
     } finally {
       setBusy(null);
     }
   }
 
   if (!bootstrapped || role !== "pending") {
-    return <p className="px-5 py-16 text-center text-sm text-mute">A preparar…</p>;
+    return <p className="px-5 py-16 text-center text-sm text-mute">{t("A preparar…")}</p>;
   }
 
   const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -79,39 +82,39 @@ export default function ChooseRolePage() {
     <AuthFrame>
       {askCoach ? (
         <>
-          <h1 className="text-3xl font-bold">Pedir conta de treinador</h1>
+          <h1 className="text-3xl font-bold">{t("Pedir conta de treinador")}</h1>
           <p className="mt-2 text-sm leading-6 text-mute">
-            As contas de treinador são ativadas manualmente. Deixa os teus dados e respondemos por email.
+            {t("As contas de treinador são ativadas manualmente. Deixa os teus dados e respondemos por email.")}
           </p>
           <form className="mt-5 space-y-4" onSubmit={(event) => void sendCoachRequest(event)}>
             <label className="block text-sm font-medium text-mist">
-              Nome
+              {t("Nome")}
               <input className="field mt-1.5" value={form.name} onChange={set("name")} required maxLength={80} autoFocus />
             </label>
             <label className="block text-sm font-medium text-mist">
-              Telemóvel ou outro contacto
+              {t("Telemóvel ou outro contacto")}
               <input className="field mt-1.5" value={form.contact} onChange={set("contact")} required maxLength={80} />
             </label>
             <label className="block text-sm font-medium text-mist">
-              Equipa ou clube
+              {t("Equipa ou clube")}
               <input className="field mt-1.5" value={form.teamName} onChange={set("teamName")} required maxLength={80} />
             </label>
             <label className="block text-sm font-medium text-mist">
-              Mensagem <span className="font-normal text-mute">(opcional)</span>
+              {t("Mensagem")} <span className="font-normal text-mute">{t("(opcional)")}</span>
               <textarea className="field mt-1.5 min-h-24" value={form.message} onChange={set("message")} maxLength={600} />
             </label>
             <button type="submit" disabled={busy !== null} className="btn-primary h-11 w-full">
-              {busy === "coach" ? "A enviar…" : "Enviar pedido"}
+              {busy === "coach" ? t("A enviar…") : t("Enviar pedido")}
             </button>
           </form>
           <button type="button" className="mt-4 text-sm font-medium text-mute hover:text-mist" onClick={() => setAskCoach(false)}>
-            Voltar
+            {t("Voltar")}
           </button>
         </>
       ) : (
         <>
-          <h1 className="text-3xl font-bold">Escolhe o teu perfil</h1>
-          <p className="mt-2 text-sm leading-6 text-mute">Podes entrar como atleta já, ou pedir uma conta de treinador.</p>
+          <h1 className="text-3xl font-bold">{t("Escolhe o teu perfil")}</h1>
+          <p className="mt-2 text-sm leading-6 text-mute">{t("Podes entrar como atleta já, ou pedir uma conta de treinador.")}</p>
           <div className="mt-6 grid gap-3">
             <button
               type="button"
@@ -119,16 +122,16 @@ export default function ChooseRolePage() {
               onClick={() => void chooseSwimmer()}
               className="rounded-xl border border-line bg-panel px-4 py-4 text-left transition-colors hover:border-aqua disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span className="font-display text-xl font-bold text-mist">Atleta</span>
-              <span className="mt-1 block text-sm leading-5 text-mute">Consulta treinos, tempos, provas e evolução pessoal.</span>
+              <span className="font-display text-xl font-bold text-mist">{t("Atleta")}</span>
+              <span className="mt-1 block text-sm leading-5 text-mute">{t("Consulta treinos, tempos, provas e evolução pessoal.")}</span>
             </button>
             {request?.requested ? (
               <div className="rounded-xl border border-line bg-aqua-soft px-4 py-4">
-                <p className="font-display text-xl font-bold text-mist">Pedido de treinador enviado</p>
+                <p className="font-display text-xl font-bold text-mist">{t("Pedido de treinador enviado")}</p>
                 <p className="mt-1 text-sm leading-5 text-mute">
                   {request.teamName ? `${request.teamName} · ` : ""}
-                  {request.requestedAt ? `enviado a ${formatDatePt(request.requestedAt.slice(0, 10))}. ` : ""}
-                  Vais receber um email quando a conta for ativada.
+                  {request.requestedAt ? `${t("enviado a {date}.", { date: formatDatePt(request.requestedAt.slice(0, 10)) })} ` : ""}
+                  {t("Vais receber um email quando a conta for ativada.")}
                 </p>
               </div>
             ) : (
@@ -141,15 +144,15 @@ export default function ChooseRolePage() {
                 }}
                 className="rounded-xl border border-line bg-panel px-4 py-4 text-left transition-colors hover:border-aqua disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <span className="font-display text-xl font-bold text-mist">Treinador</span>
+                <span className="font-display text-xl font-bold text-mist">{t("Treinador")}</span>
                 <span className="mt-1 block text-sm leading-5 text-mute">
-                  Planeia sessões, acompanha a equipa e analisa resultados. Ativada após pedido.
+                  {t("Planeia sessões, acompanha a equipa e analisa resultados. Ativada após pedido.")}
                 </span>
               </button>
             )}
           </div>
           <label className="mt-5 block text-sm font-medium text-mist">
-            Código da equipa <span className="font-normal text-mute">(opcional, para atletas)</span>
+            {t("Código da equipa")} <span className="font-normal text-mute">{t("(opcional, para atletas)")}</span>
             <input
               className="field mt-1.5 uppercase tracking-widest"
               value={teamCode}
@@ -166,7 +169,7 @@ export default function ChooseRolePage() {
       )}
       {(error || bootError) && (
         <p className="mt-4 text-sm text-coral" role="alert">
-          {error || bootError}
+          {td(error || bootError || "")}
         </p>
       )}
     </AuthFrame>

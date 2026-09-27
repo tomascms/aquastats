@@ -4,6 +4,7 @@ import { useState } from "react";
 import { COURSE_LABEL, STROKE_LABEL, STROKES, formatEvent } from "@/lib/labels";
 import { eventKey, eventsForCourse, isOfficialEvent, seedSplitMarks } from "@/lib/meets";
 import { ClockField } from "@/components/ui/clock-field";
+import { useT } from "@/i18n/provider";
 import { EMPTY_PARTS, isEmptyParts, normalizeParts, partsFromNumbers } from "@/lib/swim-time";
 import type { PoolCourse, SeedRecord, SplitTime, Stroke, TimeParts } from "@/lib/types";
 
@@ -58,6 +59,7 @@ export function SeedRecordsEditor({
   records: SeedRecord[];
   onChange: (next: SeedRecord[]) => void;
 }) {
+  const t = useT();
   const [course, setCourse] = useState<PoolCourse>("scm");
   const [choice, setChoice] = useState("");
   const [picked, setPicked] = useState<string[]>(() =>
@@ -158,16 +160,16 @@ export function SeedRecordsEditor({
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-[7.5rem_minmax(0,1fr)_auto] sm:items-end">
         <label className="block text-sm">
-          Piscina
+          {t("Piscina")}
           <select className="field mt-1.5" value={course} onChange={(event) => setCourse(event.target.value as PoolCourse)}>
             <option value="scm">{COURSE_LABEL.scm}</option>
             <option value="lcm">{COURSE_LABEL.lcm}</option>
           </select>
         </label>
         <label className="block text-sm">
-          Prova
+          {t("Prova")}
           <select className="field mt-1.5" value={choice} onChange={(event) => setChoice(event.target.value)}>
-            <option value="">{available.length ? "Escolher prova" : "Todas as desta piscina estão na lista"}</option>
+            <option value="">{available.length ? t("Escolher prova") : t("Todas as desta piscina estão na lista")}</option>
             {STROKES.map((stroke) => {
               const options = available.filter((event) => event.stroke === stroke);
               if (!options.length) return null;
@@ -184,17 +186,17 @@ export function SeedRecordsEditor({
           </select>
         </label>
         <button type="button" disabled={!choice} onClick={addEvent} className="btn-ghost h-11 w-full sm:w-auto">
-          Adicionar
+          {t("Adicionar")}
         </button>
       </div>
 
       {groups.length === 0 ? (
-        <p className="text-sm text-mute">Adiciona só as provas em que já tens marca.</p>
+        <p className="text-sm text-mute">{t("Adiciona só as provas em que já tens marca.")}</p>
       ) : (
         <div className="space-y-4">
           {groups.map((group) => (
             <section key={group.course} className="space-y-2">
-              <p className="text-xs font-semibold text-mute">Piscina de {COURSE_LABEL[group.course]}</p>
+              <p className="text-xs font-semibold text-mute">{t("Piscina de {course}", { course: COURSE_LABEL[group.course] })}</p>
               {group.rows.map(({ key, parsed }) => {
                 const marks = seedSplitMarks(parsed.distanceM);
                 return (
@@ -202,11 +204,11 @@ export function SeedRecordsEditor({
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-medium">{formatEvent(parsed.distanceM, parsed.stroke)}</p>
                       <button type="button" onClick={() => removeEvent(key)} className="text-xs text-mute hover:text-coral">
-                        Tirar
+                        {t("Tirar")}
                       </button>
                     </div>
                     <label className="mt-3 block text-sm text-mute">
-                      Data
+                      {t("Data")}
                       <input
                         type="date"
                         className="field mt-1.5"
@@ -215,7 +217,7 @@ export function SeedRecordsEditor({
                       />
                     </label>
                     <div className="mt-3 flex items-center justify-between gap-3">
-                      <p className="text-sm text-mute">Final</p>
+                      <p className="text-sm text-mute">{t("Final")}</p>
                       <ClockField value={times[key] ?? EMPTY_PARTS} onChange={(parts) => setTime(key, parts)} />
                     </div>
                     {marks.length ? (

@@ -24,6 +24,8 @@ export type WellnessEntry = {
   date: string;
   sleepHours: number | null;
   gym: GymType | null;
+  /** How recovered the swimmer feels, 1 (very tired) to 5 (fresh). */
+  recovery?: number | null;
 };
 
 export type PoolCourse = "scm" | "lcm";
@@ -44,6 +46,9 @@ export type SeedRecord = {
   cc: number;
   date: string;
   splits?: SplitTime[];
+  /** "swimrankings" when it came from the SwimRankings profile (final time only). */
+  source?: string;
+  meet?: string;
 };
 
 export type Athlete = {
@@ -58,6 +63,8 @@ export type Athlete = {
   groupName?: string;
   seedRecords?: SeedRecord[];
   wellness?: WellnessEntry[];
+  swimrankingsUrl?: string;
+  swimrankingsSyncedAt?: string | null;
 };
 
 export type RepDetail = {
@@ -76,7 +83,14 @@ export type SetSegment = {
   gear: Gear[];
   details: RepDetail[];
   splitMarks: number[];
+  /**
+   * Optional per-group send-offs for the same set ("A a 1'10, B a 1'20"). Swimmers whose
+   * group isn't listed keep the segment's own send-off.
+   */
+  bands?: SegmentBand[];
 };
+
+export type SegmentBand = { group: string; sendOffSeconds: number };
 
 export type WorkoutBlock = {
   id: string;
@@ -95,6 +109,10 @@ export type Workout = {
   course?: PoolCourse | "";
   athleteIds: string[];
   blocks: WorkoutBlock[];
+  /** Training groups this session is for (velocidade / intermedio / fundo). */
+  groups?: string[];
+  /** The coach's word for the day: Potência, Tolerância, Aeróbio, Teste… */
+  focus?: string;
 };
 
 export type TimeLog = {
@@ -127,6 +145,8 @@ export type WorkoutInput = {
   shift: Shift;
   course: PoolCourse;
   blocks: DraftBlock[];
+  groups?: string[];
+  focus?: string;
 };
 
 export type AthleteInput = {
@@ -138,6 +158,8 @@ export type AthleteInput = {
   groupName?: string;
   seedRecords?: SeedRecord[];
   wellness?: WellnessEntry[];
+  swimrankingsUrl?: string;
+  swimrankingsSyncedAt?: string | null;
 };
 
 export type DayPart = "am" | "pm";
@@ -190,7 +212,10 @@ export type RaceSession = {
 
 export type SeasonCycle = {
   id: string;
+  /** Phase kind for macros ("general" | "specific" | "competitive" | "taper" | "transition"). */
   type: string;
+  label?: string;
+  focus?: string;
   start: string;
   end: string;
 };
@@ -241,6 +266,10 @@ export type Competition = {
   course: PoolCourse;
   venue: string;
   athleteIds: string[];
+  /** Live-results page followed during the meet (SPLASH on live.swimrankings.net). */
+  live?: { url: string; status?: string; lastSyncAt?: string | null } | null;
+  /** Key facts read from the regulations PDF. */
+  rules?: { label: string; value: string }[] | null;
 };
 
 export type CompetitionInput = {
@@ -257,6 +286,30 @@ export type MeetEntry = {
   athleteId: string;
   stroke: Stroke;
   distanceM: number;
+  /** From the organiser's files: present once the start list is published. */
+  heat?: number | null;
+  lane?: number | null;
+  entryTimeS?: number | null;
+  eventNumber?: number | null;
+  date?: string | null;
+  sessionTime?: string | null;
+  /** Pool of the entry time (a 25 m time can be used to enter a 50 m meet). */
+  entryCourse?: PoolCourse | null;
+  /** The final, when the swimmer makes it; heats (heat/lane above) are always kept. */
+  finalHeat?: number | null;
+  finalLane?: number | null;
+  finalDate?: string | null;
+  finalTime?: string | null;
+};
+
+export type OfficialSwim = {
+  timeS: number;
+  reactionS?: number | null;
+  heat?: number | null;
+  lane?: number | null;
+  date?: string | null;
+  place?: number | null;
+  category?: string | null;
 };
 
 export type MeetResult = {
@@ -266,6 +319,10 @@ export type MeetResult = {
   ss: number;
   cc: number;
   splits: SplitTime[];
+  reactionS?: number | null;
+  source?: "manual" | "lenex" | "pdf";
+  /** Official swims by round when both heats and final were swum. */
+  swims?: { heat?: OfficialSwim; final?: OfficialSwim };
   recordedAt: string;
 };
 
@@ -288,7 +345,8 @@ export type AppState = {
   role: Role | null;
   swimmerId: string;
   online: boolean;
-  syncing: boolean;  teamName: string;
+  syncing: boolean;
+  teamName: string;
   joinCode: string;
   athletes: Athlete[];
   workouts: Workout[];
@@ -299,4 +357,49 @@ export type AppState = {
   raceSessions: RaceSession[];
   seasonPlans: SeasonPlan[];
   attendance: AttendanceSession[];
+  goals: Goal[];
+  hrSessions: HrSession[];
 };
+
+/** Heart rate from a watch, attached to a workout. Offsets are seconds from startedAt. */
+export type HrSession = {
+  id: string;
+  athleteId: string;
+  workoutId: string | null;
+  source: "file" | "polar" | "whoop";
+  startedAt: string;
+  endedAt: string | null;
+  avgHr: number | null;
+  maxHr: number | null;
+  samples: [number, number][];
+  laps: { start: number; end: number; distanceM: number; avgHr: number | null; maxHr: number | null }[];
+  summary: Record<string, unknown>;
+};
+
+export type GoalKind = "time" | "technical" | "other";
+export type GoalMetric = "reaction" | "at15" | "dps" | "sr" | "underwater";
+export type GoalStatus = "active" | "achieved" | "dropped";
+
+export type Goal = {
+  id: string;
+  athleteId: string;
+  /** Who set it: the coach ("o que espero") or the athlete ("o que quero"). */
+  author: "coach" | "athlete";
+  kind: GoalKind;
+  stroke: Stroke | null;
+  distanceM: number | null;
+  course: PoolCourse | null;
+  metric: GoalMetric | null;
+  /** Seconds for time goals; metric units for technical goals. */
+  targetValue: number | null;
+  targetDate: string | null;
+  competitionId: string | null;
+  text: string;
+  /** The other side's answer. */
+  response: string;
+  status: GoalStatus;
+  achievedAt: string | null;
+  createdAt: string;
+};
+
+export type GoalInput = Partial<Omit<Goal, "id" | "author" | "achievedAt" | "createdAt">> & { id?: string; athleteId: string };

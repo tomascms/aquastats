@@ -1,3 +1,4 @@
+import { tx, type MessageKey } from "@/i18n";
 import { COURSE_LABEL, DAY_PART_LABEL, STROKE_LABEL } from "./labels";
 import type { DayPart, PoolCourse, RaceLap, RaceSession, Stroke } from "./types";
 
@@ -127,7 +128,7 @@ export function sectorOf(marks: number[], times: number[], index: number): { fro
 
 export function sectorLabel(from: number, to: number): string {
   if (!to) return "";
-  return `${from} a ${to}`;
+  return `${from}–${to}`;
 }
 
 export function officialFromLaps(laps: RaceLap[], distanceM: number, course: PoolCourse): number {
@@ -438,13 +439,28 @@ export function filterRaces(
   });
 }
 
+function zone(id: string, code: string, name: MessageKey, pct: number, hr: string, hint: MessageKey) {
+  return {
+    id,
+    code,
+    pct,
+    hr,
+    get name() {
+      return tx(name);
+    },
+    get hint() {
+      return tx(hint);
+    },
+  };
+}
+
 export const ZONES = [
-  { id: "Z1", code: "EN1", name: "Aeróbio baixo", pct: 1.22, hr: "60–70%", hint: "Suave, aquecimento e soltar." },
-  { id: "Z2", code: "EN2", name: "Aeróbio médio", pct: 1.14, hr: "70–80%", hint: "Base de resistência." },
-  { id: "Z3", code: "EN3", name: "Limiar", pct: 1.07, hr: "80–90%", hint: "Série exigente, ritmo de limiar." },
-  { id: "Z4", code: "SP1", name: "Tolerância", pct: 1.03, hr: "85–95%", hint: "Lactato, séries curtas com descanso." },
-  { id: "Z5", code: "SP2", name: "VO2 máx.", pct: 1.0, hr: "90–100%", hint: "Potência aeróbia máxima." },
-  { id: "Z6", code: "SP3", name: "Velocidade", pct: 0.96, hr: "95–100%", hint: "Sprint explosivo." },
+  zone("Z1", "EN1", "Aeróbio baixo", 1.22, "60–70%", "Suave, aquecimento e soltar."),
+  zone("Z2", "EN2", "Aeróbio médio", 1.14, "70–80%", "Base de resistência."),
+  zone("Z3", "EN3", "Limiar", 1.07, "80–90%", "Série exigente, ritmo de limiar."),
+  zone("Z4", "SP1", "Tolerância", 1.03, "85–95%", "Lactato, séries curtas com descanso."),
+  zone("Z5", "SP2", "VO2 máx.", 1.0, "90–100%", "Potência aeróbia máxima."),
+  zone("Z6", "SP3", "Velocidade", 0.96, "95–100%", "Sprint explosivo."),
 ] as const;
 
 export function pace100(totalS: number, distanceM: number): number {
@@ -490,18 +506,18 @@ export function downloadText(filename: string, content: string, type = "text/csv
 
 export function exportRacesCsv(sessions: RaceSession[], athleteName: (id: string) => string): void {
   const header = [
-    "Atleta",
-    "Data",
-    "Torneio",
-    "Prova",
-    "Estilo",
-    "Piscina",
-    "Sessão",
-    "Tempo total",
-    "SR médio",
-    "V média",
-    "Reacção",
-    "Voo",
+    tx("Atleta"),
+    tx("Data"),
+    tx("Torneio"),
+    tx("Prova"),
+    tx("Estilo"),
+    tx("Piscina"),
+    tx("Sessão"),
+    tx("Tempo total"),
+    tx("SR médio"),
+    tx("V média"),
+    tx("Reacção"),
+    tx("Voo"),
   ];
   const rows = sessions.map((session) => {
     const view = analyzeRace(session);
@@ -524,7 +540,7 @@ export function exportRacesCsv(sessions: RaceSession[], athleteName: (id: string
   const lapSheets = sessions.map((session) => {
     const view = analyzeRace(session);
     const title = `${athleteName(session.athleteId)}_${session.date}_${session.distanceM}`;
-    const lapHeader = ["#", "UW", "UWD", "Sec15", "Sec10", "Sec25", "Sec50", "SR", "SR1", "SR2", "SC", "T.Nado", "T.Volta", "V", "DPS"];
+    const lapHeader = ["#", "UW", "UWD", "Sec15", "Sec10", "Sec25", "Sec50", "SR", "SR1", "SR2", "SC", tx("T.Nado"), tx("T.Volta"), "V", "DPS"];
     const lapRows = view.laps.map((lap) => [
       lap.n,
       lap.uw,
@@ -544,5 +560,5 @@ export function exportRacesCsv(sessions: RaceSession[], athleteName: (id: string
     ]);
     return [`# ${title}`, lapHeader.join(";"), ...lapRows.map((line) => line.map(csvEscape).join(";"))].join("\n");
   });
-  downloadText(`provas-${new Date().toISOString().slice(0, 10)}.csv`, [summary, "", ...lapSheets].join("\n\n"));
+  downloadText(`${tx("provas")}-${new Date().toISOString().slice(0, 10)}.csv`, [summary, "", ...lapSheets].join("\n\n"));
 }

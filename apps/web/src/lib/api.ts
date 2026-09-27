@@ -1,3 +1,5 @@
+import { getLocale, txDynamic } from "@/i18n";
+
 export type ApiError = { status: number; detail: string; requestId?: string };
 
 let refreshPromise: Promise<boolean> | null = null;
@@ -41,8 +43,9 @@ async function parseError(res: Response): Promise<ApiError> {
 }
 
 export function formatApiError(error: ApiError): string {
-  if (error.requestId) return `${error.detail} (ref. ${error.requestId.slice(0, 12)})`;
-  return error.detail;
+  const detail = txDynamic(error.detail);
+  if (error.requestId) return `${detail} (ref. ${error.requestId.slice(0, 12)})`;
+  return detail;
 }
 
 export function isRetryableError(error: ApiError): boolean {
@@ -70,6 +73,7 @@ export async function api<T>(
 ): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
+  if (!headers.has("Accept-Language")) headers.set("Accept-Language", getLocale());
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   headers.set("X-Request-Id", crypto.randomUUID?.() ?? `${Date.now()}`);
   const method = (init.method || "GET").toUpperCase();

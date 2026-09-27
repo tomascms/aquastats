@@ -109,6 +109,28 @@ select {
   touch-action: manipulation;
 }
 
+/*
+ * Results-table look (SwimRankings-style): tight rows, alternating stripes, row hover.
+ * Base layer, so any row that sets its own background (selected, current week…) still wins.
+ */
+@layer base {
+  table {
+    border-collapse: collapse;
+  }
+
+  tbody > tr:nth-child(even) {
+    background-color: #f8fbfd;
+  }
+
+  tbody > tr:hover {
+    background-color: #eef4fa;
+  }
+
+  thead th {
+    white-space: nowrap;
+  }
+}
+
 /* Timing-board numerals: every time, split and count aligns column-wise. */
 .tabular,
 .metric-value,

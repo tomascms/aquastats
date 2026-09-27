@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useT } from "@/i18n/provider";
 
 export function AnaliseTabs({ role = "coach" }: { role?: "coach" | "swimmer" }) {
+  const t = useT();
   const pathname = usePathname();
   const provaHref = role === "swimmer" ? "/swimmer/provas" : "/coach/provas";
   const treinoHref = role === "swimmer" ? "/swimmer/provas/treino" : "/coach/provas/treino";
@@ -16,7 +18,7 @@ export function AnaliseTabs({ role = "coach" }: { role?: "coach" | "swimmer" }) 
           treino ? "text-mute hover:text-mist" : "bg-aqua text-white"
         }`}
       >
-        Análise de prova
+        {t("Análise de prova")}
       </Link>
       <Link
         href={treinoHref}
@@ -24,7 +26,7 @@ export function AnaliseTabs({ role = "coach" }: { role?: "coach" | "swimmer" }) 
           treino ? "bg-aqua text-white" : "text-mute hover:text-mist"
         }`}
       >
-        Análise de treino
+        {t("Análise de treino")}
       </Link>
     </div>
   );

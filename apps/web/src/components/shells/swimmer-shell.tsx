@@ -2,6 +2,7 @@
 
 import { AppShell, type NavItem } from "@/components/shells/app-shell";
 import { IconCalendar, IconFlag, IconHome, IconSettings } from "@/components/ui/icons";
+import { useT } from "@/i18n/provider";
 import { useAppState } from "@/lib/store";
 
 const NAV: NavItem[] = [
@@ -13,10 +14,11 @@ const NAV: NavItem[] = [
 
 export function SwimmerShell({ children }: { children: React.ReactNode }) {
   const { athletes, swimmerId } = useAppState();
+  const t = useT();
   const me = athletes.find((athlete) => athlete.id === swimmerId);
 
   return (
-    <AppShell nav={NAV} homeHref="/swimmer" context={me?.name ?? "Atleta"} narrow>
+    <AppShell nav={NAV} homeHref="/swimmer" context={me?.name ?? t("Atleta")} narrow>
       {children}
     </AppShell>
   );

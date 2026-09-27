@@ -5,8 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { WorkoutForm } from "@/components/workouts/workout-form";
 import { actions, useAppState } from "@/lib/store";
 import { normalizeDraft } from "@/lib/set";
+import { useT } from "@/i18n/provider";
 
 export default function EditWorkoutPage() {
+  const t = useT();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { workouts } = useAppState();
@@ -15,9 +17,9 @@ export default function EditWorkoutPage() {
   if (!workout) {
     return (
       <div className="py-10 text-center text-mute">
-        Treino não encontrado.
+        {t("Treino não encontrado.")}
         <Link href="/coach" className="mt-3 block text-aqua">
-          Voltar ao calendário
+          {t("Voltar ao calendário")}
         </Link>
       </div>
     );
@@ -26,9 +28,9 @@ export default function EditWorkoutPage() {
   return (
     <div>
       <Link href={`/coach?date=${workout.date}`} className="mb-3 inline-block text-sm text-mute">
-        ← Calendário
+        ← {t("Calendário")}
       </Link>
-      <h1 className="mb-4 text-2xl font-semibold tracking-tight">Editar treino</h1>
+      <h1 className="mb-4 text-2xl font-semibold tracking-tight">{t("Editar treino")}</h1>
       <WorkoutForm
         initial={{
           title: workout.title,
@@ -36,8 +38,10 @@ export default function EditWorkoutPage() {
           shift: workout.shift,
           course: workout.course === "scm" || workout.course === "lcm" ? workout.course : undefined,
           blocks: workout.blocks.map((block) => ({ ...normalizeDraft(block), id: block.id })),
+          groups: workout.groups ?? [],
+          focus: workout.focus ?? "",
         }}
-        submitLabel="Guardar alterações"
+        submitLabel={t("Guardar alterações")}
         onSubmit={async (input) => {
           await actions.updateWorkout(workout.id, input);
           router.push(`/coach?date=${input.date}`);
@@ -47,11 +51,11 @@ export default function EditWorkoutPage() {
         type="button"
         className="mt-3 h-12 w-full rounded-2xl border border-coral/40 text-sm font-semibold text-coral"
         onClick={() => {
-          if (!window.confirm("Apagar este treino e os tempos?")) return;
+          if (!window.confirm(t("Apagar este treino e os tempos?"))) return;
           void actions.deleteWorkout(workout.id).then(() => router.push(`/coach?date=${workout.date}`));
         }}
       >
-        Apagar treino
+        {t("Apagar treino")}
       </button>
     </div>
   );

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AuthFrame } from "@/components/auth/auth-frame";
+import { useT, useTDynamic } from "@/i18n/provider";
 import { GoogleSignIn } from "@/components/auth/google-sign-in";
 import { api } from "@/lib/api";
 import { safeNext } from "@/lib/safe-next";
@@ -11,6 +12,8 @@ import { writeInviteCookie } from "@/lib/invite";
 import { useAppState, useAuthBoot } from "@/lib/store";
 
 export default function JoinTeamPage() {
+  const t = useT();
+  const td = useTDynamic();
   const { code } = useParams<{ code: string }>();
   const { role } = useAppState();
   const { bootstrapped, bootError } = useAuthBoot();
@@ -23,8 +26,8 @@ export default function JoinTeamPage() {
     if (!token) return;
     writeInviteCookie(token);
     void api<{ valid: boolean }>(`/api/v1/auth/join/${token}`)
-      .then(() => setTeamName("Convite válido"))
-      .catch((err) => setError((err as { detail?: string }).detail || "Este convite não é válido."));
+      .then(() => setTeamName(t("Convite válido")))
+      .catch((err) => setError(td((err as { detail?: string }).detail || "Este convite não é válido.")));
   }, [token]);
 
   async function join() {
@@ -39,13 +42,13 @@ export default function JoinTeamPage() {
         window.location.assign(`/?invite=${encodeURIComponent(token)}`);
         return;
       }
-      setError((err as { detail?: string }).detail || "Não foi possível entrar na equipa.");
+      setError(td((err as { detail?: string }).detail || "Não foi possível entrar na equipa."));
       setBusy(false);
     }
   }
 
   const loggedIn = bootstrapped && Boolean(role);
-  const banner = error || bootError;
+  const banner = error || td(bootError || "");
 
   useEffect(() => {
     if (!token || !loggedIn) return;
@@ -56,7 +59,7 @@ export default function JoinTeamPage() {
 
   return (
     <AuthFrame>
-      <h1 className="text-2xl font-semibold tracking-tight">{teamName || "Convite"}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{teamName || t("Convite")}</h1>
 
       {loggedIn ? (
         <button
@@ -65,12 +68,12 @@ export default function JoinTeamPage() {
           onClick={() => void join()}
           className="btn-primary mt-6 h-10 w-full"
         >
-          {busy ? "A entrar…" : "Entrar na equipa"}
+          {busy ? t("A entrar…") : t("Entrar na equipa")}
         </button>
       ) : (
         <div className="mt-6 space-y-3">
           <Link href={`/?invite=${encodeURIComponent(token)}`} className="btn-primary h-10 w-full">
-            Entrar
+            {t("Entrar")}
           </Link>
           <GoogleSignIn invite={token} disabled={busy} />
         </div>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDistance, sameMeters, splitChoices } from "@/lib/distances";
-import { BLOCK_LABEL, COURSE_LABEL, SHIFT_LABEL, strokeLabel } from "@/lib/labels";
+import { BLOCK_LABEL, COURSE_LABEL, SHIFT_LABEL, displayTitle, strokeLabel } from "@/lib/labels";
 import { formatSendOff } from "@/lib/send-off";
 import {
   INTENSITY_LABEL,
@@ -14,10 +14,12 @@ import {
   formatSet,
   innerCount,
   needsClockTime,
+  sendOffFor,
   splitRepNumber,
   totalReps,
 } from "@/lib/set";
 import { actions, emptyParts, useAppState } from "@/lib/store";
+import { sessionFor } from "@/lib/heart-rate";
 import { isTimeComplete } from "@/lib/time-save";
 import {
   canAcceptSecondsDigit,
@@ -31,11 +33,12 @@ import {
   padClockDigit,
   partsFromNumbers,
 } from "@/lib/swim-time";
-import type { CellRef, Stroke, TimeLog, TimeParts, WorkoutBlock } from "@/lib/types";
+import type { CellRef, HrSession, Stroke, TimeLog, TimeParts, WorkoutBlock } from "@/lib/types";
 import { AthletePicker } from "@/components/matrix/athlete-picker";
 import { IconBack, IconMinus, IconPlus } from "@/components/ui/icons";
 import { OfflinePill } from "@/components/ui/offline-pill";
 import { SwimKeyboard } from "@/components/matrix/swim-keyboard";
+import { useT } from "@/i18n/provider";
 
 type Field = 0 | 1 | 2;
 const FIELDS: Array<keyof TimeParts> = ["mm", "ss", "cc"];
@@ -65,9 +68,10 @@ function partsFromLog(log: TimeLog | undefined, splitAt: number | null): TimePar
 }
 
 export function MatrixScreen() {
+  const t = useT();
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { athletes, workouts, timeLogs } = useAppState();
+  const { athletes, workouts, timeLogs, hrSessions } = useAppState();
   const seedWorkout = workouts.find((item) => item.id === params.id);
   const dayWorkouts = useMemo(
     () =>
@@ -202,11 +206,11 @@ export function MatrixScreen() {
       await saveChain.current.catch(() => undefined);
       await actions.flushAllTimeSaves();
       if (saveErrors.current > 0) {
-        setSaved("Erro ao guardar");
+        setSaved(t("Erro ao guardar"));
         window.setTimeout(() => setSaved(""), 3000);
         return;
       }
-      setSaved("Guardado");
+      setSaved(t("Guardado"));
       window.setTimeout(() => setSaved(""), 1800);
     } finally {
       setSaving(false);
@@ -419,7 +423,7 @@ export function MatrixScreen() {
   if (!workout) {
     return (
       <div className="px-4 py-16 text-center text-mute">
-        Treino não encontrado.
+        {t("Treino não encontrado.")}
         <Link href="/coach" className="mt-4 block text-aqua">
           Voltar
         </Link>
@@ -430,9 +434,9 @@ export function MatrixScreen() {
   if (!block) {
     return (
       <div className="px-4 py-16 text-center text-mute">
-        Este treino ainda não tem blocos.
+        {t("Este treino ainda não tem blocos.")}
         <Link href={`/coach/workouts/${workout.id}/edit`} className="mt-4 block text-aqua">
-          Editar treino
+          {t("Editar treino")}
         </Link>
       </div>
     );
@@ -456,14 +460,16 @@ export function MatrixScreen() {
             void flushTimes();
           }}
           className="rounded-xl border border-line bg-panel p-2 text-mist"
+          aria-label={t("Voltar")}
         >
           <IconBack />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{workout.title}</p>
+          <p className="truncate text-sm font-medium">{displayTitle(workout.title)}</p>
           <p className="text-[11px] text-mute">
             {workout.course === "scm" || workout.course === "lcm" ? `${COURSE_LABEL[workout.course]} · ` : ""}
-            {present.length} na água · {filled}/{present.length * requiredReps || 0} tempos
+            {t("{count} na água", { count: present.length })} ·{" "}
+            {t("{done}/{total} tempos", { done: filled, total: present.length * requiredReps || 0 })}
           </p>
         </div>
         {saved ? <span className="text-[11px] font-semibold text-aqua">{saved}</span> : null}
@@ -473,7 +479,7 @@ export function MatrixScreen() {
           disabled={saving}
           className="h-9 rounded-xl bg-aqua hover:bg-aqua-2 px-3 text-xs font-semibold text-white disabled:opacity-60"
         >
-          {saving ? "A guardar…" : "Guardar"}
+          {saving ? t("A guardar…") : t("Guardar")}
         </button>
         <OfflinePill />
       </header>
@@ -497,7 +503,7 @@ export function MatrixScreen() {
                 item.id === workout.id ? "bg-aqua text-ink" : "border border-line bg-panel text-mute"
               }`}
             >
-              {SHIFT_LABEL[item.shift]} · {item.title}
+              {SHIFT_LABEL[item.shift]} · {displayTitle(item.title)}
             </button>
           ))}
         </div>
@@ -536,7 +542,7 @@ export function MatrixScreen() {
                 round === index + 1 ? "bg-aqua text-white" : "border border-line text-mute"
               }`}
             >
-              Série {index + 1}
+              {t("Série {n}", { n: index + 1 })}
             </button>
           ))}
         </div>
@@ -544,7 +550,7 @@ export function MatrixScreen() {
 
       {block.betweenRounds && rounds > 1 && (
         <p className="px-3 pb-2 text-[11px] text-mute">
-          Suave entre séries: {formatDistance(block.betweenRounds.distanceM)}m
+          {t("Suave entre séries: {distance}m", { distance: formatDistance(block.betweenRounds.distanceM) })}
         </p>
       )}
 
@@ -558,7 +564,7 @@ export function MatrixScreen() {
             onClick={() => setPicker(true)}
             className="sticky left-0 z-10 bg-ink px-2 py-2 text-left text-xs font-semibold tracking-[0.12em] text-aqua"
           >
-            Editar atletas
+            {t("Editar atletas")}
           </button>
           {inners.map((item) => (
             <div key={item.index} className="px-1 py-1 text-center">
@@ -567,12 +573,12 @@ export function MatrixScreen() {
                 <span className="text-mute/70"> · {formatDistance(item.distanceM)}m</span>
               </p>
               <p className="text-[10px] font-semibold text-sand">{INTENSITY_LABEL[item.intensity]}</p>
-              {!needsClockTime(item.intensity) ? <p className="text-[9px] text-mute">sem tempo</p> : null}
+              {!needsClockTime(item.intensity) ? <p className="text-[9px] text-mute">{t("sem tempo")}</p> : null}
               <p className="font-mono text-[10px] text-aqua">
                 {block.noSendOff ? "—" : formatSendOff(item.sendOffSeconds)}
               </p>
               {item.fromBlock && (
-                <p className="mt-0.5 text-xs font-semibold text-sand">bloco</p>
+                <p className="mt-0.5 text-xs font-semibold text-sand">{t("bloco")}</p>
               )}
               {item.gear.length > 0 && (
                 <p className="mt-0.5 text-[9px] leading-tight text-mute">{formatGear(item.gear)}</p>
@@ -582,7 +588,7 @@ export function MatrixScreen() {
 
           {innerReps === 0 && (
             <div className="sticky left-0 z-10 border-t border-line bg-ink-2 px-2 py-4 text-sm text-mute">
-              Esta série ainda não tem reps.
+              {t("Esta série ainda não tem reps.")}
             </div>
           )}
 
@@ -595,6 +601,7 @@ export function MatrixScreen() {
                 selectedSplit && cell?.athleteId === row.id && selectedSplit.round === round ? selectedSplit.innerRep : 0
               }
               getLog={(innerRep) => logsByCell.get(cellKey(row.id, flatRepNumber(round, innerRep, innerReps)))}
+              hr={sessionFor(hrSessions, workout.id, row.id)}
               onSelect={(innerRep) =>
                 applyCell({ athleteId: row.id, blockId: block.id, repNumber: flatRepNumber(round, innerRep, innerReps) }, true)
               }
@@ -612,7 +619,7 @@ export function MatrixScreen() {
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-aqua/15">
                   <IconPlus className="h-4 w-4" />
                 </span>
-                <span className="text-[13px] font-semibold">Adicionar atleta</span>
+                <span className="text-[13px] font-semibold">{t("Adicionar atleta")}</span>
               </button>
               {inners.map((item) => (
                 <div key={`add-${item.index}`} className="border-t border-l border-line bg-panel/20" />
@@ -628,7 +635,7 @@ export function MatrixScreen() {
           field={field}
           invalid={invalid}
           athleteName={athlete.name}
-          repLabel={`${rounds > 1 ? `S${selectedSplit.round} · ` : ""}R${selectedSplit.innerRep} · ${formatDistance(selectedInner.distanceM)}m`}
+          repLabel={`${rounds > 1 ? `S${selectedSplit.round} · ` : ""}R${selectedSplit.innerRep} · ${formatDistance(selectedInner.distanceM)}m${block.segments[selectedInner.segmentIndex]?.bands?.length ? ` · ${formatSendOff(sendOffFor(block.segments[selectedInner.segmentIndex], selectedInner.sendOffSeconds, athlete.groupName))}` : ""}`}
           finalLabel={formatDistance(selectedInner.distanceM) + "m"}
           splitMarks={activeSplitMarks}
           activeSplit={splitAt}
@@ -729,14 +736,17 @@ function Row({
   getLog,
   onSelect,
   onRemove,
+  hr,
 }: {
   name: string;
+  hr?: HrSession;
   reps: number;
   selectedInner: number;
   getLog: (innerRep: number) => TimeLog | undefined;
   onSelect: (innerRep: number) => void;
   onRemove?: () => void;
 }) {
+  const t = useT();
   return (
     <>
       <div className="sticky left-0 z-10 flex items-center gap-1.5 border-t border-line bg-ink-2 px-2 py-2">
@@ -748,12 +758,17 @@ function Row({
               onRemove();
             }}
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-coral/15 text-coral"
-            aria-label={`Tirar ${name} deste treino`}
+            aria-label={t("Tirar {name} deste treino", { name })}
           >
             <IconMinus className="h-4 w-4" />
           </button>
         ) : null}
         <p className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">{name}</p>
+        {hr?.maxHr ? (
+          <span className="shrink-0 font-mono text-[10px] text-coral" title={t("Frequência cardíaca máxima do treino")}>
+            ♥{hr.maxHr}
+          </span>
+        ) : null}
       </div>
       {Array.from({ length: reps }, (_, index) => {
         const innerRep = index + 1;
@@ -776,7 +791,7 @@ function Row({
             {hasFinal ? (
               <span className={log?.pending ? "text-sand" : "text-mist"}>{formatTime(log!.mm, log!.ss, log!.cc)}</span>
             ) : splits ? (
-              <span className="text-sand">{splits} parc.</span>
+              <span className="text-sand">{t("{count} parc.", { count: splits })}</span>
             ) : (
               <span className="text-mute/50">—</span>
             )}

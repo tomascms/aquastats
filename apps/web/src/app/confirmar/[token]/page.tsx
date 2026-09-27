@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AuthFrame } from "@/components/auth/auth-frame";
 import { api } from "@/lib/api";
+import { useT } from "@/i18n/provider";
 
 export default function ConfirmPage() {
+  const t = useT();
   const { token } = useParams<{ token: string }>();
   const [state, setState] = useState<"pending" | "ok" | "error">("pending");
 
@@ -25,15 +27,15 @@ export default function ConfirmPage() {
 
   return (
     <AuthFrame>
-      <h1 className="text-2xl font-semibold tracking-tight">Confirmar email</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("Confirmar email")}</h1>
       <p className="mt-6 text-sm text-mute" role="status">
-        {state === "pending" && "A confirmar…"}
-        {state === "ok" && "Email confirmado. Já podes usar a conta."}
-        {state === "error" && "Este link já não é válido."}
+        {state === "pending" && t("A confirmar…")}
+        {state === "ok" && t("Email confirmado. Já podes usar a conta.")}
+        {state === "error" && t("Este link já não é válido.")}
       </p>
       <p className="mt-4 text-sm">
         <Link href="/" className="text-mute hover:text-mist">
-          Entrar
+          {t("Entrar")}
         </Link>
       </p>
     </AuthFrame>

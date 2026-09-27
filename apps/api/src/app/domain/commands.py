@@ -44,6 +44,17 @@ from .serializers import (
 STROKES = {"free", "back", "breast", "fly", "im"}
 SHIFTS = {"morning", "afternoon"}
 COURSES = {"scm", "lcm"}
+# Training groups: same meets for everyone, different sessions and season plans.
+GROUPS = ("velocidade", "intermedio", "fundo")
+
+
+def _groups(value) -> list[str]:
+    return [group for group in GROUPS if group in (value or [])]
+
+
+def _focus(value) -> str:
+    """The coach's own word for the day (Potência, Tolerância, Aeróbio, Teste…)."""
+    return " ".join(str(value or "").split())[:40]
 DAY_PARTS = {"am", "pm"}
 RACE_DISTANCES = {25, 50, 100, 200, 400, 800, 1500}
 ATTENDANCE_STATUS = {"present", "late", "absent"}
@@ -182,6 +193,34 @@ def _upsert_seed_records(session: Session, athlete_id: UUID, records: list[dict]
             session.delete(row)
 
 
+def _parse_wellness(raw) -> list[dict]:
+    """Daily wellness: sleep hours, gym session and how recovered the swimmer feels (1–5)."""
+    by_day: dict[str, dict] = {}
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        day = _as_date(item.get("date"))
+        if not day:
+            continue
+        try:
+            sleep = float(item["sleepHours"]) if item.get("sleepHours") not in (None, "") else None
+        except (TypeError, ValueError):
+            sleep = None
+        try:
+            recovery = int(item["recovery"]) if item.get("recovery") not in (None, "") else None
+        except (TypeError, ValueError):
+            recovery = None
+        entry = {
+            "date": day.isoformat(),
+            "sleepHours": sleep if sleep is not None and 0 <= sleep <= 24 else None,
+            "gym": item.get("gym") if item.get("gym") in {"strength", "mobility", "explosive"} else None,
+            "recovery": recovery if recovery is not None and 1 <= recovery <= 5 else None,
+        }
+        if entry["sleepHours"] is not None or entry["gym"] or entry["recovery"]:
+            by_day[entry["date"]] = entry
+    return sorted(by_day.values(), key=lambda entry: entry["date"])[-400:]
+
+
 def _parse_seed_records(raw, existing) -> list[dict]:
     if not isinstance(raw, list):
         raise HTTPException(status_code=400, detail="Recordes pessoais inválidos.")
@@ -233,6 +272,12 @@ def _parse_seed_records(raw, existing) -> list[dict]:
                 "cc": cc,
                 "date": (_as_date(item.get("date")) or _as_date(old.get("date")) or _now().date()).isoformat(),
                 "splits": _parse_seed_splits(item.get("splits"), distance),
+                # Provenance survives edits: a SwimRankings time stays marked as such unless the time changes.
+                **(
+                    {"source": old.get("source")}
+                    if old.get("source") == "swimrankings" and (old.get("mm"), old.get("ss"), old.get("cc")) == (mm, ss, cc)
+                    else {}
+                ),
             }
         )
     return out
@@ -292,7 +337,8 @@ def update_athlete(session: Session, payload: dict, athlete_id: str, body: dict,
         raise HTTPException(status_code=403, detail="Só podes editar a tua ficha.")
     row = _owned_athlete(session, payload["team_uuid"], target)
     row.name = _clean_name(body.get("name") or row.name)
-    row.date_of_birth = _as_date(body.get("dateOfBirth"))
+    if "dateOfBirth" in body:  # partial updates (e.g. only wellness) must not wipe the birthday
+        row.date_of_birth = _as_date(body.get("dateOfBirth"))
     if "primaryStroke" in body:
         row.primary_stroke = _stroke(str(body.get("primaryStroke"))) if body.get("primaryStroke") in STROKES else ""
     extra = dict(row.extra or {})
@@ -301,17 +347,32 @@ def update_athlete(session: Session, payload: dict, athlete_id: str, body: dict,
     if "gender" in body:
         gender = str(body.get("gender") or "").strip().upper()
         extra["gender"] = "M" if gender in {"M", "MASCULINO"} else "F" if gender in {"F", "FEMININO"} else ""
-    if "groupName" in body:
-        extra["groupName"] = str(body.get("groupName") or "")[:160]
     if "seedRecords" in body:
         extra["seedRecords"] = _parse_seed_records(body.get("seedRecords"), extra.get("seedRecords") or [])
         _upsert_seed_records(session, row.id, extra["seedRecords"])
     if "wellness" in body:
-        extra["wellness"] = body.get("wellness") if isinstance(body.get("wellness"), list) else []
+        extra["wellness"] = _parse_wellness(body.get("wellness"))
     row.extra = extra
     flag_modified(row, "extra")
     row.updated_at = _now()
     _audit(session, payload, "athlete.update", "athlete", row.id, request)
+    return athlete_out(row)
+
+
+def coach_update_athlete(session: Session, payload: dict, athlete_id: str, body: dict, request) -> dict:
+    """The coach's part of an athlete: training group, and gender only while the athlete left it empty."""
+    row = _owned_athlete(session, payload["team_uuid"], as_uuid(athlete_id, "athleteId"))
+    extra = dict(row.extra or {})
+    if "groupName" in body:
+        group = str(body.get("groupName") or "").strip().lower()
+        extra["groupName"] = group if group in GROUPS else ""
+    if "gender" in body and extra.get("gender") not in {"M", "F"}:
+        gender = str(body.get("gender") or "").strip().upper()
+        extra["gender"] = gender if gender in {"M", "F"} else ""
+    row.extra = extra
+    flag_modified(row, "extra")
+    row.updated_at = _now()
+    _audit(session, payload, "athlete.coach_update", "athlete", row.id, request)
     return athlete_out(row)
 
 
@@ -346,6 +407,14 @@ def _ordered_workout_blocks(blocks: list) -> list:
     ]
 
 
+def _group_athletes(session: Session, team_id: UUID, groups: list[str]) -> list[UUID]:
+    """A workout for a group starts with that group's active swimmers in the water."""
+    if not groups:
+        return []
+    rows = session.scalars(select(Athlete).where(Athlete.team_id == team_id, Athlete.deleted_at.is_(None))).all()
+    return [row.id for row in rows if (row.extra or {}).get("groupName") in groups]
+
+
 def create_workout(session: Session, payload: dict, body: dict, request) -> dict:
     now = _now()
     shift = body.get("shift") or "afternoon"
@@ -360,9 +429,13 @@ def create_workout(session: Session, payload: dict, body: dict, request) -> dict
         title=(body.get("title") or "").strip()[:120] or _treino_title(body.get("date")),
         workout_date=body.get("date"),
         shift=shift,
-        athlete_ids=[],
+        athlete_ids=[],  # swimmers are picked per session; a group is only who the session is for
         blocks=_ordered_workout_blocks(body.get("blocks") or []),
-        extra={"course": body.get("course")} if body.get("course") in COURSES else {},
+        extra={
+            **({"course": body.get("course")} if body.get("course") in COURSES else {}),
+            "groups": _groups(body.get("groups")),
+            "focus": _focus(body.get("focus")),
+        },
         created_at=now,
         updated_at=now,
     )
@@ -381,9 +454,14 @@ def update_workout(session: Session, payload: dict, workout_id: str, body: dict,
         row.workout_date = body["date"]
     if body.get("shift") in SHIFTS:
         row.shift = body["shift"]
-    if body.get("course") in COURSES:
+    if body.get("course") in COURSES or "groups" in body or "focus" in body:
         extra = dict(row.extra or {})
-        extra["course"] = body["course"]
+        if body.get("course") in COURSES:
+            extra["course"] = body["course"]
+        if "groups" in body:
+            extra["groups"] = _groups(body.get("groups"))
+        if "focus" in body:
+            extra["focus"] = _focus(body.get("focus"))
         row.extra = extra
         flag_modified(row, "extra")
     if "blocks" in body:
@@ -501,7 +579,6 @@ def save_time(session: Session, payload: dict, body: dict, request) -> dict:
             cc=cc,
             splits=splits,
             stroke=stroke,
-            skipped=skipped,
             recorded_by=payload["user_id"],
             recorded_at=now,
         )
@@ -621,6 +698,79 @@ def toggle_meet_entry(session: Session, payload: dict, body: dict, request) -> d
     session.flush()
     _audit(session, payload, "meet.entry", "meet_entry", row.id, request)
     return entry_out(row)
+
+
+def _opt_int(value, low: int, high: int) -> int | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if low <= number <= high else None
+
+
+def save_meet_entry(session: Session, payload: dict, body: dict, request) -> dict:
+    """Coach adds or corrects one event by hand; later file/live imports fill whatever is still missing."""
+    meet = _owned_meet(session, payload["team_uuid"], as_uuid(body.get("competitionId"), "competitionId"))
+    athlete = _owned_athlete(session, payload["team_uuid"], as_uuid(body.get("athleteId"), "athleteId"))
+    stroke = _stroke(body.get("stroke") or "")
+    distance_m = _opt_int(body.get("distanceM"), 50, 1500)
+    if distance_m not in RACE_DISTANCES:
+        raise HTTPException(status_code=400, detail="Esta prova não existe.")
+    row = session.scalar(
+        select(MeetEntry).where(
+            MeetEntry.competition_id == meet.id,
+            MeetEntry.athlete_id == athlete.id,
+            MeetEntry.stroke == stroke,
+            MeetEntry.distance_m == distance_m,
+        )
+    )
+    if row is None:
+        row = MeetEntry(id=uuid4(), competition_id=meet.id, athlete_id=athlete.id, stroke=stroke, distance_m=distance_m, extra={})
+        session.add(row)
+    extra = dict(row.extra or {})
+    for key, low, high in (("eventNumber", 1, 999), ("heat", 1, 999), ("lane", 0, 10), ("finalHeat", 1, 99), ("finalLane", 0, 10)):
+        if key in body:
+            extra[key] = _opt_int(body.get(key), low, high)
+    for key in ("date", "finalDate"):
+        if key in body:
+            try:
+                extra[key] = date.fromisoformat(str(body[key])[:10]).isoformat() if body.get(key) else None
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Data inválida.")
+    if "entryTimeS" in body:
+        try:
+            value = float(body["entryTimeS"]) if body.get("entryTimeS") not in (None, "") else None
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Tempo inválido.")
+        extra["entryTimeS"] = value if value and 10 <= value <= 3600 else None
+    if "entryCourse" in body:
+        extra["entryCourse"] = body.get("entryCourse") if body.get("entryCourse") in COURSES else None
+    row.extra = extra
+    flag_modified(row, "extra")
+    ids = list(meet.athlete_ids or [])
+    if athlete.id not in ids:
+        meet.athlete_ids = [*ids, athlete.id]
+    live = (meet.extra or {}).get("live")
+    if isinstance(live, dict) and live.get("files"):
+        # A new/corrected event must be looked for again in files already read.
+        meet.extra = {**meet.extra, "live": {**live, "files": {}}}
+        flag_modified(meet, "extra")
+    session.flush()
+    _audit(session, payload, "meet.entry.save", "meet_entry", row.id, request)
+    return entry_out(row)
+
+
+def delete_meet_entry(session: Session, payload: dict, entry_id: str, request) -> dict:
+    """Removing an event removes its result too (and unlinks any race analysis from it)."""
+    row = session.get(MeetEntry, as_uuid(entry_id, "entryId"))
+    if not row:
+        raise HTTPException(status_code=404, detail="Prova não encontrada.")
+    _owned_meet(session, payload["team_uuid"], row.competition_id)
+    session.query(MeetResult).filter(MeetResult.entry_id == row.id).delete(synchronize_session=False)
+    session.delete(row)
+    session.flush()
+    _audit(session, payload, "meet.entry.delete", "meet_entry", row.id, request)
+    return {"deleted": True, "id": str(row.id)}
 
 
 def save_meet_result(session: Session, payload: dict, body: dict, request) -> dict:
@@ -803,19 +953,85 @@ def delete_race_session(session: Session, payload: dict, race_id: str, request) 
     return {"deleted": True, "id": str(row.id)}
 
 
+def _iso_or_none(value) -> str | None:
+    try:
+        return date.fromisoformat(str(value)[:10]).isoformat()
+    except (TypeError, ValueError):
+        return None
+
+
+def _plan_cycles(value) -> list[dict]:
+    """Macro/meso cycles: id, type, dates and short free text, bounded."""
+    out = []
+    for raw in value[:60] if isinstance(value, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        start, end = _iso_or_none(raw.get("start")), _iso_or_none(raw.get("end"))
+        if not start or not end or end < start:
+            continue
+        out.append(
+            {
+                "id": str(raw.get("id") or uuid4())[:64],
+                "type": str(raw.get("type") or "")[:40],
+                "label": " ".join(str(raw.get("label") or "").split())[:80],
+                "focus": " ".join(str(raw.get("focus") or "").split())[:200],
+                "start": start,
+                "end": end,
+            }
+        )
+    return out
+
+
+def _plan_events(value) -> list[dict]:
+    out = []
+    for raw in value[:200] if isinstance(value, list) else []:
+        if not isinstance(raw, dict) or not _iso_or_none(raw.get("date")):
+            continue
+        out.append(
+            {
+                "id": str(raw.get("id") or uuid4())[:64],
+                "name": " ".join(str(raw.get("name") or "").split())[:120],
+                "type": str(raw.get("type") or "")[:20],
+                "date": _iso_or_none(raw.get("date")),
+                "description": " ".join(str(raw.get("description") or "").split())[:300],
+            }
+        )
+    return out
+
+
+def _plan_volumes(value) -> list[dict]:
+    out = []
+    for raw in value[:60] if isinstance(value, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            week, meters = int(raw.get("week")), int(float(raw.get("meters") or 0))
+        except (TypeError, ValueError):
+            continue
+        if 0 <= week < 60 and 0 <= meters <= 200_000:
+            out.append({"week": week, "meters": meters})
+    return out
+
+
 def save_season_plan(session: Session, payload: dict, body: dict, request) -> dict:
     name = " ".join(str(body.get("name") or "").split())[:120]
     if not name:
         raise HTTPException(status_code=400, detail="Nome do plano obrigatório.")
     if not body.get("start") or not body.get("end"):
         raise HTTPException(status_code=400, detail="Datas do plano obrigatórias.")
+    try:
+        start, end = date.fromisoformat(str(body["start"])[:10]), date.fromisoformat(str(body["end"])[:10])
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Data inválida.")
+    if end <= start or (end - start).days > 400:
+        raise HTTPException(status_code=400, detail="Datas do plano inválidas.")
     now = _now()
     payload_json = {
-        "macros": body.get("macros") if isinstance(body.get("macros"), list) else [],
-        "mesos": body.get("mesos") if isinstance(body.get("mesos"), list) else [],
-        "competitions": body.get("competitions") if isinstance(body.get("competitions"), list) else [],
-        "tests": body.get("tests") if isinstance(body.get("tests"), list) else [],
-        "weeklyVolumes": body.get("weeklyVolumes") if isinstance(body.get("weeklyVolumes"), list) else [],
+        "macros": _plan_cycles(body.get("macros")),
+        "mesos": _plan_cycles(body.get("mesos")),
+        "competitions": _plan_events(body.get("competitions")),
+        "tests": _plan_events(body.get("tests")),
+        "weeklyVolumes": _plan_volumes(body.get("weeklyVolumes")),
     }
     plan_id = body.get("id")
     row = session.get(SeasonPlan, as_uuid(plan_id, "id")) if plan_id else None
@@ -823,8 +1039,8 @@ def save_season_plan(session: Session, payload: dict, body: dict, request) -> di
         raise HTTPException(status_code=404, detail="Plano não encontrado.")
     if row:
         row.name = name
-        row.start_date = body.get("start")
-        row.end_date = body.get("end")
+        row.start_date = start
+        row.end_date = end
         row.description = str(body.get("description") or "")[:2000]
         row.payload = payload_json
         row.updated_at = now
@@ -833,8 +1049,8 @@ def save_season_plan(session: Session, payload: dict, body: dict, request) -> di
             id=uuid4(),
             team_id=payload["team_uuid"],
             name=name,
-            start_date=body.get("start"),
-            end_date=body.get("end"),
+            start_date=start,
+            end_date=end,
             description=str(body.get("description") or "")[:2000],
             payload=payload_json,
             created_by=payload["user_id"],
@@ -951,7 +1167,7 @@ def update_swimmer_profile(session: Session, user_id: UUID, body: dict, request)
     if "seedRecords" in body:
         extra["seedRecords"] = _parse_seed_records(body.get("seedRecords"), extra.get("seedRecords") or [])
     if "wellness" in body:
-        extra["wellness"] = body.get("wellness") if isinstance(body.get("wellness"), list) else []
+        extra["wellness"] = _parse_wellness(body.get("wellness"))
     profile.extra = extra
     flag_modified(profile, "extra")
     profile.updated_at = _now()

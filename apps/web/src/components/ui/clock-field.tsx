@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useT } from "@/i18n/provider";
 import { canAcceptSecondsDigit, padClockDigit } from "@/lib/swim-time";
 import type { TimeParts } from "@/lib/types";
 
@@ -36,6 +37,7 @@ export function ClockField({
   readOnly?: boolean;
   startOnSeconds?: boolean;
 }) {
+  const t = useT();
   const fields: Array<keyof TimeParts> = mode === "split" ? ["ss", "cc"] : ["mm", "ss", "cc"];
   const tight = compact || mode === "split";
   const secondsRef = useRef<HTMLInputElement>(null);
@@ -79,7 +81,7 @@ export function ClockField({
             maxLength={2}
             readOnly={readOnly}
             tabIndex={readOnly ? -1 : undefined}
-            aria-label={field === "mm" ? "Minutos" : field === "ss" ? "Segundos" : "Centésimos"}
+            aria-label={field === "mm" ? t("Minutos") : field === "ss" ? t("Segundos") : t("Centésimos")}
             placeholder="__"
             className={
               tight
@@ -110,8 +112,8 @@ export function ClockField({
               }
             }}
           />
-          {field === "mm" ? <span className="text-mute">'</span> : null}
-          {field === "ss" && index < fields.length - 1 ? <span className="text-mute">"</span> : null}
+          {field === "mm" ? <span className="text-mute">{"'"}</span> : null}
+          {field === "ss" && index < fields.length - 1 ? <span className="text-mute">{'"'}</span> : null}
         </span>
       ))}
     </div>

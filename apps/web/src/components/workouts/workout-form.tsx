@@ -23,7 +23,9 @@ import {
   toggleRepGear,
   updateRepDetail,
 } from "@/lib/set";
+import { FOCUS_SUGGESTIONS, GROUPS, GROUP_LABEL, type TrainingGroup } from "@/lib/groups";
 import type { BlockType, DraftBlock, Gear, Intensity, PoolCourse, SetSegment, Shift, WorkoutInput } from "@/lib/types";
+import { useT } from "@/i18n/provider";
 
 const SHIFTS: Shift[] = ["morning", "afternoon"];
 const TYPES: BlockType[] = ["warmup", "main", "recovery"];
@@ -37,11 +39,14 @@ export function WorkoutForm({
   submitLabel: string;
   onSubmit: (input: WorkoutInput) => void | Promise<void>;
 }) {
+  const t = useT();
   const startingDate = initial?.date ?? "";
-  const [title, setTitle] = useState(initial?.title ?? (startingDate ? treinoTitle(startingDate) : "Treino"));
+  const [title, setTitle] = useState(initial?.title ?? (startingDate ? treinoTitle(startingDate) : t("Treino")));
   const [date, setDate] = useState(startingDate);
   const [shift, setShift] = useState<Shift>(initial?.shift ?? "afternoon");
   const [course, setCourse] = useState<PoolCourse | "">(initial?.course ?? "");
+  const [groups, setGroups] = useState<TrainingGroup[]>((initial?.groups ?? []) as TrainingGroup[]);
+  const [focus, setFocus] = useState(initial?.focus ?? "");
   const [blocks, setBlocks] = useState<DraftBlock[]>(
     initial?.blocks?.length ? orderDraftBlocks(initial.blocks.map(normalizeDraft)) : [emptyBlock("main")],
   );
@@ -68,12 +73,14 @@ export function WorkoutForm({
           date,
           shift,
           course,
+          groups,
+          focus: focus.trim(),
           blocks: orderDraftBlocks(blocks.map(persistDraft)),
         });
       }}
     >
       <label className="block text-xs font-semibold text-mute">
-        Data
+        {t("Data")}
         <input
           type="date"
           value={date}
@@ -88,7 +95,7 @@ export function WorkoutForm({
       </label>
 
       <div>
-        <p className="text-xs font-semibold text-mute">Piscina</p>
+        <p className="text-xs font-semibold text-mute">{t("Piscina")}</p>
         <div className="mt-1 grid grid-cols-2 gap-1 rounded-2xl border border-line bg-panel p-1">
           {(["scm", "lcm"] as const).map((item) => (
             <button
@@ -103,8 +110,43 @@ export function WorkoutForm({
         </div>
       </div>
 
+      <div>
+        <p className="text-xs font-semibold text-mute">{t("Grupo")}</p>
+        <div className="mt-1 grid grid-cols-3 gap-1 rounded-2xl border border-line bg-panel p-1">
+          {GROUPS.map((item) => (
+            <button
+              key={item}
+              type="button"
+              aria-pressed={groups.includes(item)}
+              onClick={() => setGroups((current) => (current.includes(item) ? current.filter((value) => value !== item) : [...current, item]))}
+              className={`rounded-xl py-2 text-sm font-semibold ${groups.includes(item) ? "bg-aqua text-ink" : "text-mute"}`}
+            >
+              {GROUP_LABEL[item]}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1 text-[11px] text-mute">{t("Para quem é este treino. Os atletas escolhes no próprio treino, dia a dia (ex.: um velocista que hoje nada com o intermédio). Sem grupo, é para todos.")}</p>
+      </div>
+
       <label className="block text-xs font-semibold text-mute">
-        Título
+        {t("Foco do treino")}
+        <input
+          value={focus}
+          maxLength={40}
+          list="workout-focus"
+          placeholder={t("Ex.: Potência, Tolerância, Aeróbio, Teste")}
+          onChange={(event) => setFocus(event.target.value)}
+          className="mt-1 w-full rounded-2xl border border-line bg-panel px-3 py-3 text-sm text-mist outline-none focus:border-aqua"
+        />
+        <datalist id="workout-focus">
+          {FOCUS_SUGGESTIONS.map((item) => (
+            <option key={item} value={item} />
+          ))}
+        </datalist>
+      </label>
+
+      <label className="block text-xs font-semibold text-mute">
+        {t("Título")}
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
@@ -113,7 +155,7 @@ export function WorkoutForm({
       </label>
 
       <div>
-        <p className="text-xs font-semibold text-mute">Turno</p>
+        <p className="text-xs font-semibold text-mute">{t("Turno")}</p>
         <div className="mt-1 grid grid-cols-2 gap-1 rounded-2xl border border-line bg-panel p-1">
           {SHIFTS.map((item) => (
             <button
@@ -142,7 +184,7 @@ export function WorkoutForm({
           onClick={() => setBlocks((current) => orderDraftBlocks([...current, emptyBlock("main")]))}
           className="w-full rounded-2xl border border-dashed border-line py-3 text-sm text-mute"
         >
-          Adicionar bloco
+          {t("Adicionar bloco")}
         </button>
       </div>
 
@@ -162,6 +204,7 @@ function BlockEditor({
   onChange: (patch: Partial<DraftBlock> | ((current: DraftBlock) => DraftBlock)) => void;
   onRemove?: () => void;
 }) {
+  const t = useT();
   const showNoSendOff = block.type === "warmup" || block.type === "recovery";
   const preview = formatSet(block);
 
@@ -194,13 +237,13 @@ function BlockEditor({
         </div>
         {onRemove && (
           <button type="button" onClick={onRemove} className="text-[11px] text-coral">
-            Remover
+            {t("Remover")}
           </button>
         )}
       </div>
 
       <div className="mt-3 flex flex-wrap items-end gap-3">
-        <NumberField label="Séries" value={block.rounds} min={1} onChange={(rounds) => onChange({ rounds })} />
+        <NumberField label={t("Séries")} value={block.rounds} min={1} onChange={(rounds) => onChange({ rounds })} />
         {showNoSendOff && (
           <label className="mb-1 flex items-center gap-2 text-sm">
             <input
@@ -208,7 +251,7 @@ function BlockEditor({
               checked={block.noSendOff}
               onChange={(event) => onChange({ noSendOff: event.target.checked })}
             />
-            Sem saídas
+            {t("Sem saídas")}
           </label>
         )}
       </div>
@@ -237,7 +280,7 @@ function BlockEditor({
           onClick={() => onChange((current) => ({ ...current, segments: [...current.segments, emptySegment()] }))}
           className="w-full rounded-2xl border border-dashed border-line py-2.5 text-sm text-mute"
         >
-          + Grupo
+          + {t("Grupo")}
         </button>
       </div>
 
@@ -253,7 +296,7 @@ function BlockEditor({
                 })
               }
             />
-            Suave entre séries
+            {t("Suave entre séries")}
           </label>
           {block.betweenRounds && (
             <div className="mt-2 max-w-[160px]">
@@ -284,6 +327,7 @@ function GroupCard({
   onChange: (patch: Partial<SetSegment> | ((current: SetSegment) => SetSegment)) => void;
   onRemove: () => void;
 }) {
+  const t = useT();
   const ready = isReadySegment(segment);
   const [customizing, setCustomizing] = useState(false);
 
@@ -291,7 +335,7 @@ function GroupCard({
     <div className="rounded-2xl border border-line bg-ink px-3 py-3">
       <div className="flex items-end gap-2">
             <NumberField
-              label="Reps"
+              label={t("Reps")}
               value={segment.reps}
               min={1}
               onChange={(reps) => onChange((current) => resizeSegment(current, reps))}
@@ -300,7 +344,7 @@ function GroupCard({
         <DistanceField value={segment.distanceM} onChange={(distanceM) => onChange({ distanceM })} />
         {canRemove && (
           <button type="button" onClick={onRemove} className="mb-1 ml-auto text-[11px] text-coral">
-            Tirar
+            {t("Tirar")}
           </button>
         )}
       </div>
@@ -309,7 +353,7 @@ function GroupCard({
         <div className="mt-3 space-y-3">
           <div className="flex flex-wrap items-end gap-2">
             <div className="min-w-[180px] flex-1">
-              <p className="mb-1 text-xs font-semibold text-mute">Velocidade</p>
+              <p className="mb-1 text-xs font-semibold text-mute">{t("Velocidade")}</p>
               <IntensityPills
                 value={segment.intensity}
                 onChange={(intensity) => onChange((current) => applySegmentDefaults(current, { intensity }))}
@@ -317,7 +361,7 @@ function GroupCard({
             </div>
             {!hideSendOff && (
               <label className="w-[7.5rem] text-xs font-semibold text-mute">
-                Saída
+                {t("Saída")}
                 <SendOffSelect
                   value={segment.sendOffSeconds || DEFAULT_SEND_OFF}
                   onChange={(sendOffSeconds) => onChange((current) => applySegmentDefaults(current, { sendOffSeconds }))}
@@ -327,7 +371,7 @@ function GroupCard({
           </div>
 
           <div>
-            <p className="mb-1 text-xs font-semibold text-mute">Material</p>
+            <p className="mb-1 text-xs font-semibold text-mute">{t("Material")}</p>
             <div className="flex flex-wrap gap-1">
               {GEARS.map((item) => (
                 <GearChip
@@ -342,7 +386,7 @@ function GroupCard({
 
           <div>
             {showStart ? (
-              <p className="mb-1 text-xs font-semibold text-mute">Partida</p>
+              <p className="mb-1 text-xs font-semibold text-mute">{t("Partida")}</p>
             ) : null}
             <div className="flex flex-wrap items-center gap-2">
               {showStart ? (
@@ -358,7 +402,7 @@ function GroupCard({
                   customizing ? "bg-aqua text-ink" : "border border-line text-mute"
                 }`}
               >
-                {customizing ? "Fechar" : "Personalizar"}
+                {customizing ? t("Fechar") : t("Personalizar")}
               </button>
             </div>
           </div>
@@ -448,6 +492,7 @@ function SendOffSelect({
 }
 
 function IntensityPills({ value, onChange }: { value: Intensity; onChange: (value: Intensity) => void }) {
+  const t = useT();
   return (
     <div className="relative">
       <select
@@ -455,12 +500,12 @@ function IntensityPills({ value, onChange }: { value: Intensity; onChange: (valu
         onChange={(event) => onChange(event.target.value as Intensity)}
         className="h-10 w-full appearance-none rounded-xl border border-line bg-panel px-3 pr-9 text-sm font-semibold text-mist outline-none focus:border-aqua"
       >
-        <optgroup label="Carga">
+        <optgroup label={t("Carga")}>
           {INTENSITIES.filter((item) => !item.startsWith("P")).map((item) => (
             <option key={item} value={item}>{INTENSITY_LABEL[item]}</option>
           ))}
         </optgroup>
-        <optgroup label="Ritmo de prova">
+        <optgroup label={t("Ritmo de prova")}>
           {INTENSITIES.filter((item) => item.startsWith("P")).map((item) => (
             <option key={item} value={item}>{INTENSITY_LABEL[item]}</option>
           ))}
@@ -480,6 +525,7 @@ function StartToggle({
   onChange: (fromBlock: boolean) => void;
   compact?: boolean;
 }) {
+  const t = useT();
   return (
     <div className={`grid grid-cols-2 gap-1 rounded-xl border border-line p-0.5 ${compact ? "w-[9.5rem]" : "max-w-[220px]"}`}>
       <button
@@ -487,14 +533,14 @@ function StartToggle({
         onClick={() => onChange(false)}
         className={`rounded-lg py-1.5 text-[11px] font-semibold ${!fromBlock ? "bg-aqua text-ink" : "text-mute"}`}
       >
-        De baixo
+        {t("De baixo")}
       </button>
       <button
         type="button"
         onClick={() => onChange(true)}
         className={`rounded-lg py-1.5 text-[11px] font-semibold ${fromBlock ? "bg-aqua text-white" : "text-mute"}`}
       >
-        Bloco
+        {t("Bloco")}
       </button>
     </div>
   );
@@ -525,9 +571,10 @@ function GearChip({
 }
 
 function DistanceField({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const t = useT();
   return (
     <label className="text-xs text-mute">
-      Metros
+      {t("Metros")}
       <div className="relative mt-1">
         <select
           value={value ? String(value) : ""}

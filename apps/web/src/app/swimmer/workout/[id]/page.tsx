@@ -2,33 +2,41 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { BLOCK_LABEL, COURSE_LABEL, SHIFT_LABEL, strokeLabel } from "@/lib/labels";
+import { BLOCK_LABEL, COURSE_LABEL, SHIFT_LABEL, displayTitle, strokeLabel } from "@/lib/labels";
 import { formatSet, totalReps } from "@/lib/set";
 import { useAppState } from "@/lib/store";
 import { formatTime, toCentiseconds } from "@/lib/swim-time";
 import { IconBack } from "@/components/ui/icons";
+import { useT } from "@/i18n/provider";
+import { HrAttach } from "@/components/heart-rate/hr-attach";
+import { HrChart } from "@/components/heart-rate/hr-chart";
+import { sessionFor } from "@/lib/heart-rate";
 
 export default function SwimmerWorkoutPage() {
+  const t = useT();
   const params = useParams<{ id: string }>();
-  const { athletes, swimmerId, workouts, timeLogs } = useAppState();
+  const { athletes, swimmerId, workouts, timeLogs, hrSessions } = useAppState();
   const me = athletes.find((athlete) => athlete.id === swimmerId) ?? athletes[0];
   const workout = workouts.find((item) => item.id === params.id) ?? workouts[0];
   const mine = timeLogs.filter((log) => log.athleteId === me?.id && log.workoutId === workout?.id);
 
   if (!workout || !me) return null;
+  const hr = sessionFor(hrSessions, workout.id, me.id);
 
   return (
     <div className="space-y-4">
       <Link href="/swimmer" className="inline-flex items-center gap-1 text-sm text-mute">
         <IconBack className="h-4 w-4" />
-        Voltar
+        {t("Voltar")}
       </Link>
-      <h1 className="text-2xl font-semibold tracking-tight">{workout.title}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{displayTitle(workout.title)}</h1>
       <p className="text-sm text-mute">
         {SHIFT_LABEL[workout.shift]}
-        {workout.course === "scm" || workout.course === "lcm" ? ` · ${COURSE_LABEL[workout.course]}` : ""} · só os teus
-        splits
+        {workout.course === "scm" || workout.course === "lcm" ? ` · ${COURSE_LABEL[workout.course]}` : ""} ·{" "}
+        {t("só os teus parciais")}
       </p>
+      <HrAttach athleteId={me.id} workoutId={workout.id} session={hr} />
+      {hr ? <HrChart session={hr} /> : null}
 
       {workout.blocks.map((block) => {
         const logs = [...mine.filter((log) => log.blockId === block.id)].sort((a, b) => a.repNumber - b.repNumber);

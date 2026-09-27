@@ -1,13 +1,15 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { AppShell, type NavItem } from "@/components/shells/app-shell";import { IconCalendar, IconFlag, IconGrid, IconPeople, IconSettings } from "@/components/ui/icons";
+import { AppShell, type NavItem } from "@/components/shells/app-shell";
+import { IconCalendar, IconFlag, IconGrid, IconPeople, IconSeason, IconSettings } from "@/components/ui/icons";
 import { useAppState } from "@/lib/store";
 
 const NAV: NavItem[] = [
   { href: "/coach", label: "Calendário", icon: IconCalendar, exact: true },
   { href: "/coach/team", label: "Equipa", icon: IconPeople },
-  { href: "/coach/competicoes", label: "Competição", icon: IconFlag },
+  { href: "/coach/competicoes", label: "Competição|nav", icon: IconFlag },
+  { href: "/coach/epoca", label: "Época", icon: IconSeason },
   { href: "/coach/provas", label: "Análise", icon: IconGrid },
   { href: "/coach/definicoes", label: "Definições", icon: IconSettings },
 ];

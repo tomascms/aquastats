@@ -1,9 +1,10 @@
+import { localizedList, localizedMap, tx } from "@/i18n";
 import { WEEKDAYS, parseIsoDate, weekStartMonday } from "./dates";
 import { formatDistance, formatReps } from "./distances";
 import { BLOCK_LABEL, SHIFT_LABEL, STROKE_LABEL, strokeLabel } from "./labels";
 import { workoutMeters } from "./rankings";
 import { formatSendOff } from "./send-off";
-import { flattenInner, formatGear, innerCount, INTENSITY_LABEL, splitRepNumber } from "./set";
+import { flattenInner, formatGear, innerCount, INTENSITY_LABEL, sendOffFor, splitRepNumber } from "./set";
 import { hasClockTime, toCentiseconds } from "./swim-time";
 import type {
   BlockType,
@@ -44,20 +45,9 @@ const INTENSITY_RANK: Record<Intensity, number> = {
   P400: 4.4,
 };
 
-export const MONTH_LABEL = [
-  "Janeiro",
-  "Fevereiro",
-  "Março",
-  "Abril",
-  "Maio",
-  "Junho",
-  "Julho",
-  "Agosto",
-  "Setembro",
-  "Outubro",
-  "Novembro",
-  "Dezembro",
-];
+export const MONTH_LABEL = localizedList([
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+]);
 
 export type RepSlot = "first" | "middle" | "last";
 export type RestVsSet = "less" | "same" | "more";
@@ -262,7 +252,7 @@ function restVsMean(rest: number | null, meanRest: number | null): RestVsSet {
   return "same";
 }
 
-function walkWorkout(workout: Workout): SessionSlot[] {
+function walkWorkout(workout: Workout, group = ""): SessionSlot[] {
   const slots: SessionSlot[] = [];
   let meters = 0;
   let weighted = 0;
@@ -274,7 +264,7 @@ function walkWorkout(workout: Workout): SessionSlot[] {
       for (const inner of inners) {
         const segment = block.segments[inner.segmentIndex];
         const details = segment?.details ?? [];
-        const rests = details.map((detail) => detail.sendOffSeconds).filter((value) => value != null);
+        const rests = details.map((detail) => sendOffFor(segment, detail.sendOffSeconds, group)).filter((value) => value != null);
         slots.push({
           workout,
           block,
@@ -283,7 +273,7 @@ function walkWorkout(workout: Workout): SessionSlot[] {
           repNumber: (round - 1) * innerN + inner.index + 1,
           distanceM: inner.distanceM,
           intensity: inner.intensity,
-          restSeconds: inner.sendOffSeconds,
+          restSeconds: sendOffFor(segment, inner.sendOffSeconds, group),
           fromBlock: inner.fromBlock,
           gear: inner.gear,
           segmentIndex: inner.segmentIndex,
@@ -292,7 +282,7 @@ function walkWorkout(workout: Workout): SessionSlot[] {
           setShape: formatReps(segment?.reps ?? 1, inner.distanceM),
           mixedIntensity: new Set(details.map((detail) => detail.intensity)).size > 1,
           easierMiddle: easierMiddleOf(details),
-          meanRest: rests.length ? mean(rests) : inner.sendOffSeconds,
+          meanRest: rests.length ? mean(rests) : sendOffFor(segment, inner.sendOffSeconds, group),
           loadBeforeM: meters,
           loadBeforeWeighted: weighted,
         });
@@ -339,6 +329,8 @@ export function annotateTrainingReps(
   timeLogs: TimeLog[],
   athleteId: string,
   wellness: WellnessEntry[] = [],
+  /** The athlete's training group, for per-group send-offs. */
+  group = "",
 ): TrainingRep[] {
   if (!athleteId) return [];
   const mine = workouts
@@ -363,7 +355,7 @@ export function annotateTrainingReps(
   for (const workout of mine) {
     let meters = 0;
     let weighted = 0;
-    for (const slot of walkWorkout(workout)) {
+    for (const slot of walkWorkout(workout, group)) {
       const log = logsByKey.get(`${workout.id}:${slot.block.id}:${slot.repNumber}`);
       observedLoads.set(`${workout.id}:${slot.block.id}:${slot.repNumber}`, { meters, weighted });
       if (log?.skipped) continue;
@@ -400,7 +392,7 @@ export function annotateTrainingReps(
     const date = parseIsoDate(workout.date);
     const dayWellness = wellness.find((entry) => entry.date === workout.date);
     const weekday = (date.getDay() + 6) % 7;
-    const slots = walkWorkout(workout);
+    const slots = walkWorkout(workout, group);
     const observedCounts = new Map<string, number>();
     for (const slot of slots) {
       const log = logsByKey.get(`${workout.id}:${slot.block.id}:${slot.repNumber}`);
@@ -536,7 +528,7 @@ export function restRanges(rows: TrainingRep[]): RestRange[] {
   const values = rows.map((row) => row.restSeconds).filter((value): value is number => value != null);
   const out: RestRange[] = [];
   const noneCount = rows.length - values.length;
-  if (!values.length) return noneCount ? [{ key: "none", label: "Sem intervalo", count: noneCount }] : [];
+  if (!values.length) return noneCount ? [{ key: "none", label: tx("Sem intervalo"), count: noneCount }] : [];
 
   const count = (lo: number, hi: number) => values.filter((value) => value >= lo && value < hi).length;
   const push = (lo: number, hi: number, label: string) => {
@@ -572,7 +564,7 @@ export function restRanges(rows: TrainingRep[]): RestRange[] {
     lo = hi;
   }
 
-  if (noneCount) out.push({ key: "none", label: "Sem intervalo", count: noneCount });
+  if (noneCount) out.push({ key: "none", label: tx("Sem intervalo"), count: noneCount });
   return out;
 }
 
@@ -694,21 +686,21 @@ export function groupLabel(row: TrainingRep, by: TrainingGroupBy): string {
     case "shift":
       return SHIFT_LABEL[row.shift];
     case "fromBlock":
-      return row.fromBlock ? "Bloco" : "De baixo";
+      return row.fromBlock ? tx("Bloco") : tx("De baixo");
     case "month":
       return MONTH_LABEL[row.month - 1] ?? String(row.month);
     case "slot":
-      return row.slot === "first" ? "1.ª rep" : row.slot === "last" ? "Última" : "Meio";
+      return SLOT_LABEL[row.slot];
     case "trainedEarlier":
-      return row.trainedEarlierToday ? "Já treinou hoje" : "1.º treino do dia";
+      return row.trainedEarlierToday ? tx("Já treinou hoje") : tx("1.º treino do dia");
     case "stroke":
-      return strokeLabel(row.stroke) || "Sem estilo";
+      return strokeLabel(row.stroke) || tx("Sem estilo");
     case "gear":
-      return row.gearLabel || "Sem material";
+      return row.gearLabel || tx("Sem material");
     case "restBucket":
-      return row.restBucket === "livre" ? "Sem intervalo" : row.restBucket;
+      return row.restBucket === "livre" ? tx("Sem intervalo") : row.restBucket;
     case "fatigueBand":
-      return row.fatigueBand;
+      return tx(row.fatigueBand);
     case "loadBeforeBucket":
       return row.loadBeforeBucket;
     case "distance":
@@ -716,7 +708,7 @@ export function groupLabel(row: TrainingRep, by: TrainingGroupBy): string {
   }
 }
 
-export const GROUP_BY_LABEL: Record<TrainingGroupBy, string> = {
+export const GROUP_BY_LABEL = localizedMap<TrainingGroupBy>({
   intensity: "Intensidade",
   setShape: "Forma da série",
   weekday: "Dia da semana",
@@ -731,19 +723,19 @@ export const GROUP_BY_LABEL: Record<TrainingGroupBy, string> = {
   fatigueBand: "Cansaço",
   loadBeforeBucket: "Carga antes",
   distance: "Distância",
-};
+});
 
-export const SLOT_LABEL: Record<RepSlot, string> = {
+export const SLOT_LABEL = localizedMap<RepSlot>({
   first: "1.ª rep",
   middle: "Meio",
   last: "Última",
-};
+});
 
-export const REST_VS_LABEL: Record<RestVsSet, string> = {
+export const REST_VS_LABEL = localizedMap<RestVsSet>({
   less: "Descansa menos",
   same: "Descanso igual",
   more: "Descansa mais",
-};
+});
 
 export function uniqueSorted<T>(values: T[], compare?: (a: T, b: T) => number): T[] {
   const unique = [...new Set(values)];

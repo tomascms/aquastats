@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..core.db import get_session
 from ..core.idempotency import require_key, run_idempotent
 from ..core.tenant import require_coach, require_member, require_user
-from ..domain import commands
+from ..domain import commands, goals, heart_rate, lenex_import, live_results, swimrankings
 from ..domain.models import Profile, TeamMember, User
 from ..domain.queries import filter_swimmer_snapshot, team_snapshot
 from ..domain.serializers import profile_out
@@ -93,6 +93,19 @@ def update_athlete(athlete_id: str, body: dict, request: Request, payload: dict 
     )
 
 
+@router.patch("/athletes/{athlete_id}/coach")
+def coach_update_athlete(athlete_id: str, body: dict, request: Request, payload: dict = Depends(require_coach), session: Session = Depends(get_session)):
+    clean = {key: body[key] for key in ("groupName", "gender") if key in body}
+    return _command(
+        session,
+        payload,
+        request,
+        "athlete.coach_update",
+        {"id": athlete_id, **clean},
+        lambda: (200, commands.coach_update_athlete(session, payload, athlete_id, clean, request)),
+    )
+
+
 @router.delete("/athletes/{athlete_id}")
 def delete_athlete(athlete_id: str, request: Request, payload: dict = Depends(require_coach), session: Session = Depends(get_session)):
     return _command(session, payload, request, "athlete.delete", {"id": athlete_id}, lambda: (200, commands.delete_athlete(session, payload, athlete_id, request)))
@@ -153,9 +166,83 @@ def toggle_entry(body: dict, request: Request, payload: dict = Depends(require_c
     return _command(session, payload, request, "meet.entry.toggle", body, lambda: (200, commands.toggle_meet_entry(session, payload, body, request)))
 
 
+@router.put("/meet-entries")
+def save_entry(body: dict, request: Request, payload: dict = Depends(require_coach), session: Session = Depends(get_session)):
+    return _command(session, payload, request, "meet.entry.save", body, lambda: (200, commands.save_meet_entry(session, payload, body, request)))
+
+
+@router.delete("/meet-entries/{entry_id}")
+def delete_entry(entry_id: str, request: Request, payload: dict = Depends(require_coach), session: Session = Depends(get_session)):
+    return _command(session, payload, request, "meet.entry.delete", {"id": entry_id}, lambda: (200, commands.delete_meet_entry(session, payload, entry_id, request)))
+
+
 @router.put("/meet-results")
 def save_result(body: dict, request: Request, payload: dict = Depends(require_coach), session: Session = Depends(get_session)):
     return _command(session, payload, request, "meet.result.save", body, lambda: (200, commands.save_meet_result(session, payload, body, request)))
+
+
+@router.post("/meet-files/lenex")
+def meet_file_lenex(body: dict, request: Request, payload: dict = Depends(require_coach), session: Session = Depends(get_session)):
+    if body.get("dryRun"):
+        return lenex_import.process_file(session, payload, body, request)
+    fingerprint = {k: v for k, v in body.items() if k != "data"} | {"size": len(str(body.get("data") or ""))}
+    return _command(
+        session,
+        payload,
+        request,
+        "meet.file.lenex",
+        fingerprint,
+        lambda: (200, lenex_import.process_file(session, payload, body, request)),
+    )
+
+
+@router.put("/competitions/{competition_id}/live")
+def live_link(competition_id: str, body: dict, request: Request, payload: dict = Depends(require_coach), session: Session = Depends(get_session)):
+    return live_results.set_link(session, payload, competition_id, body.get("url"))
+
+
+@router.post("/competitions/{competition_id}/live/sync")
+def live_sync(competition_id: str, request: Request, payload: dict = Depends(require_coach), session: Session = Depends(get_session)):
+    return live_results.sync_one(session, payload, competition_id, request)
+
+
+@router.post("/live/sync")
+def live_sync_team(request: Request, payload: dict = Depends(require_coach), session: Session = Depends(get_session)):
+    return live_results.sync_team(session, payload, request)
+
+
+@router.post("/athletes/{athlete_id}/swimrankings")
+def swimrankings_import(athlete_id: str, body: dict, request: Request, payload: dict = Depends(require_member), session: Session = Depends(get_session)):
+    if body.get("dryRun"):
+        return swimrankings.import_profile(session, payload, athlete_id, body, request)
+    fingerprint = {k: v for k, v in body.items() if k != "text"} | {"size": len(str(body.get("text") or ""))}
+    return _command(session, payload, request, "athlete.swimrankings", fingerprint, lambda: (200, swimrankings.import_profile(session, payload, athlete_id, body, request)))
+
+
+@router.put("/athletes/{athlete_id}/records/splits")
+def record_splits(athlete_id: str, body: dict, request: Request, payload: dict = Depends(require_member), session: Session = Depends(get_session)):
+    return _command(session, payload, request, "athlete.record.splits", {"id": athlete_id, **body}, lambda: (200, swimrankings.save_record_splits(session, payload, athlete_id, body, request)))
+
+
+@router.put("/goals")
+def save_goal(body: dict, request: Request, payload: dict = Depends(require_member), session: Session = Depends(get_session)):
+    return _command(session, payload, request, "goal.save", body, lambda: (200, goals.save_goal(session, payload, body, request)))
+
+
+@router.delete("/goals/{goal_id}")
+def delete_goal(goal_id: str, request: Request, payload: dict = Depends(require_member), session: Session = Depends(get_session)):
+    return _command(session, payload, request, "goal.delete", {"id": goal_id}, lambda: (200, goals.delete_goal(session, payload, goal_id, request)))
+
+
+@router.post("/hr/upload")
+def hr_upload(body: dict, request: Request, payload: dict = Depends(require_member), session: Session = Depends(get_session)):
+    fingerprint = {k: v for k, v in body.items() if k != "data"} | {"size": len(str(body.get("data") or ""))}
+    return _command(session, payload, request, "hr.upload", fingerprint, lambda: (200, heart_rate.upload(session, payload, body, request)))
+
+
+@router.delete("/hr/{session_id}")
+def hr_delete(session_id: str, request: Request, payload: dict = Depends(require_member), session: Session = Depends(get_session)):
+    return _command(session, payload, request, "hr.delete", {"id": session_id}, lambda: (200, heart_rate.delete(session, payload, session_id, request)))
 
 
 @router.put("/race-sessions")

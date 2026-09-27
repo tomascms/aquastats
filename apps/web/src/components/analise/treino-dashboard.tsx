@@ -33,6 +33,7 @@ import {
   type TrainingTarget,
 } from "@/lib/training-prediction";
 import type { TimeLog, WellnessEntry, Workout } from "@/lib/types";
+import { useT } from "@/i18n/provider";
 
 const INK = "#0b1d33";
 const POOL = "#1668b8";
@@ -122,18 +123,30 @@ export function TreinoDashboard({
   workouts,
   timeLogs,
   wellness,
+  groupName,
 }: {
   athleteId: string;
   workouts: Workout[];
   timeLogs: TimeLog[];
   wellness?: WellnessEntry[];
+  groupName?: string;
 }) {
+  const t = useT();
   const allRows = useMemo(
-    () => annotateTrainingReps(workouts, timeLogs, athleteId, wellness),
-    [athleteId, timeLogs, wellness, workouts],
+    () => annotateTrainingReps(workouts, timeLogs, athleteId, wellness, groupName),
+    [athleteId, groupName, timeLogs, wellness, workouts],
   );
-  const rows = useMemo(() => allRows.filter(isPlausibleRep), [allRows]);
+  const plausible = useMemo(() => allRows.filter(isPlausibleRep), [allRows]);
   const invalid = useMemo(() => allRows.filter((row) => !isPlausibleRep(row)), [allRows]);
+  // A 25 m and a 50 m pool are never compared: everything below (estimates, patterns, form) is per pool.
+  const courseOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of plausible) counts.set(row.course || "", (counts.get(row.course || "") ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([value]) => value);
+  }, [plausible]);
+  const [course, setCourse] = useState<string | null>(null);
+  const activeCourse = course != null && courseOptions.includes(course) ? course : (courseOptions[0] ?? "");
+  const rows = useMemo(() => plausible.filter((row) => (row.course || "") === activeCourse), [activeCourse, plausible]);
   const distances = useMemo(() => uniqueSorted(rows.map((row) => row.distanceM), (a, b) => a - b), [rows]);
   const [distance, setDistance] = useState<number | null>(() => modeDistance(rows));
   const activeDistance = distance != null && distances.includes(distance) ? distance : modeDistance(rows);
@@ -153,11 +166,6 @@ export function TreinoDashboard({
     () => INTENSITIES.filter((intensity) => atDistance.some((row) => row.intensity === intensity)),
     [atDistance],
   );
-  const presentCourses = useMemo(
-    () => (["scm", "lcm"] as const).filter((course) => atDistance.some((row) => row.course === course)),
-    [atDistance],
-  );
-
   const paired = useMemo(
     () =>
       visible
@@ -201,12 +209,12 @@ export function TreinoDashboard({
     [atDistance],
   );
 
-  if (!rows.length) {
+  if (!plausible.length) {
     return (
       <section className="rounded-2xl border border-dashed border-line-strong bg-panel px-6 py-12 text-center">
-        <p className="font-display text-2xl font-bold">Ainda sem tempos de treino</p>
+        <p className="font-display text-2xl font-bold">{t("Ainda sem tempos de treino")}</p>
         <p className="mx-auto mt-2 max-w-md text-sm text-mute">
-          Regista tempos numa série para ver aqui cada repetição, o tempo estimado e a distribuição.
+          {t("Regista tempos numa série para ver aqui cada repetição, o tempo estimado e a distribuição.")}
         </p>
       </section>
     );
@@ -219,23 +227,52 @@ export function TreinoDashboard({
           <div role="status" className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[#f3c6c0] bg-[#fdf1ef] px-4 py-3">
             <p className="text-sm text-mist">
               <span className="font-semibold text-coral">
-                {invalid.length === 1 ? "1 tempo ignorado" : `${invalid.length} tempos ignorados`}
+                {invalid.length === 1 ? t("1 tempo ignorado") : t("{count} tempos ignorados", { count: invalid.length })}
               </span>{" "}
-              por ser impossível para a distância:{" "}
+              {t("por ser impossível para a distância:")}{" "}
               {invalid
                 .slice(0, 3)
-                .map((row) => `${clock(row.timeS)} em ${row.distanceM} m (${formatDatePt(row.date).slice(0, 5)})`)
+                .map((row) =>
+                  t("{time} em {distance} m ({date})", {
+                    time: clock(row.timeS),
+                    distance: row.distanceM,
+                    date: formatDatePt(row.date).slice(0, 5),
+                  }),
+                )
                 .join(", ")}
               {invalid.length > 3 ? "…" : ""}
             </p>
             <a href={`/coach/matrix/${invalid[0].workoutId}`} className="text-sm font-semibold text-pool hover:underline">
-              Corrigir tempos
+              {t("Corrigir tempos")}
             </a>
           </div>
         ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div role="group" aria-label="Distância da repetição" className="flex flex-wrap gap-1 rounded-xl border border-line bg-panel p-1">
+          <div className="flex flex-wrap gap-2">
+          {courseOptions.length > 1 ? (
+            <div role="group" aria-label={t("Piscina")} className="flex gap-1 rounded-xl border border-line bg-panel p-1">
+              {courseOptions.map((value) => (
+                <button
+                  key={value || "none"}
+                  type="button"
+                  aria-pressed={value === activeCourse}
+                  onClick={() => {
+                    setCourse(value);
+                    setDistance(null);
+                    setFilters(EMPTY_TRAINING_FILTERS);
+                    setPicked([]);
+                  }}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    value === activeCourse ? "bg-ink text-white" : "text-mute hover:text-mist"
+                  }`}
+                >
+                  {value === "scm" || value === "lcm" ? COURSE_LABEL[value] : t("Piscina não indicada")}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <div role="group" aria-label={t("Distância da repetição")} className="flex flex-wrap gap-1 rounded-xl border border-line bg-panel p-1">
             {distances.map((value) => (
               <button
                 key={value}
@@ -254,42 +291,43 @@ export function TreinoDashboard({
               </button>
             ))}
           </div>
+          </div>
           <p className="text-sm text-mute">
-            {visible.length} de {atDistance.length} repetições de {activeDistance} m
+            {t("{shown} de {total} repetições de {distance} m", { shown: visible.length, total: atDistance.length, distance: activeDistance ?? "—" })}
           </p>
         </div>
 
-        <section className="grid grid-cols-2 overflow-hidden rounded-2xl border border-line bg-panel lg:grid-cols-4" aria-label="Resumo">
-          <Kpi label="Tempo médio real" value={real.n ? clock(real.mean) : "—"} note={real.n ? `melhor ${clock(real.best)}` : ""} />
+        <section className="grid grid-cols-2 overflow-hidden rounded-2xl border border-line bg-panel lg:grid-cols-4" aria-label={t("Resumo")}>
+          <Kpi label={t("Tempo médio real")} value={real.n ? clock(real.mean) : "—"} note={real.n ? t("melhor {time}", { time: clock(real.best) }) : ""} />
           <Kpi
-            label="Tempo médio estimado"
+            label={t("Tempo médio estimado")}
             value={estimated.n ? clock(estimated.mean) : "—"}
-            note={estimated.n ? `${paired.length} reps com estimativa` : "sem histórico comparável"}
+            note={estimated.n ? t("{count} reps com estimativa", { count: paired.length }) : t("sem histórico comparável")}
           />
           <Kpi
-            label="Real face ao estimado"
+            label={t("Real face ao estimado")}
             value={Number.isFinite(delta) ? signedSeconds(delta) : "—"}
             tone={!Number.isFinite(delta) ? undefined : delta <= 0 ? "good" : "bad"}
-            note={paired.length ? `${beat} de ${paired.length} abaixo do estimado` : ""}
+            note={paired.length ? t("{beat} de {total} abaixo do estimado", { beat, total: paired.length }) : ""}
           />
           <Kpi
-            label="Consistência"
+            label={t("Consistência")}
             value={real.n > 1 ? `±${real.sd.toFixed(2)} s` : "—"}
-            note={real.n > 1 ? "desvio entre repetições" : ""}
+            note={real.n > 1 ? t("desvio entre repetições") : ""}
           />
         </section>
 
         <section className="rounded-2xl border border-line bg-panel p-5">
           <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
             <div>
-              <h3 className="font-display text-2xl font-bold">Repetição a repetição</h3>
-              <p className="text-sm text-mute">Tempo real contra o estimado pelo histórico do atleta. Mais rápido fica em cima.</p>
+              <h3 className="font-display text-2xl font-bold">{t("Repetição a repetição")}</h3>
+              <p className="text-sm text-mute">{t("Tempo real contra o estimado pelo histórico do atleta. Mais rápido fica em cima.")}</p>
             </div>
             <Legend
               items={[
-                { swatch: <span className="h-2.5 w-2.5 rounded-full bg-good" />, label: "Abaixo do estimado" },
-                { swatch: <span className="h-2.5 w-2.5 rounded-full bg-coral" />, label: "Acima do estimado" },
-                { swatch: <span className="h-0.5 w-4 border-t-2 border-dashed border-pool" />, label: "Estimado" },
+                { swatch: <span className="h-2.5 w-2.5 rounded-full bg-good" />, label: t("Abaixo do estimado") },
+                { swatch: <span className="h-2.5 w-2.5 rounded-full bg-coral" />, label: t("Acima do estimado") },
+                { swatch: <span className="h-0.5 w-4 border-t-2 border-dashed border-pool" />, label: t("Estimado") },
               ]}
             />
           </header>
@@ -299,14 +337,14 @@ export function TreinoDashboard({
         <section className="rounded-2xl border border-line bg-panel p-5">
           <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
             <div>
-              <h3 className="font-display text-2xl font-bold">Distribuição dos tempos</h3>
-              <p className="text-sm text-mute">Onde se concentram os tempos reais e os estimados. Passa o cursor para ler cada ponto.</p>
+              <h3 className="font-display text-2xl font-bold">{t("Distribuição dos tempos")}</h3>
+              <p className="text-sm text-mute">{t("Onde se concentram os tempos reais e os estimados. Passa o cursor para ler cada ponto.")}</p>
             </div>
             <Legend
               items={[
-                { swatch: <span className="h-0.5 w-5 bg-[#4f46c8]" />, label: "Real" },
-                { swatch: <span className="h-0.5 w-5 border-t-2 border-dashed border-pool" />, label: "Estimado" },
-                { swatch: <span className="h-3 w-0.5 bg-[#2fae4a]" />, label: "Referências" },
+                { swatch: <span className="h-0.5 w-5 bg-[#4f46c8]" />, label: t("Real") },
+                { swatch: <span className="h-0.5 w-5 border-t-2 border-dashed border-pool" />, label: t("Estimado") },
+                { swatch: <span className="h-3 w-0.5 bg-[#2fae4a]" />, label: t("Referências") },
               ]}
             />
           </header>
@@ -321,15 +359,15 @@ export function TreinoDashboard({
         <section className="rounded-2xl border border-line bg-panel p-5">
           <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h3 className="font-display text-2xl font-bold">Onde nada mais rápido</h3>
-              <p className="text-sm text-mute">Tempo médio por contexto, do mais rápido para o mais lento.</p>
+              <h3 className="font-display text-2xl font-bold">{t("Onde nada mais rápido")}</h3>
+              <p className="text-sm text-mute">{t("Tempo médio por contexto, do mais rápido para o mais lento.")}</p>
             </div>
             <label className="text-sm text-mute">
-              <span className="sr-only">Agrupar por</span>
+              <span className="sr-only">{t("Agrupar por")}</span>
               <select className="field min-h-10 py-1.5" value={groupBy} onChange={(event) => setGroupBy(event.target.value as TrainingGroupBy)}>
                 {GROUP_OPTIONS.map((option) => (
                   <option key={option} value={option}>
-                    Por {GROUP_BY_LABEL[option].toLowerCase()}
+                    {t("Por {group}", { group: GROUP_BY_LABEL[option].toLowerCase() })}
                   </option>
                 ))}
               </select>
@@ -341,9 +379,9 @@ export function TreinoDashboard({
         <RepTable rows={visible} predictions={predictions} picked={picked} setPicked={setPicked} />
       </div>
 
-      <aside className="rounded-2xl border border-line bg-panel p-5 xl:sticky xl:top-6" aria-label="Filtros">
+      <aside className="rounded-2xl border border-line bg-panel p-5 xl:sticky xl:top-6" aria-label={t("Filtros")}>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-display text-2xl font-bold">Filtros</h3>
+          <h3 className="font-display text-2xl font-bold">{t("Filtros")}</h3>
           {activeFilterCount ? (
             <button
               type="button"
@@ -353,13 +391,13 @@ export function TreinoDashboard({
               }}
               className="text-sm font-semibold text-pool hover:underline"
             >
-              Limpar ({activeFilterCount})
+              {t("Limpar ({count})", { count: activeFilterCount })}
             </button>
           ) : null}
         </div>
 
         <div className="space-y-4">
-          <FilterGroup title="Intensidade">
+          <FilterGroup title={t("Intensidade")}>
             {presentIntensities.map((intensity) => (
               <Toggle
                 key={intensity}
@@ -372,7 +410,7 @@ export function TreinoDashboard({
             ))}
           </FilterGroup>
 
-          <FilterGroup title="Descanso (saída)">
+          <FilterGroup title={t("Descanso (saída)")}>
             {ranges.map((range) => (
               <Toggle
                 key={range.key}
@@ -385,23 +423,6 @@ export function TreinoDashboard({
             ))}
           </FilterGroup>
 
-          <FilterGroup title="Piscina">
-            {presentCourses.length ? (
-              presentCourses.map((course) => (
-                <Toggle
-                  key={course}
-                  on={filters.courses.includes(course)}
-                  onClick={() => patch({ courses: toggleValue(filters.courses, course) })}
-                  count={atDistance.filter((row) => row.course === course).length}
-                >
-                  {COURSE_LABEL[course]}
-                </Toggle>
-              ))
-            ) : (
-              <p className="text-sm text-mute">Os treinos não têm a piscina indicada.</p>
-            )}
-          </FilterGroup>
-
           <div className="border-t border-line pt-4">
             <button
               type="button"
@@ -409,7 +430,7 @@ export function TreinoDashboard({
               aria-expanded={moreFilters}
               className="flex w-full items-center justify-between text-sm font-semibold text-mist"
             >
-              Mais filtros
+              {t("Mais filtros")}
               <span aria-hidden="true" className={`transition-transform ${moreFilters ? "rotate-180" : ""}`}>
                 ▾
               </span>
@@ -418,34 +439,34 @@ export function TreinoDashboard({
 
           {moreFilters ? (
             <div className="space-y-4">
-              <FilterGroup title="Posição na série">
+              <FilterGroup title={t("Posição na série")}>
                 {(["first", "middle", "last"] as const).map((slot) => (
                   <Toggle key={slot} on={filters.slots.includes(slot)} onClick={() => patch({ slots: toggleValue(filters.slots, slot) })}>
                     {SLOT_LABEL[slot]}
                   </Toggle>
                 ))}
               </FilterGroup>
-              <FilterGroup title="Série">
+              <FilterGroup title={t("Série")}>
                 {more.setShapes.map((shape) => (
                   <Toggle key={shape} on={filters.setShapes.includes(shape)} onClick={() => patch({ setShapes: toggleValue(filters.setShapes, shape) })}>
                     {shape}
                   </Toggle>
                 ))}
               </FilterGroup>
-              <FilterGroup title="Partida">
+              <FilterGroup title={t("Partida")}>
                 <Toggle on={filters.fromBlock === "below"} onClick={() => exclusive("fromBlock")("below")}>
-                  De baixo
+                  {t("De baixo")}
                 </Toggle>
                 <Toggle on={filters.fromBlock === "block"} onClick={() => exclusive("fromBlock")("block")}>
-                  Bloco
+                  {t("Bloco")}
                 </Toggle>
               </FilterGroup>
-              <FilterGroup title="Treino do dia">
+              <FilterGroup title={t("Treino do dia")}>
                 <Toggle on={filters.trainedEarlier === "no"} onClick={() => exclusive("trainedEarlier")("no")}>
-                  1.º treino
+                  {t("1.º treino")}
                 </Toggle>
                 <Toggle on={filters.trainedEarlier === "yes"} onClick={() => exclusive("trainedEarlier")("yes")}>
-                  2.º treino
+                  {t("2.º treino")}
                 </Toggle>
                 {(["morning", "afternoon"] as const).map((shift) => (
                   <Toggle key={shift} on={filters.shifts.includes(shift)} onClick={() => patch({ shifts: toggleValue(filters.shifts, shift) })}>
@@ -453,7 +474,7 @@ export function TreinoDashboard({
                   </Toggle>
                 ))}
               </FilterGroup>
-              <FilterGroup title="Estilo">
+              <FilterGroup title={t("Estilo")}>
                 {Object.entries(STROKE_LABEL).map(([stroke, label]) => (
                   <Toggle
                     key={stroke}
@@ -464,9 +485,9 @@ export function TreinoDashboard({
                   </Toggle>
                 ))}
               </FilterGroup>
-              <FilterGroup title="Material">
+              <FilterGroup title={t("Material")}>
                 <Toggle on={filters.gears.includes("none")} onClick={() => patch({ gears: toggleValue(filters.gears, "none") })}>
-                  Sem material
+                  {t("Sem material")}
                 </Toggle>
                 {GEARS.map((gear) => (
                   <Toggle key={gear} on={filters.gears.includes(gear)} onClick={() => patch({ gears: toggleValue(filters.gears, gear) })}>
@@ -474,35 +495,35 @@ export function TreinoDashboard({
                   </Toggle>
                 ))}
               </FilterGroup>
-              <FilterGroup title="Carga antes da repetição">
+              <FilterGroup title={t("Carga antes da repetição")}>
                 {more.loadBuckets.map((bucket) => (
                   <Toggle key={bucket} on={filters.loadBuckets.includes(bucket)} onClick={() => patch({ loadBuckets: toggleValue(filters.loadBuckets, bucket) })}>
                     {bucket}
                   </Toggle>
                 ))}
               </FilterGroup>
-              <FilterGroup title="Carga semanal">
+              <FilterGroup title={t("Carga semanal")}>
                 {more.weeklyBuckets.map((bucket) => (
                   <Toggle key={bucket} on={filters.weeklyBuckets.includes(bucket)} onClick={() => patch({ weeklyBuckets: toggleValue(filters.weeklyBuckets, bucket) })}>
                     {bucket}
                   </Toggle>
                 ))}
               </FilterGroup>
-              <FilterGroup title="Bloco">
+              <FilterGroup title={t("Bloco|tipo")}>
                 {(["warmup", "main", "recovery"] as const).map((type) => (
                   <Toggle key={type} on={filters.blockTypes.includes(type)} onClick={() => patch({ blockTypes: toggleValue(filters.blockTypes, type) })}>
                     {BLOCK_LABEL[type]}
                   </Toggle>
                 ))}
               </FilterGroup>
-              <FilterGroup title="Dia da semana">
+              <FilterGroup title={t("Dia da semana")}>
                 {WEEKDAYS.map((label, index) => (
                   <Toggle key={label} on={filters.weekdays.includes(index)} onClick={() => patch({ weekdays: toggleValue(filters.weekdays, index) })}>
                     {label}
                   </Toggle>
                 ))}
               </FilterGroup>
-              <FilterGroup title="Mês">
+              <FilterGroup title={t("Mês")}>
                 {more.months.map((month) => (
                   <Toggle key={month} on={filters.months.includes(month)} onClick={() => patch({ months: toggleValue(filters.months, month) })}>
                     {MONTH_LABEL[month - 1]}
@@ -558,7 +579,8 @@ function niceTicks(lo: number, hi: number, count = 4): number[] {
 }
 
 function RepTimeline({ items, predictions }: { items: TrainingRep[]; predictions: Map<string, TrainingTarget> }) {
-  if (!items.length) return <EmptyChart text="Nenhuma repetição com estes filtros." />;
+  const t = useT();
+  if (!items.length) return <EmptyChart text={t("Nenhuma repetição com estes filtros.")} />;
   const width = 820;
   const height = 300;
   const pad = { l: 64, r: 16, t: 16, b: 40 };
@@ -604,7 +626,7 @@ function RepTimeline({ items, predictions }: { items: TrainingRep[]; predictions
   const shownDates = dateTicks.filter((_, idx) => idx % Math.ceil(dateTicks.length / 6 || 1) === 0);
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label="Tempo real e estimado por repetição">
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label={t("Tempo real e estimado por repetição")}>
       {niceTicks(lo, hi).map((tick) => (
         <g key={tick}>
           <line x1={pad.l} x2={width - pad.r} y1={y(tick)} y2={y(tick)} stroke={GRID} />
@@ -636,8 +658,10 @@ function RepTimeline({ items, predictions }: { items: TrainingRep[]; predictions
             strokeWidth={1.5}
           >
             <title>
-              {`${formatDatePt(row.date)} · ${row.setShape} rep ${row.repInSegment}/${row.segmentReps}\nReal ${clock(row.timeS)}${
-                target ? ` · estimado ${clock(target.targetS)} (${signedSeconds(row.timeS - target.targetS)})` : " · sem estimativa"
+              {`${formatDatePt(row.date)} · ${row.setShape} ${t("rep {n}/{total}", { n: row.repInSegment, total: row.segmentReps })}\n${t("Real {time}", { time: clock(row.timeS) })}${
+                target
+                  ? ` · ${t("estimado {time}", { time: clock(target.targetS) })} (${signedSeconds(row.timeS - target.targetS)})`
+                  : ` · ${t("sem estimativa")}`
               }`}
             </title>
           </circle>
@@ -666,8 +690,9 @@ function silverman(values: number[]): number {
 }
 
 function DensityChart({ real, estimated }: { real: number[]; estimated: number[] }) {
+  const t = useT();
   const [cursor, setCursor] = useState<number | null>(null);
-  if (!real.length) return <EmptyChart text="Nenhuma repetição com estes filtros." />;
+  if (!real.length) return <EmptyChart text={t("Nenhuma repetição com estes filtros.")} />;
 
   const width = 860;
   const height = 360;
@@ -696,9 +721,9 @@ function DensityChart({ real, estimated }: { real: number[]; estimated: number[]
   const realStats = statsOf(real);
   const estStats = statsOf(estimated);
   const markers = [
-    { t: realStats.best, label: "melhor" },
-    { t: realStats.mean, label: "média real" },
-    ...(estimated.length ? [{ t: estStats.mean, label: "média estimada" }] : []),
+    { t: realStats.best, label: t("melhor") },
+    { t: realStats.mean, label: t("média real") },
+    ...(estimated.length ? [{ t: estStats.mean, label: t("média estimada") }] : []),
   ];
 
   const xTicks = niceTicks(lo, hi, 8);
@@ -717,19 +742,20 @@ function DensityChart({ real, estimated }: { real: number[]; estimated: number[]
   return (
     <div className="overflow-hidden rounded-lg border border-line">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-line bg-panel-2 px-3 py-2 text-xs text-mute">
-        <Readout label="Tempo" value={clock(cursorT)} />
-        <Readout label="Real" value={readReal.toFixed(2)} />
-        {readEst != null ? <Readout label="Estimado" value={readEst.toFixed(2)} /> : null}
-        <span>reps por 0,1 s</span>
+        <Readout label={t("Tempo")} value={clock(cursorT)} />
+        <Readout label={t("Real")} value={readReal.toFixed(2)} />
+        {readEst != null ? <Readout label={t("Estimado")} value={readEst.toFixed(2)} /> : null}
+        <span>{t("reps por 0,1 s")}</span>
         <span className="ml-auto font-semibold text-mist tabular">
-          TOT {real.length} reps{estimated.length ? ` · ${estimated.length} estimadas` : ""}
+          {t("TOT {count} reps", { count: real.length })}
+          {estimated.length ? ` · ${t("{count} estimadas", { count: estimated.length })}` : ""}
         </span>
       </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="h-auto w-full touch-none bg-white"
         role="img"
-        aria-label="Curva de distribuição dos tempos reais e estimados"
+        aria-label={t("Curva de distribuição dos tempos reais e estimados")}
         onPointerMove={onMove}
         onPointerLeave={() => setCursor(null)}
       >
@@ -783,7 +809,7 @@ function DensityChart({ real, estimated }: { real: number[]; estimated: number[]
           </g>
         ) : null}
         <text x={width - pad.r} y={height - 2} textAnchor="end" fill={MUTE} fontSize="11">
-          tempo
+          {t("tempo")}
         </text>
       </svg>
     </div>
@@ -800,11 +826,12 @@ function Readout({ label, value }: { label: string; value: string }) {
 }
 
 function GroupBars({ rows, groupBy }: { rows: TrainingRep[]; groupBy: TrainingGroupBy }) {
+  const t = useT();
   const groups = groupTrainingReps(rows, groupBy).map((group) => ({
     label: group.label,
     stats: statsOf(group.rows.map((row) => row.timeS)),
   }));
-  if (!groups.length) return <EmptyChart text="Nenhuma repetição com estes filtros." />;
+  if (!groups.length) return <EmptyChart text={t("Nenhuma repetição com estes filtros.")} />;
   const fastest = Math.min(...groups.map((group) => group.stats.mean));
   const slowest = Math.max(...groups.map((group) => group.stats.mean));
   const span = Math.max(slowest - fastest, 0.01);
@@ -827,7 +854,7 @@ function GroupBars({ rows, groupBy }: { rows: TrainingRep[]; groupBy: TrainingGr
             <span className="w-32 text-right text-sm">
               <span className="font-display text-lg font-bold tabular text-mist">{clock(group.stats.mean)}</span>
               <span className="ml-1.5 text-xs text-mute">
-                {index === 0 ? `${group.stats.n} reps` : `+${gap.toFixed(2)}`}
+                {index === 0 ? t("{count} reps", { count: group.stats.n }) : `+${gap.toFixed(2)}`}
               </span>
             </span>
           </li>
@@ -852,14 +879,15 @@ function RepTable({
   picked: string[];
   setPicked: React.Dispatch<React.SetStateAction<string[]>>;
 }) {
+  const t = useT();
   const a = rows.find((row) => row.log.id === picked[0]);
   const b = rows.find((row) => row.log.id === picked[1]);
   return (
     <section className="overflow-hidden rounded-2xl border border-line bg-panel">
       <header className="flex flex-wrap items-end justify-between gap-2 border-b border-line px-5 py-4">
         <div>
-          <h3 className="font-display text-2xl font-bold">Repetições</h3>
-          <p className="text-sm text-mute">Seleciona duas linhas para as comparar.</p>
+          <h3 className="font-display text-2xl font-bold">{t("Repetições")}</h3>
+          <p className="text-sm text-mute">{t("Seleciona duas linhas para as comparar.")}</p>
         </div>
         {a && b ? (
           <p className="text-sm">
@@ -876,23 +904,23 @@ function RepTable({
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="sticky top-0 bg-panel-2 text-xs font-semibold text-mute">
             <tr>
-              <th className="px-5 py-2.5">Data</th>
-              <th className="px-3 py-2.5">Série</th>
-              <th className="px-3 py-2.5">Rep</th>
-              <th className="px-3 py-2.5 text-right">Real</th>
-              <th className="px-3 py-2.5 text-right">Estimado</th>
-              <th className="px-3 py-2.5 text-right">Dif.</th>
-              <th className="px-3 py-2.5">Intensidade</th>
-              <th className="px-3 py-2.5">Saída</th>
-              <th className="px-3 py-2.5">Antes</th>
-              <th className="px-3 py-2.5">Semana</th>
+              <th className="px-5 py-2.5">{t("Data")}</th>
+              <th className="px-3 py-2.5">{t("Série")}</th>
+              <th className="px-3 py-2.5">{t("Rep")}</th>
+              <th className="px-3 py-2.5 text-right">{t("Real")}</th>
+              <th className="px-3 py-2.5 text-right">{t("Estimado")}</th>
+              <th className="px-3 py-2.5 text-right">{t("Dif.")}</th>
+              <th className="px-3 py-2.5">{t("Intensidade")}</th>
+              <th className="px-3 py-2.5">{t("Saída")}</th>
+              <th className="px-3 py-2.5">{t("Antes")}</th>
+              <th className="px-3 py-2.5">{t("Semana")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={10} className="px-5 py-10 text-center text-mute">
-                  Nenhuma repetição com estes filtros.
+                  {t("Nenhuma repetição com estes filtros.")}
                 </td>
               </tr>
             ) : (
@@ -926,7 +954,7 @@ function RepTable({
                       <td className="px-3 py-2.5">
                         {row.setShape}
                         <span className="block text-xs text-mute">
-                          {row.fromBlock ? "Bloco" : "De baixo"}
+                          {row.fromBlock ? t("Bloco") : t("De baixo")}
                           {row.gearLabel ? ` · ${row.gearLabel}` : ""}
                         </span>
                       </td>
@@ -937,7 +965,7 @@ function RepTable({
                       <td className="px-3 py-2.5 text-right font-display text-lg font-bold tabular text-mist">{clock(row.timeS)}</td>
                       <td className="px-3 py-2.5 text-right tabular text-sand">
                         {target ? clock(target.targetS) : "—"}
-                        {target ? <span className="block text-[11px] text-mute">confiança {target.confidence}</span> : null}
+                        {target ? <span className="block text-[11px] text-mute">{t("confiança {level}", { level: t(target.confidence) })}</span> : null}
                       </td>
                       <td
                         className={`px-3 py-2.5 text-right font-semibold tabular ${
@@ -965,17 +993,18 @@ function RepTable({
 }
 
 function LearnedPanel({ effects, n }: { effects: LearnedEffect[]; n: number }) {
+  const t = useT();
   const shown = [...effects].sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 12);
   const scale = Math.max(1, ...shown.map((effect) => Math.abs(effect.pct)));
   return (
     <section className="rounded-2xl border border-line bg-panel p-5">
-      <h3 className="font-display text-2xl font-bold">O que o modelo aprendeu</h3>
+      <h3 className="font-display text-2xl font-bold">{t("O que o modelo aprendeu")}</h3>
       <p className="text-sm text-mute">
-        Efeitos estimados só com os tempos deste atleta ({n} repetições comparáveis). Com poucos dados ficam perto de zero.
+        {t("Efeitos estimados só com os tempos deste atleta ({count} repetições comparáveis). Com poucos dados ficam perto de zero.", { count: n })}
       </p>
       {shown.length === 0 ? (
         <p className="mt-4 rounded-xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-mute">
-          Ainda não há repetições suficientes em condições diferentes para aprender padrões.
+          {t("Ainda não há repetições suficientes em condições diferentes para aprender padrões.")}
         </p>
       ) : (
         <ul className="mt-4 space-y-2">
@@ -986,7 +1015,7 @@ function LearnedPanel({ effects, n }: { effects: LearnedEffect[]; n: number }) {
               <li key={effect.key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,11rem)_4.5rem] items-center gap-3">
                 <span className="text-sm text-mist">
                   {effect.label}
-                  <span className="block text-xs text-mute">{effect.support} reps</span>
+                  <span className="block text-xs text-mute">{t("{count} reps", { count: effect.support })}</span>
                 </span>
                 <span className="relative h-5 rounded bg-panel-2">
                   <span className="absolute inset-y-0 left-1/2 w-px bg-line-strong" aria-hidden="true" />
@@ -1004,18 +1033,19 @@ function LearnedPanel({ effects, n }: { effects: LearnedEffect[]; n: number }) {
           })}
         </ul>
       )}
-      <p className="mt-3 text-xs text-mute">Verde: tempos mais rápidos nessa condição. Vermelho: mais lentos.</p>
+      <p className="mt-3 text-xs text-mute">{t("Verde: tempos mais rápidos nessa condição. Vermelho: mais lentos.")}</p>
     </section>
   );
 }
 
 function FormPanel({ points, breaks }: { points: FormPoint[]; breaks: FormBreak[] }) {
+  const t = useT();
   if (points.length < 2) {
     return (
       <section className="rounded-2xl border border-line bg-panel p-5">
-        <h3 className="font-display text-2xl font-bold">Forma ao longo do tempo</h3>
+        <h3 className="font-display text-2xl font-bold">{t("Forma ao longo do tempo")}</h3>
         <p className="mt-4 rounded-xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-mute">
-          Aparece a partir de duas semanas com repetições comparáveis.
+          {t("Aparece a partir de duas semanas com repetições comparáveis.")}
         </p>
       </section>
     );
@@ -1035,9 +1065,9 @@ function FormPanel({ points, breaks }: { points: FormPoint[]; breaks: FormBreak[
 
   return (
     <section className="rounded-2xl border border-line bg-panel p-5">
-      <h3 className="font-display text-2xl font-bold">Forma ao longo do tempo</h3>
-      <p className="text-sm text-mute">Tempo semanal face ao habitual do atleta, nas mesmas séries. Mais rápido fica em cima.</p>
-      <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 h-auto w-full" role="img" aria-label="Índice de forma semanal">
+      <h3 className="font-display text-2xl font-bold">{t("Forma ao longo do tempo")}</h3>
+      <p className="text-sm text-mute">{t("Tempo semanal face ao habitual do atleta, nas mesmas séries. Mais rápido fica em cima.")}</p>
+      <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 h-auto w-full" role="img" aria-label={t("Índice de forma semanal")}>
         {[-lim / 1.2, 0, lim / 1.2].map((tick) => (
           <g key={tick}>
             <line x1={pad.l} x2={width - pad.r} y1={y(tick)} y2={y(tick)} stroke={tick === 0 ? "#bccad8" : GRID} />
@@ -1054,7 +1084,7 @@ function FormPanel({ points, breaks }: { points: FormPoint[]; breaks: FormBreak[
             <g key={item.to}>
               <line x1={x(i)} x2={x(i)} y1={pad.t} y2={pad.t + innerH} stroke={LANE} strokeDasharray="4 4" />
               <text x={x(i) + 4} y={pad.t + 12} fill={LANE} fontSize="11">
-                após {item.days} dias parado
+                {t("após {days} dias parado", { days: item.days })}
               </text>
             </g>
           );
@@ -1062,7 +1092,7 @@ function FormPanel({ points, breaks }: { points: FormPoint[]; breaks: FormBreak[
         <path d={path} fill="none" stroke={POOL} strokeWidth={2} />
         {points.map((p, i) => (
           <circle key={p.week} cx={x(i)} cy={y(p.indexPct)} r={3.5} fill={p.indexPct <= 0 ? GOOD : LANE}>
-            <title>{`Semana de ${formatDatePt(p.week)} · ${p.indexPct > 0 ? "+" : ""}${p.indexPct.toFixed(1)}% · ${p.n} reps`}</title>
+            <title>{`${t("Semana de {date}", { date: formatDatePt(p.week) })} · ${p.indexPct > 0 ? "+" : ""}${p.indexPct.toFixed(1)}% · ${t("{count} reps", { count: p.n })}`}</title>
           </circle>
         ))}
         <text x={x(0)} y={height - 12} textAnchor="start" fill={MUTE} fontSize="11">
@@ -1076,12 +1106,16 @@ function FormPanel({ points, breaks }: { points: FormPoint[]; breaks: FormBreak[
         <ul className="mt-2 space-y-1 text-sm text-mist">
           {breaks.map((item) => (
             <li key={item.to}>
-              Paragem de {item.days} dias ({formatDatePt(item.from).slice(0, 5)} → {formatDatePt(item.to).slice(0, 5)}):{" "}
+              {t("Paragem de {days} dias ({from} → {to}):", {
+                days: item.days,
+                from: formatDatePt(item.from).slice(0, 5),
+                to: formatDatePt(item.to).slice(0, 5),
+              })}{" "}
               {item.recoveryWeeks == null
-                ? "ainda não voltou ao nível anterior."
+                ? t("ainda não voltou ao nível anterior.")
                 : item.recoveryWeeks === 0
-                  ? "voltou ao nível anterior na primeira semana."
-                  : `voltou ao nível anterior em ${item.recoveryWeeks} semanas.`}
+                  ? t("voltou ao nível anterior na primeira semana.")
+                  : t("voltou ao nível anterior em {weeks} semanas.", { weeks: item.recoveryWeeks })}
             </li>
           ))}
         </ul>

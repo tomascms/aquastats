@@ -1,10 +1,14 @@
 "use client";
 
+import { PbGrid } from "@/components/team/personal-bests";
+
 import { useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnaliseTabs } from "@/components/analise/analise-tabs";
 import { AthleteChips, NoAthletes } from "@/components/analise/athlete-chips";
 import { EvolutionChart } from "@/components/analise/evolution-chart";
+import { RaceInsights } from "@/components/competicoes/race-insights";
+import { PreparationImpact } from "@/components/analise/preparation-impact";
 import { COURSE_LABEL, ageFromDob, formatDatePt, formatEvent, initials, strokeLabel } from "@/lib/labels";
 import {
   eventKey,
@@ -20,7 +24,8 @@ import {
 import { formatRaceClock } from "@/lib/race";
 import { annotateTrainingReps, isPlausibleRep } from "@/lib/training-context";
 import { useAppState } from "@/lib/store";
-import type { Gender, PoolCourse, Stroke } from "@/lib/types";
+import type { Gender, PoolCourse, RaceSession, Stroke, WellnessEntry } from "@/lib/types";
+import { useT } from "@/i18n/provider";
 
 function signed(seconds: number, pct: number) {
   const prefix = seconds > 0 ? "+" : "";
@@ -32,6 +37,7 @@ function signed(seconds: number, pct: number) {
 }
 
 export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }) {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -64,8 +70,8 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Análise de prova</h1>
-          <p className="mt-1 text-sm text-mute">Recordes, evolução e comparação entre marcas.</p>
+          <h1>{t("Análise de prova")}</h1>
+          <p className="mt-1 text-sm text-mute">{t("Recordes, evolução e comparação entre marcas.")}</p>
         </div>
         <div className="w-full max-w-md">
           <AnaliseTabs role={role} />
@@ -89,8 +95,14 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
           records={records}
           recordId={recordId}
           compareId={compareId}
+
+
+
+
           workouts={workouts}
           timeLogs={timeLogs}
+          raceSessions={raceSessions.filter((item) => item.athleteId === athleteId)}
+          wellness={athlete.wellness ?? []}
           onBack={() => setParams({ registo: null, comparar: null })}
           onCompare={(id) => setParams({ comparar: id || null })}
         />
@@ -117,6 +129,7 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
           bests={bests}
           recordCount={records.length}
           onOpenEvent={(stroke, distanceM) => setParams({ evento: eventKey(stroke, distanceM) })}
+          onOpenRecord={(id) => setParams({ registo: id })}
         />
       )}
     </div>
@@ -133,6 +146,7 @@ function PersonalBestTable({
   bests,
   recordCount,
   onOpenEvent,
+  onOpenRecord,
 }: {
   athleteName: string;
   gender?: Gender | "";
@@ -143,7 +157,9 @@ function PersonalBestTable({
   bests: ReturnType<typeof personalBests>;
   recordCount: number;
   onOpenEvent: (stroke: Stroke, distanceM: number) => void;
+  onOpenRecord: (id: string) => void;
 }) {
+  const t = useT();
   const year = dob ? dob.slice(0, 4) : "";
   const scored = bests
     .map((record) => ({ record, points: finaPoints(record.timeS, record.course, record.stroke, record.distanceM, gender) || 0 }))
@@ -164,19 +180,19 @@ function PersonalBestTable({
               {year ? <span className="ml-2 text-lg font-medium text-white/60">{year}</span> : null}
             </p>
             <p className="mt-1.5 text-sm text-white/70">
-              {[teamName, groupName, strokeLabel(stroke), age != null ? `${age} anos` : ""].filter(Boolean).join(" · ")}
+              {[teamName, strokeLabel(stroke), age != null ? t("{age} anos", { age }) : ""].filter(Boolean).join(" · ")}
             </p>
           </div>
         </div>
         <dl className="mt-5 grid grid-cols-3 gap-3 border-t border-white/15 pt-4">
           <div>
-            <dt className="text-xs text-white/65">Registos de prova</dt>
+            <dt className="text-xs text-white/65">{t("Registos de prova")}</dt>
             <dd className="font-display text-3xl font-bold tabular">{recordCount}</dd>
           </div>
           <div>
             <dt className="text-xs text-white/65">
-              Melhor pontuação FINA
-              {gender !== "M" && gender !== "F" ? <span className="block text-[#ffd8a8]">define o género do atleta</span> : null}
+              {t("Melhor pontuação FINA")}
+              {gender !== "M" && gender !== "F" ? <span className="block text-[#ffd8a8]">{t("define o género do atleta")}</span> : null}
             </dt>
             <dd className="font-display text-3xl font-bold tabular">
               {top ? top.points : "—"}
@@ -188,52 +204,19 @@ function PersonalBestTable({
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-white/65">Última prova</dt>
+            <dt className="text-xs text-white/65">{t("Última prova")}</dt>
             <dd className="font-display text-3xl font-bold tabular">{latest ? formatDatePt(latest).slice(0, 5) : "—"}</dd>
           </div>
         </dl>
-      </div>      <div className="overflow-x-auto">
-        <table className="min-w-[640px] w-full text-left text-sm">
-          <thead className="bg-panel-2 text-xs font-semibold text-mute">
-            <tr>
-              <th className="px-4 py-3">Prova</th>
-              <th className="px-3 py-3">Piscina</th>
-              <th className="px-3 py-3">Tempo</th>
-              <th className="px-3 py-3">Pts</th>
-              <th className="px-3 py-3">Data</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bests.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-mute">
-                  Ainda sem tempos de prova para este atleta.
-                </td>
-              </tr>
-            ) : (
-              bests.map((record) => (
-                <tr key={record.id} className="border-t border-line hover:bg-panel-2">
-                  <td className="px-4 py-2.5">
-                    <button
-                      type="button"
-                      onClick={() => onOpenEvent(record.stroke, record.distanceM)}
-                      className="font-semibold text-aqua hover:underline"
-                    >
-                      {formatEvent(record.distanceM, record.stroke)}
-                    </button>
-                  </td>
-                  <td className="px-3 py-2.5 text-mute">{COURSE_LABEL[record.course]}</td>
-                  <td className="px-3 py-2.5 font-display text-xl font-bold text-mist tabular">{formatRaceClock(record.timeS)}</td>
-                  <td className="px-3 py-2.5 font-mono text-sand">
-                    {finaPoints(record.timeS, record.course, record.stroke, record.distanceM, gender) || "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-mute">{formatDatePt(record.date)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
       </div>
+      {bests.length === 0 ? (
+        <p className="px-4 py-8 text-center text-mute">{t("Ainda sem tempos de prova para este atleta.")}</p>
+      ) : (
+        <>
+          <PbGrid bests={bests} gender={gender} onOpen={(record) => onOpenRecord(record.id)} onOpenEvent={onOpenEvent} titleFor={() => t("Abrir análise")} />
+          <p className="px-4 py-2 text-[11px] text-mute">{t("Carrega num tempo para abrir a análise dessa prova, ou na distância para ver todas as marcas.")}</p>
+        </>
+      )}
     </section>
   );
 }
@@ -246,8 +229,8 @@ function EventBoard({
   distanceM,
   mode,
   onMode,
-  onBack,
   onOpen,
+  onBack,
 }: {
   athleteName: string;
   gender?: Gender | "";
@@ -259,6 +242,7 @@ function EventBoard({
   onBack: () => void;
   onOpen: (id: string) => void;
 }) {
+  const t = useT();
   const all = eventRecords(records, stroke, distanceM);
   const scm = sliceRecords(eventRecords(all, stroke, distanceM, "scm"), mode);
   const lcm = sliceRecords(eventRecords(all, stroke, distanceM, "lcm"), mode);
@@ -266,12 +250,12 @@ function EventBoard({
   return (
     <div className="space-y-4">
       <button type="button" onClick={onBack} className="text-sm font-semibold text-pool hover:underline">
-        ← Recordes de {athleteName}
+        ← {t("Recordes de {name}", { name: athleteName })}
       </button>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-3xl font-bold">{formatEvent(distanceM, stroke)}</h2>
-          <p className="text-sm text-mute">Ranking pessoal de {athleteName}</p>
+          <p className="text-sm text-mute">{t("Ranking pessoal de {name}", { name: athleteName })}</p>
         </div>
         <div className="grid grid-cols-2 gap-1 rounded-xl border border-line bg-panel p-1">
           <button
@@ -279,27 +263,27 @@ function EventBoard({
             onClick={() => onMode("last")}
             className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === "last" ? "bg-aqua text-white" : "text-mute hover:text-mist"}`}
           >
-            Últimas 10
+            {t("Últimas 10")}
           </button>
           <button
             type="button"
             onClick={() => onMode("best")}
             className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === "best" ? "bg-aqua text-white" : "text-mute hover:text-mist"}`}
           >
-            10 melhores
+            {t("10 melhores")}
           </button>
         </div>
       </div>
 
       <section className="rounded-2xl border border-line bg-panel p-4">
-        <h3 className="mb-2 px-1 font-display text-xl font-bold">Evolução</h3>
+        <h3 className="mb-2 px-1 font-display text-xl font-bold">{t("Evolução")}</h3>
         <EvolutionChart records={chart} onSelect={onOpen} />
-        <p className="mt-2 px-1 text-[11px] text-mute">Clica num ponto ou numa linha para abrir o detalhe.</p>
+        <p className="mt-2 px-1 text-[11px] text-mute">{t("Clica num ponto ou numa linha para abrir o detalhe.")}</p>
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <CourseList gender={gender} title="Piscina de 50 m" course="lcm" rows={lcm} onOpen={onOpen} />
-        <CourseList gender={gender} title="Piscina de 25 m" course="scm" rows={scm} onOpen={onOpen} />
+        <CourseList gender={gender} title={t("Piscina de {course}", { course: "50 m" })} course="lcm" rows={lcm} onOpen={onOpen} />
+        <CourseList gender={gender} title={t("Piscina de {course}", { course: "25 m" })} course="scm" rows={scm} onOpen={onOpen} />
       </div>
     </div>
   );
@@ -318,11 +302,12 @@ function CourseList({
   rows: ReturnType<typeof sliceRecords>;
   onOpen: (id: string) => void;
 }) {
+  const t = useT();
   return (
     <section className="rounded-2xl border border-line bg-panel p-4">
       <h3 className="px-1 font-display text-xl font-bold">{title}</h3>
       {rows.length === 0 ? (
-        <p className="px-1 py-6 text-sm text-mute">Sem registos em {COURSE_LABEL[course]}.</p>
+        <p className="px-1 py-6 text-sm text-mute">{t("Sem registos em {course}.", { course: COURSE_LABEL[course] })}</p>
       ) : (
         <ul className="mt-2 space-y-1">
           {rows.map((record) => (
@@ -358,6 +343,8 @@ function RecordDetail({
   compareId,
   workouts,
   timeLogs,
+  raceSessions,
+  wellness = [],
   onBack,
   onCompare,
 }: {
@@ -368,9 +355,12 @@ function RecordDetail({
   compareId: string;
   workouts: ReturnType<typeof useAppState>["workouts"];
   timeLogs: ReturnType<typeof useAppState>["timeLogs"];
+  raceSessions: RaceSession[];
+  wellness?: WellnessEntry[];
   onBack: () => void;
   onCompare: (id: string) => void;
 }) {
+  const t = useT();
   const record = findRecord(records, recordId);
   const other = compareId ? findRecord(records, compareId) : undefined;
   const athleteIdForContext = record?.athleteId ?? "";
@@ -393,9 +383,9 @@ function RecordDetail({
   if (!record) {
     return (
       <p className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-mute">
-        Registo não encontrado.
+        {t("Registo não encontrado.")}
         <button type="button" onClick={onBack} className="mt-3 block w-full text-aqua">
-          Voltar
+          {t("Voltar")}
         </button>
       </p>
     );
@@ -429,7 +419,7 @@ function RecordDetail({
           {formatDatePt(record.date)} · {COURSE_LABEL[record.course]}
         </p>
         <p className="mt-1 font-mono text-sm text-sand">
-          {finaPoints(record.timeS, record.course, record.stroke, record.distanceM, gender) || "—"} pts
+          {finaPoints(record.timeS, record.course, record.stroke, record.distanceM, gender) || "—"} {t("pts")}
         </p>
         {sameEvent.length ? (
           <button
@@ -437,17 +427,17 @@ function RecordDetail({
             onClick={() => onCompare(comparable ? "" : previous.id)}
             className="btn-primary mt-4"
           >
-            {comparable ? "Fechar comparação" : "Comparar com outra marca"}
+            {comparable ? t("Fechar comparação") : t("Comparar com outra marca")}
           </button>
         ) : (
-          <p className="mt-4 text-sm text-mute">Sem outras marcas desta prova em {COURSE_LABEL[record.course]} para comparar.</p>
+          <p className="mt-4 text-sm text-mute">{t("Sem outras marcas desta prova em {course} para comparar.", { course: COURSE_LABEL[record.course] })}</p>
         )}
       </section>
 
       {comparable && signedDelta ? (
         <section className="rounded-2xl border border-line bg-panel p-5">
           <label className="block text-sm font-semibold text-mist">
-            Comparar com
+            {t("Comparar com")}
             <select className="field mt-1.5" value={comparable.id} onChange={(event) => onCompare(event.target.value)}>
               {sameEvent.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -457,19 +447,21 @@ function RecordDetail({
               ))}
             </select>
           </label>
-          <p className="mt-1 text-xs text-mute">Só marcas de {formatEvent(record.distanceM, record.stroke)} em {COURSE_LABEL[record.course]}.</p>
+          <p className="mt-1 text-xs text-mute">
+            {t("Só marcas de {event} em {course}.", { event: formatEvent(record.distanceM, record.stroke), course: COURSE_LABEL[record.course] })}
+          </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
             <div className="rounded-xl bg-panel-2 px-4 py-3">
-              <p className="text-xs text-mute">Esta marca · {formatDatePt(record.date)}</p>
+              <p className="text-xs text-mute">{t("Esta marca")} · {formatDatePt(record.date)}</p>
               <p className="font-display text-3xl font-bold text-mist tabular">{formatRaceClock(record.timeS)}</p>
             </div>
             <div className="rounded-xl bg-panel-2 px-4 py-3">
-              <p className="text-xs text-mute">Comparada com · {formatDatePt(comparable.date)}</p>
+              <p className="text-xs text-mute">{t("Comparada com")} · {formatDatePt(comparable.date)}</p>
               <p className="font-display text-3xl font-bold text-mist tabular">{formatRaceClock(comparable.timeS)}</p>
             </div>
             <div className={`rounded-xl px-4 py-3 ${signedDelta.faster ? "bg-good-soft" : delta && delta.seconds === 0 ? "bg-panel-2" : "bg-[#fdecea]"}`}>
               <p className="text-xs text-mute">
-                {signedDelta.faster ? "Esta marca é mais rápida" : delta && delta.seconds === 0 ? "Tempos iguais" : "Esta marca é mais lenta"}
+                {signedDelta.faster ? t("Esta marca é mais rápida") : delta && delta.seconds === 0 ? t("Tempos iguais") : t("Esta marca é mais lenta")}
               </p>
               <p className={`font-display text-3xl font-bold tabular ${signedDelta.faster ? "text-good" : "text-coral"}`}>{signedDelta.clock}</p>
               <p className="text-sm text-mute">{signedDelta.pct}</p>
@@ -477,6 +469,23 @@ function RecordDetail({
           </div>
         </section>
       ) : null}
+
+      {(() => {
+        const session = raceSessions.find((item) => item.id === (record.sessionId ?? record.id));
+        if (!session) {
+          return (
+            <p className="rounded-2xl border border-dashed border-line bg-panel px-5 py-4 text-sm text-mute">
+              {t("Adiciona informação a esta prova (reação, 15 m, subaquático, viragens, frequências…) para a cruzar com a preparação.")}
+            </p>
+          );
+        }
+        return (
+          <>
+            <RaceInsights session={session} others={raceSessions} />
+            <PreparationImpact session={session} sessions={raceSessions} workouts={workouts} wellness={wellness} />
+          </>
+        );
+      })()}
 
       <TrainingContextPanel
         recordDate={record.date}
@@ -505,38 +514,40 @@ function TrainingContextPanel({
   reps: number;
   sessions: number;
 }) {
+  const t = useT();
   const hasData = reps > 0;
   return (
     <section className="data-panel p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="metric-label">Contexto de treino</p>
-          <h3 className="mt-1 text-lg font-semibold text-mist">O que preparou este resultado</h3>
-          <p className="mt-1 text-xs text-mute">Repetições de {distanceM} m nos 42 dias anteriores a {formatDatePt(recordDate)}.</p>
+          <p className="metric-label">{t("Contexto de treino")}</p>
+          <h3 className="mt-1 text-lg font-semibold text-mist">{t("O que preparou este resultado")}</h3>
+          <p className="mt-1 text-xs text-mute">
+            {t("Repetições de {distance} m nos 42 dias anteriores a {date}.", { distance: distanceM, date: formatDatePt(recordDate) })}
+          </p>
         </div>
-        
       </div>
       {hasData ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <div className="stat-card p-3">
-            <p className="metric-label">Reps equivalentes</p>
+            <p className="metric-label">{t("Reps equivalentes")}</p>
             <p className="mt-2 metric-value">{reps}</p>
-            <p className="mt-1 text-xs text-mute">em {sessions} sessões</p>
+            <p className="mt-1 text-xs text-mute">{t("em {count} sessões", { count: sessions })}</p>
           </div>
           <div className="stat-card p-3">
-            <p className="metric-label">Média no treino</p>
+            <p className="metric-label">{t("Média no treino")}</p>
             <p className="mt-2 metric-value">{mean.toFixed(2)}<span className="ml-1 text-sm font-normal text-mute">s</span></p>
-            <p className="mt-1 text-xs text-mute">mesma distância</p>
+            <p className="mt-1 text-xs text-mute">{t("mesma distância")}</p>
           </div>
           <div className="stat-card p-3">
-            <p className="metric-label">Volume semanal médio</p>
+            <p className="metric-label">{t("Volume semanal médio")}</p>
             <p className="mt-2 metric-value">{(weekly / 1000).toFixed(1)}<span className="ml-1 text-sm font-normal text-mute">km</span></p>
-            <p className="mt-1 text-xs text-mute">nas semanas antes da prova</p>
+            <p className="mt-1 text-xs text-mute">{t("nas semanas antes da prova")}</p>
           </div>
         </div>
       ) : (
         <p className="mt-4 rounded-xl border border-dashed border-line bg-ink-2 px-3 py-4 text-sm text-mute">
-          Ainda não existem repetições de treino comparáveis para esta distância e janela temporal.
+          {t("Ainda não existem repetições de treino comparáveis para esta distância e janela temporal.")}
         </p>
       )}
     </section>

@@ -4,12 +4,15 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ComponentType, ReactNode } from "react";
 import { BrandLockup } from "@/components/ui/brand";
+import { LanguageSwitch } from "@/components/ui/language-switch";
 import { OfflinePill } from "@/components/ui/offline-pill";
+import type { MessageKey } from "@/i18n";
+import { useT } from "@/i18n/provider";
 import { actions } from "@/lib/store";
 
 export type NavItem = {
   href: string;
-  label: string;
+  label: MessageKey;
   icon: ComponentType<{ className?: string }>;
   exact?: boolean;
 };
@@ -33,6 +36,7 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const t = useT();
 
   async function logout() {
     await actions.logout();
@@ -50,7 +54,7 @@ export function AppShell({
           {context ? <p className="mt-3 truncate text-sm text-white/70">{context}</p> : null}
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-3" aria-label="Navegação principal">
+        <nav className="flex-1 space-y-0.5 px-3" aria-label={t("Navegação principal")}>
           {nav.map((item) => {
             const active = isActive(pathname, item);
             const Icon = item.icon;
@@ -65,20 +69,23 @@ export function AppShell({
               >
                 {active ? <span className="lane-rope-v absolute inset-y-2 left-0 rounded-full" aria-hidden="true" /> : null}
                 <Icon className="h-5 w-5" />
-                {item.label}
+                {t(item.label)}
               </Link>
             );
           })}
         </nav>
 
         <div className="flex flex-col gap-3 border-t border-white/12 px-5 py-5">
-          <OfflinePill />
+          <div className="flex items-center justify-between gap-3">
+            <OfflinePill />
+            <LanguageSwitch tone="dark" />
+          </div>
           <button
             type="button"
             onClick={() => void logout()}
             className="min-h-10 rounded-lg border border-white/25 px-3 text-sm font-medium text-white/85 transition-colors hover:border-white/60 hover:text-white"
           >
-            Terminar sessão
+            {t("Terminar sessão")}
           </button>
         </div>
       </aside>
@@ -93,13 +100,14 @@ export function AppShell({
               {context ? <p className="truncate text-xs text-mute">{context}</p> : null}
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <OfflinePill />
+              <OfflinePill compact />
+              <LanguageSwitch compact />
               <button
                 type="button"
                 onClick={() => void logout()}
                 className="min-h-9 rounded-lg border border-line px-3 text-xs font-semibold text-mist"
               >
-                Sair
+                {t("Sair")}
               </button>
             </div>
           </div>
@@ -112,7 +120,7 @@ export function AppShell({
 
         <nav
           className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-panel lg:hidden"
-          aria-label="Navegação principal"
+          aria-label={t("Navegação principal")}
         >
           <div className="mx-auto grid max-w-lg px-1 pt-1" style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}>
             {nav.map((item) => {
@@ -129,7 +137,7 @@ export function AppShell({
                 >
                   {active ? <span className="lane-rope absolute inset-x-4 top-0 rounded-full" aria-hidden="true" /> : null}
                   <Icon className="h-5 w-5" />
-                  <span>{item.label}</span>
+                  <span>{t(item.label)}</span>
                 </Link>
               );
             })}

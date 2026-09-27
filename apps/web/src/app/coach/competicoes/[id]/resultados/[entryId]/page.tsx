@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { RaceInsights } from "@/components/competicoes/race-insights";
 import { RaceResultSheet } from "@/components/competicoes/race-result-sheet";
 import { COURSE_LABEL, formatDatePt, formatEvent } from "@/lib/labels";
 import { sessionForEntry } from "@/lib/race";
 import { useAppState } from "@/lib/store";
 import { formatTime, hasClockTime } from "@/lib/swim-time";
+import { useT } from "@/i18n/provider";
 
 export default function ResultViewPage() {
+  const t = useT();
   const params = useParams<{ id: string; entryId: string }>();
   const { athletes, competitions, meetEntries, meetResults, raceSessions } = useAppState();
   const meet = competitions.find((item) => item.id === params.id);
@@ -20,9 +23,9 @@ export default function ResultViewPage() {
   if (!meet || !entry || !athlete) {
     return (
       <div className="py-10 text-center text-mute">
-        Resultado não encontrado.
-        <Link href={meet ? `/coach/competicoes/${meet.id}/resultados` : "/coach/competicoes"} className="mt-3 block text-aqua">
-          Voltar
+        {t("Resultado não encontrado.")}
+        <Link href={meet ? `/coach/competicoes/${meet.id}` : "/coach/competicoes"} className="mt-3 block text-aqua">
+          {t("Voltar")}
         </Link>
       </div>
     );
@@ -46,7 +49,7 @@ export default function ResultViewPage() {
           href={`/coach/competicoes/${meet.id}/resultados/${entry.id}/edit`}
           className="flex h-12 items-center justify-center rounded-2xl border border-line px-5 text-sm font-semibold"
         >
-          Editar
+          {t("Adicionar informação")}
         </Link>
       </div>
       <RaceResultSheet
@@ -57,6 +60,7 @@ export default function ResultViewPage() {
         existing={existing}
         result={result}
       />
+      {existing ? <RaceInsights session={existing} others={raceSessions.filter((item) => item.athleteId === athlete.id)} /> : null}
     </div>
   );
 }

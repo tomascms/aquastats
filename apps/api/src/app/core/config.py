@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     edge_auth_token: str = ""
     outbox_batch_size: int = 20
     coach_request_email: str = "aquastats@outlook.com"
+    polar_client_id: str = ""
+    polar_client_secret: str = ""
 
     @property
     def is_production(self) -> bool:

@@ -7,8 +7,10 @@ import { AuthFrame } from "@/components/auth/auth-frame";
 import { PasswordStrength } from "@/components/ui/password-strength";
 import { api, formatApiError, type ApiError } from "@/lib/api";
 import { safeNext } from "@/lib/safe-next";
+import { useT } from "@/i18n/provider";
 
 export default function ResetPage() {
+  const t = useT();
   const { token } = useParams<{ token: string }>();
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,17 +27,17 @@ export default function ResetPage() {
       });
       window.location.assign(safeNext(result.next, "/entrar"));
     } catch (err) {
-      setError(formatApiError(err as ApiError) || "Não foi possível gravar a nova palavra-passe.");
+      setError(formatApiError(err as ApiError) || t("Não foi possível gravar a nova palavra-passe."));
       setBusy(false);
     }
   }
 
   return (
     <AuthFrame>
-      <h1 className="text-2xl font-semibold tracking-tight">Nova palavra-passe</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("Nova palavra-passe")}</h1>
       <form className="mt-6 space-y-3" onSubmit={(event) => void submit(event)}>
         <label className="block text-sm" htmlFor="reset-password">
-          Palavra-passe
+          {t("Palavra-passe")}
           <input
             id="reset-password"
             type="password"
@@ -54,12 +56,12 @@ export default function ResetPage() {
           </p>
         )}
         <button type="submit" disabled={busy} className="btn-primary h-10 w-full">
-          {busy ? "A gravar…" : "Guardar"}
+          {busy ? t("A gravar…") : t("Guardar")}
         </button>
       </form>
       <p className="mt-4 text-sm">
         <Link href="/entrar" className="text-mute hover:text-mist">
-          Voltar
+          {t("Voltar")}
         </Link>
       </p>
     </AuthFrame>

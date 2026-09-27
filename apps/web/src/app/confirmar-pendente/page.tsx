@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useT, useTDynamic } from "@/i18n/provider";
 import { AuthFrame } from "@/components/auth/auth-frame";
 import { api } from "@/lib/api";
 
@@ -25,6 +26,8 @@ function formatCountdown(totalSeconds: number): string {
 }
 
 export default function ConfirmPendingPage() {
+  const t = useT();
+  const td = useTDynamic();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -47,11 +50,11 @@ export default function ConfirmPendingPage() {
 
   async function resend() {
     if (!email.trim()) {
-      setMessage("Email em falta. Volta ao registo ou usa o link que recebeste.");
+      setMessage(t("Email em falta. Volta ao registo ou usa o link que recebeste."));
       return;
     }
     if (secondsUntilResend(email) > 0) {
-      setMessage(`Aguarda ${formatCountdown(secondsUntilResend(email))} antes de reenviar.`);
+      setMessage(t("Aguarda {time} antes de reenviar.", { time: formatCountdown(secondsUntilResend(email)) }));
       return;
     }
     setBusy(true);
@@ -63,15 +66,15 @@ export default function ConfirmPendingPage() {
       });
       localStorage.setItem(resendStorageKey(email), String(Date.now()));
       setCooldownSeconds(Math.ceil(RESEND_COOLDOWN_MS / 1000));
-      setMessage("Se existir conta por confirmar, enviámos um novo email. Pode demorar alguns minutos.");
+      setMessage(t("Se existir conta por confirmar, enviámos um novo email. Pode demorar alguns minutos."));
     } catch (error) {
       const apiError = error as { status?: number; detail?: string };
       if (apiError.status === 429) {
         localStorage.setItem(resendStorageKey(email), String(Date.now()));
         setCooldownSeconds(secondsUntilResend(email) || Math.ceil(RESEND_COOLDOWN_MS / 1000));
-        setMessage(apiError.detail || "Aguarda 5 minutos antes de reenviar.");
+        setMessage(td(apiError.detail || "Aguarda 5 minutos antes de reenviar."));
       } else {
-        setMessage("Não foi possível reenviar. Tenta mais tarde.");
+        setMessage(t("Não foi possível reenviar. Tenta mais tarde."));
       }
     } finally {
       setBusy(false);
@@ -82,12 +85,12 @@ export default function ConfirmPendingPage() {
 
   return (
     <AuthFrame>
-      <h1 className="text-2xl font-semibold tracking-tight">Confirma o email</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("Confirma o email")}</h1>
       <p className="mt-4 text-sm text-mute">
-        Enviámos um link de confirmação{email ? ` para ${email}` : ""}. Só depois de clicares nele consegues entrar.
+        {email ? t("Enviámos um link de confirmação para {email}. Só depois de clicares nele consegues entrar.", { email }) : t("Enviámos um link de confirmação. Só depois de clicares nele consegues entrar.")}
       </p>
       <p className="mt-3 rounded-md border border-line bg-ink-2 px-3 py-2 text-sm text-mute">
-        O email pode demorar alguns minutos a chegar — verifica também a pasta de spam antes de reenviar.
+        {t("O email pode demorar alguns minutos a chegar — verifica também a pasta de spam antes de reenviar.")}
       </p>
       <div className="mt-6 space-y-3">
         <button
@@ -96,13 +99,13 @@ export default function ConfirmPendingPage() {
           onClick={() => void resend()}
           className="btn-primary h-10 w-full disabled:opacity-60"
         >
-          {busy ? "A enviar…" : resendBlocked ? `Reenviar em ${formatCountdown(cooldownSeconds)}` : "Reenviar email"}
+          {busy ? t("A enviar…") : resendBlocked ? t("Reenviar em {time}", { time: formatCountdown(cooldownSeconds) }) : t("Reenviar email")}
         </button>
         <Link
           href="/"
           className="flex h-10 w-full items-center justify-center rounded-md border border-line text-sm font-medium hover:bg-ink-2"
         >
-          Já confirmei
+          {t("Já confirmei")}
         </Link>
       </div>
       {message ? (

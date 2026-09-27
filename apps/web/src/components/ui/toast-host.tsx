@@ -1,9 +1,11 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { useT } from "@/i18n/provider";
 import { dismissToast, getToasts, subscribeToasts } from "@/lib/toast";
 
 export function ToastHost() {
+  const t = useT();
   const items = useSyncExternalStore(subscribeToasts, getToasts, () => []);
 
   if (!items.length) return null;
@@ -38,11 +40,11 @@ export function ToastHost() {
                   dismissToast(item.id);
                 }}
               >
-                {item.actionLabel ?? "Repetir"}
+                {item.actionLabel ?? t("Repetir")}
               </button>
             ) : null}
             <button type="button" className="text-xs text-mute hover:text-mist" onClick={() => dismissToast(item.id)}>
-              Fechar
+              {t("Fechar")}
             </button>
           </div>
         </div>

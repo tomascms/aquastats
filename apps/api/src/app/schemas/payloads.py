@@ -86,6 +86,8 @@ class WorkoutCreateBody(StrictModel):
     course: str | None = None
     athleteIds: list[UUID] = Field(default_factory=list, max_length=200)
     blocks: list[Any] = Field(default_factory=list, max_length=64)
+    groups: list[str] = Field(default_factory=list, max_length=3)
+    focus: str | None = Field(default=None, max_length=40)
 
     @field_validator("shift")
     @classmethod
@@ -102,6 +104,8 @@ class WorkoutPatchBody(StrictModel):
     course: str | None = None
     athleteIds: list[UUID] | None = Field(default=None, max_length=200)
     blocks: list[Any] | None = Field(default=None, max_length=64)
+    groups: list[str] | None = Field(default=None, max_length=3)
+    focus: str | None = Field(default=None, max_length=40)
 
 
 class CompetitionCreateBody(StrictModel):

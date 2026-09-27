@@ -5,8 +5,10 @@ import Link from "next/link";
 import { AuthFrame } from "@/components/auth/auth-frame";
 import { api } from "@/lib/api";
 import { safeNext } from "@/lib/safe-next";
+import { useT } from "@/i18n/provider";
 
 export default function ForgotPage() {
+  const t = useT();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -29,29 +31,29 @@ export default function ForgotPage() {
 
   return (
     <AuthFrame>
-      <h1 className="text-2xl font-semibold tracking-tight">Palavra-passe</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("Palavra-passe")}</h1>
 
       {done ? (
         <div className="mt-6 space-y-4 text-sm">
           <p role="status">
-            Se existir conta com esse email, enviámos um link para repor a palavra-passe. Verifica a caixa de entrada
-            (e spam) — o email vem de <span className="text-mist">confirmation@aquastats.net</span>.
+            {t("Se existir conta com esse email, enviámos um link para repor a palavra-passe. Verifica a caixa de entrada (e spam) — o email vem de")}{" "}
+            <span className="text-mist">confirmation@aquastats.net</span>.
           </p>
           {devUrl && (
             <p>
               <Link href={devUrl} className="underline">
-                Abrir link de desenvolvimento
+                {t("Abrir link de desenvolvimento")}
               </Link>
             </p>
           )}
           <Link href="/entrar" className="btn-primary h-10 w-full">
-            Entrar
+            {t("Entrar")}
           </Link>
         </div>
       ) : (
         <form className="mt-6 space-y-3" onSubmit={(event) => void submit(event)}>
           <label className="block text-sm" htmlFor="forgot-email">
-            Email
+            {t("Email")}
             <input
               id="forgot-email"
               type="email"
@@ -63,14 +65,14 @@ export default function ForgotPage() {
             />
           </label>
           <button type="submit" disabled={busy} className="btn-primary h-10 w-full">
-            {busy ? "A enviar…" : "Enviar link"}
+            {busy ? t("A enviar…") : t("Enviar link")}
           </button>
         </form>
       )}
 
       <p className="mt-4 text-sm">
         <Link href="/entrar" className="text-mute hover:text-mist">
-          Voltar
+          {t("Voltar")}
         </Link>
       </p>
     </AuthFrame>

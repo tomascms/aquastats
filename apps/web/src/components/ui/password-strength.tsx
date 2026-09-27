@@ -1,5 +1,8 @@
 "use client";
 
+import { localizedList } from "@/i18n";
+import { useT } from "@/i18n/provider";
+
 function score(password: string): number {
   let points = 0;
   if (password.length >= 8) points += 1;
@@ -10,9 +13,10 @@ function score(password: string): number {
   return Math.min(points, 4);
 }
 
-const LABELS = ["Fraca", "Razoável", "Boa", "Forte", "Excelente"];
+const LABELS = localizedList(["Fraca", "Razoável", "Boa", "Forte", "Excelente"]);
 
 export function PasswordStrength({ password }: { password: string }) {
+  const t = useT();
   if (!password) return null;
   const value = score(password);
   const label = LABELS[value];
@@ -26,8 +30,8 @@ export function PasswordStrength({ password }: { password: string }) {
         <div className={`h-full rounded-full transition-all ${color}`} style={{ width }} />
       </div>
       <p className="text-[11px] text-mute">
-        Força: <span className="font-medium text-mist">{label}</span>
-        {password.length < 8 ? " · mínimo 8, letras e números" : null}
+        {t("Força:")} <span className="font-medium text-mist">{label}</span>
+        {password.length < 8 ? ` · ${t("mínimo 8, letras e números")}` : null}
       </p>
     </div>
   );

@@ -1,3 +1,5 @@
+import { intlLocale, localizedList } from "@/i18n";
+
 export function toIsoDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -21,7 +23,7 @@ export function addMonths(isoDay: string, delta: number): string {
 }
 
 export function monthLabel(isoDay: string): string {
-  const label = new Intl.DateTimeFormat("pt-PT", { month: "long", year: "numeric" }).format(parseIsoDate(isoDay));
+  const label = new Intl.DateTimeFormat(intlLocale(), { month: "long", year: "numeric" }).format(parseIsoDate(isoDay));
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
@@ -47,7 +49,8 @@ export function monthDays(isoDay: string): Array<string | null> {
   return cells;
 }
 
-export const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+/** Monday-first short weekday names in the active locale. */
+export const WEEKDAYS = localizedList(["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]);
 
 export function addDays(isoDay: string, delta: number): string {
   const date = parseIsoDate(isoDay);

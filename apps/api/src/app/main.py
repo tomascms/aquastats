@@ -29,8 +29,8 @@ from .core.http_security import (
 )
 from .routes.auth_routes import router as auth_router
 from .routes.data_routes import router as data_router
-from .routes.prediction_routes import router as prediction_router
 from .routes.coach_request_routes import router as coach_request_router
+from .routes.integration_routes import router as integration_router
 
 init_observability()
 settings = get_settings()
@@ -63,8 +63,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(data_router)
-app.include_router(prediction_router)
 app.include_router(coach_request_router)
+app.include_router(integration_router)
 
 
 @app.exception_handler(RuntimeError)
@@ -78,7 +78,8 @@ async def runtime_errors(request: Request, exc: RuntimeError):
 
 @app.exception_handler(StarletteHTTPException)
 async def http_errors(request: Request, exc: StarletteHTTPException):
-    detail = exc.detail if exc.status_code < 500 else "Erro interno."
+    # 503s are raised on purpose with a message for the user (e.g. mail provider down); other 5xx stay opaque.
+    detail = exc.detail if exc.status_code < 500 or exc.status_code == 503 else "Erro interno."
     if exc.status_code == 404:
         detail = "Não encontrado."
     return JSONResponse({"detail": detail, "requestId": getattr(request.state, "request_id", None)}, status_code=exc.status_code)

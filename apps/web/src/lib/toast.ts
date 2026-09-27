@@ -1,5 +1,7 @@
 "use client";
 
+import { tx, txDynamic } from "@/i18n";
+
 export type ToastTone = "success" | "error" | "info";
 
 export type Toast = {
@@ -40,6 +42,9 @@ export function pushToast(input: Omit<Toast, "id" | "ttlMs"> & { ttlMs?: number 
     id: crypto.randomUUID?.() ?? `${Date.now()}`,
     ttlMs: input.ttlMs ?? (input.tone === "error" ? 8000 : 4000),
     ...input,
+    // Callers pass Portuguese source text; show it in the active language.
+    message: txDynamic(input.message),
+    detail: input.detail ? txDynamic(input.detail) : input.detail,
   };
   toasts = [toast, ...toasts].slice(0, 4);
   emit();
@@ -58,7 +63,7 @@ export const toast = {
       tone: "error",
       message,
       detail,
-      actionLabel: onAction ? "Repetir" : undefined,
+      actionLabel: onAction ? tx("Repetir") : undefined,
       onAction,
     });
   },

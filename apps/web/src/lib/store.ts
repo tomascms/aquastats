@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
+import { tx, txDynamic } from "@/i18n";
 import { api, formatApiError, type ApiError } from "./api";
 import { toast } from "./toast";
 import {
@@ -34,19 +35,62 @@ import type {
   CellRef,
   Competition,
   CompetitionInput,
+  Goal,
+  GoalInput,
+  HrSession,
   MeetEntry,
   MeetResult,
   RaceSession,
   SeasonPlan,
+  SeedRecord,
   SplitTime,
   Stroke,
   TimeLog,
   TimeParts,
   Workout,
+  WellnessEntry,
   WorkoutInput,
 } from "./types";
 
-const LOCAL_KEYS = ["swimanalytics-ui-v9", "swimanalytics-ui-v8"];
+export type MeetFileOptions = {
+  dryRun?: boolean;
+  clubKey?: string;
+  mapping?: Record<string, string>;
+  competitionId?: string;
+  /** Regulations creating a new competition: what the coach confirmed. */
+  title?: string;
+  course?: "scm" | "lcm";
+  date?: string;
+  endDate?: string;
+};
+
+export type SwimRankingsImport = {
+  found: number;
+  added: number;
+  updated: number;
+  kept: number;
+  records: { course: string; stroke: string; distanceM: number; timeS: number; date: string | null; meet: string; action: "added" | "updated" | "kept" | "team" }[];
+};
+
+export type MeetFileSummary = {
+  kind: "entries" | "results" | "rules";
+  status: "needsClub" | "needsCompetition" | "ready" | "done";
+  competition?: Competition;
+  facts?: { label: string; value: string }[];
+  meet: { name: string; city: string; course: "scm" | "lcm"; date: string; endDate: string };
+  clubs?: { key: string; name: string; code: string | null; athletes: number }[];
+  club?: { key: string; name: string };
+  competitionId?: string | null;
+  competitionTitle?: string;
+  createsCompetition?: boolean;
+  athletes?: { name: string; events: number }[];
+  unmatched?: { key: string; name: string; birthDate: string | null }[];
+  teamAthletes?: { id: string; name: string }[];
+  entries?: number;
+  results?: number;
+};
+
+const LOCAL_KEYS =["swimanalytics-ui-v9", "swimanalytics-ui-v8"];
 const PENDING_TIMES_KEY = "aquastats-pending-times-v1";
 
 type Me = {
@@ -72,6 +116,8 @@ type Snapshot = {
   raceSessions?: RaceSession[];
   seasonPlans?: SeasonPlan[];
   attendance?: AttendanceSession[];
+  goals?: Goal[];
+  hrSessions?: HrSession[];
 };
 
 function emptyState(): AppState {
@@ -91,6 +137,8 @@ function emptyState(): AppState {
     raceSessions: [],
     seasonPlans: [],
     attendance: [],
+    goals: [],
+    hrSessions: [],
   };
 }
 
@@ -194,6 +242,8 @@ function applySnapshot(snapshot: Snapshot, role: AppState["role"], swimmerId = "
     })),
     seasonPlans: snapshot.seasonPlans ?? [],
     attendance: snapshot.attendance ?? [],
+    goals: snapshot.goals ?? [],
+    hrSessions: snapshot.hrSessions ?? [],
     syncing: false,
   });
 }
@@ -248,13 +298,15 @@ async function hydrate() {
     }
     bootError = null;
     if (state.timeLogs.some((log) => log.pending)) void retryPendingTimeLogs();
+    if (me.teamId && (me.role === "coach" || me.role === "swimmer")) void syncWatches();
+    if (me.teamId && me.role === "coach") void syncLiveMeets();
   } catch (error) {
     const status = (error as { status?: number }).status;
     if (status === 401) {
       state = emptyState();
       bootError = null;
     } else {
-      bootError = (error as { detail?: string }).detail || "Não foi possível ligar à API.";
+      bootError = txDynamic((error as { detail?: string }).detail || "Não foi possível ligar à API.");
       setState({ role: null });
     }
     emit();
@@ -264,10 +316,49 @@ async function hydrate() {
   }
 }
 
+/** Pulls new watch sessions (Polar) in the background; the API throttles per athlete. */
+async function syncWatches(force = false) {
+  try {
+    const result = await api<{ imported: number }>(`/api/v1/integrations/polar/sync${force ? "?force=1" : ""}`, {
+      method: "POST",
+      idempotencyKey: `polar-sync-${Date.now()}`,
+    });
+    if (result.imported > 0) await refreshSnapshot();
+    return result.imported;
+  } catch {
+    return 0;
+  }
+}
+
+/** During a meet with a live-results link, pull new start lists/results (the API throttles). */
+async function syncLiveMeets() {
+  try {
+    const result = await api<{ imported: number }>("/api/v1/live/sync", { method: "POST", idempotencyKey: `live-team-${Date.now()}` });
+    if (result.imported > 0) await refreshSnapshot();
+  } catch {
+    // Following live results is best-effort; the competition page has a manual refresh.
+  }
+}
+
 async function refreshSnapshot() {
   const snapshot = await api<Snapshot>("/api/v1/snapshot");
   applySnapshot(snapshot, state.role);
 }
+
+function onOnline() {
+  setState({ online: true });
+  void retryPendingTimeLogs();
+  toast.info(tx("Ligação restabelecida."), tx("A sincronizar tempos pendentes…"));
+}
+
+function onOffline() {
+  setState({ online: false });
+  toast.info(tx("Sem rede."), tx("Os tempos ficam guardados localmente até voltar a ligar."));
+}
+
+// Many components call useAppState; the network listeners must exist once, not once per component
+// (otherwise every connectivity change shows N toasts and starts N parallel resyncs).
+let networkSubscribers = 0;
 
 export function useAppState(): AppState {
   useEffect(() => {
@@ -278,20 +369,15 @@ export function useAppState(): AppState {
         emit();
       }
     }
-    const onOnline = () => {
-      setState({ online: true });
-      void retryPendingTimeLogs();
-      toast.info("Ligação restabelecida.", "A sincronizar tempos pendentes…");
-    };
-    const onOffline = () => {
-      setState({ online: false });
-      toast.info("Sem rede.", "Os tempos ficam guardados localmente até voltar a ligar.");
-    };
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
+    if (networkSubscribers++ === 0) {
+      window.addEventListener("online", onOnline);
+      window.addEventListener("offline", onOffline);
+    }
     return () => {
-      window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
+      if (--networkSubscribers === 0) {
+        window.removeEventListener("online", onOnline);
+        window.removeEventListener("offline", onOffline);
+      }
     };
   }, []);
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
@@ -403,6 +489,29 @@ export const actions = {
       method: "PATCH",
       body: JSON.stringify(input),
       idempotencyKey: `athlete-update-${id}-${Date.now()}`,
+    });
+    setState((current) => ({
+      ...current,
+      athletes: current.athletes.map((item) => (item.id === id ? athlete : item)),
+    }));
+  },
+  /** The swimmer's own partial update (only the fields sent change). */
+  async patchOwnAthlete(id: string, input: { wellness?: WellnessEntry[]; seedRecords?: SeedRecord[] }) {
+    const personal = id.startsWith("profile-");
+    const athlete = await api<Athlete>(personal ? "/api/v1/swimmer/profile" : `/api/v1/athletes/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+      idempotencyKey: `athlete-patch-${id}-${Date.now()}`,
+    });
+    setState((current) => ({ ...current, athletes: current.athletes.map((item) => (item.id === id || personal ? athlete : item)) }));
+    return athlete;
+  },
+  /** Coach-owned athlete fields: training group, and gender while the athlete hasn't set it. */
+  async coachUpdateAthlete(id: string, input: { groupName?: string; gender?: "M" | "F" }) {
+    const athlete = await api<Athlete>(`/api/v1/athletes/${id}/coach`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+      idempotencyKey: `athlete-coach-${id}-${Date.now()}`,
     });
     setState((current) => ({
       ...current,
@@ -542,6 +651,104 @@ export const actions = {
       body: JSON.stringify({ athleteIds }),
       idempotencyKey: `meet-ath-${competitionId}-${athleteId}-${inMeet ? "rm" : "add"}`,
     });
+  },
+  /**
+   * Sends an official meet file (Lenex). With dryRun the API only reports what it found;
+   * otherwise it fills the competition, selection, heats/lanes and results, then we reload.
+   */
+  async processMeetFile(file: { name: string; data: string }, options: MeetFileOptions = {}): Promise<MeetFileSummary> {
+    const body = { filename: file.name, data: file.data, ...options };
+    const summary = await api<MeetFileSummary>("/api/v1/meet-files/lenex", {
+      method: "POST",
+      body: JSON.stringify(body),
+      idempotencyKey: options.dryRun ? undefined : `meet-file-${file.name}-${file.data.length}-${Date.now()}`,
+    });
+    if (!options.dryRun) await refreshSnapshot();
+    return summary;
+  },
+  async saveGoal(input: GoalInput): Promise<Goal> {
+    const saved = await api<Goal>("/api/v1/goals", {
+      method: "PUT",
+      body: JSON.stringify(input),
+      idempotencyKey: `goal-${input.id ?? "new"}-${Date.now()}`,
+    });
+    setState((current) => ({
+      ...current,
+      goals: current.goals.some((goal) => goal.id === saved.id)
+        ? current.goals.map((goal) => (goal.id === saved.id ? saved : goal))
+        : [saved, ...current.goals],
+    }));
+    return saved;
+  },
+  /** Uploads a watch file (.FIT/.TCX); the API links it to the workout of that day and shift. */
+  async uploadHeartRate(file: { name: string; data: string }, athleteId: string, workoutId?: string): Promise<HrSession> {
+    const saved = await api<HrSession>("/api/v1/hr/upload", {
+      method: "POST",
+      body: JSON.stringify({ filename: file.name, data: file.data, athleteId, workoutId }),
+      idempotencyKey: `hr-${athleteId}-${file.name}-${file.data.length}`,
+    });
+    setState((current) => ({ ...current, hrSessions: [saved, ...current.hrSessions.filter((item) => item.id !== saved.id)] }));
+    return saved;
+  },
+  syncWatches,
+  /** Personal bests from a pasted SwimRankings profile (final times only; never overrides team data). */
+  async importSwimRankings(athleteId: string, input: { url?: string; text?: string }) {
+    const result = await api<SwimRankingsImport>(`/api/v1/athletes/${athleteId}/swimrankings`, {
+      method: "POST",
+      body: JSON.stringify(input),
+      idempotencyKey: `sr-${athleteId}-${Date.now()}`,
+    });
+    await refreshSnapshot();
+    return result;
+  },
+  /** Splits of a SwimRankings best time (coach or the athlete); the time itself never changes. */
+  async saveRecordSplits(athleteId: string, record: { course: string; stroke: string; distanceM: number; splits: SplitTime[] }) {
+    const athlete = await api<Athlete>(`/api/v1/athletes/${athleteId}/records/splits`, {
+      method: "PUT",
+      body: JSON.stringify(record),
+      idempotencyKey: `splits-${athleteId}-${record.course}-${record.stroke}-${record.distanceM}-${Date.now()}`,
+    });
+    setState((current) => ({ ...current, athletes: current.athletes.map((item) => (item.id === athleteId ? athlete : item)) }));
+    return athlete;
+  },
+  async setLiveLink(competitionId: string, url: string | null) {
+    await api(`/api/v1/competitions/${competitionId}/live`, {
+      method: "PUT",
+      body: JSON.stringify({ url }),
+      idempotencyKey: `live-${competitionId}-${Date.now()}`,
+    });
+    await refreshSnapshot();
+  },
+  async syncLive(competitionId: string): Promise<{ imported: number; status: string }> {
+    const result = await api<{ imported: number; status: string }>(`/api/v1/competitions/${competitionId}/live/sync`, {
+      method: "POST",
+      idempotencyKey: `live-sync-${competitionId}-${Date.now()}`,
+    });
+    await refreshSnapshot();
+    return result;
+  },
+  async deleteHeartRate(id: string) {
+    await api(`/api/v1/hr/${id}`, { method: "DELETE", idempotencyKey: `hr-del-${id}` });
+    setState((current) => ({ ...current, hrSessions: current.hrSessions.filter((item) => item.id !== id) }));
+  },
+  async deleteGoal(id: string) {
+    await api(`/api/v1/goals/${id}`, { method: "DELETE", idempotencyKey: `goal-del-${id}` });
+    setState((current) => ({ ...current, goals: current.goals.filter((goal) => goal.id !== id) }));
+  },
+  /** Adds or corrects an event by hand (number, day, heat/lane, entry time). */
+  async saveMeetEntry(input: Partial<MeetEntry> & { competitionId: string; athleteId: string; stroke: MeetEntry["stroke"]; distanceM: number }) {
+    const saved = await api<MeetEntry>("/api/v1/meet-entries", {
+      method: "PUT",
+      body: JSON.stringify(input),
+      idempotencyKey: `entry-save-${input.competitionId}-${input.athleteId}-${input.stroke}-${input.distanceM}-${Date.now()}`,
+    });
+    await refreshSnapshot();
+    return saved;
+  },
+  /** Deletes an event and its result. */
+  async deleteMeetEntry(id: string) {
+    await api(`/api/v1/meet-entries/${id}`, { method: "DELETE", idempotencyKey: `entry-del-${id}-${Date.now()}` });
+    await refreshSnapshot();
   },
   async toggleMeetEntry(competitionId: string, athleteId: string, stroke: MeetEntry["stroke"], distanceM: number) {
     const result = await api<MeetEntry | { deleted: true; id: string }>("/api/v1/meet-entries/toggle", {
@@ -769,7 +976,8 @@ export const actions = {
     const saved = await api<SeasonPlan>("/api/v1/season-plans", {
       method: "PUT",
       body: JSON.stringify(plan),
-      idempotencyKey: `plan-${plan.id}`,
+      // A new key per save: the same plan is saved many times while it is being edited.
+      idempotencyKey: `plan-${plan.id || "new"}-${Date.now()}`,
     });
     setState((current) => {
       const exists = current.seasonPlans.some((item) => item.id === saved.id);

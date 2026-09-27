@@ -1,3 +1,4 @@
+import { tx } from "@/i18n";
 import { addDays, weekStartMonday } from "./dates";
 import { analyzeRace, sessionForEntry } from "./race";
 import { toCentiseconds } from "./swim-time";
@@ -158,7 +159,7 @@ export function raceRecords(
       distanceM: seed.distanceM,
       timeS,
       venue: "",
-      meetTitle: "Recorde pessoal",
+      meetTitle: tx("Recorde pessoal"),
     });
   }
   for (const entry of entries.filter((item) => item.athleteId === athleteId)) {
@@ -167,7 +168,8 @@ export function raceRecords(
     const session = sessionForEntry(sessions, entry, meet.id);
     const result = results.find((item) => item.entryId === entry.id);
     const view = session ? analyzeRace(session) : null;
-    const timeS = view?.totalTime || (session?.officialTimeS ?? 0) || (result ? timeFromResult(result) : 0);
+    // The official result is the truth; an analysis total only fills in when there is none.
+    const timeS = (result ? timeFromResult(result) : 0) || view?.totalTime || (session?.officialTimeS ?? 0);
     if (timeS <= 0) continue;
     out.push({
       id: session?.id ?? `r-${result?.id ?? entry.id}`,

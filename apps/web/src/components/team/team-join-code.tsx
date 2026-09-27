@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT, useTDynamic } from "@/i18n/provider";
 import { api } from "@/lib/api";
 import { normalizeInvite, writeInviteCookie } from "@/lib/invite";
 import { safeNext } from "@/lib/safe-next";
@@ -11,6 +12,8 @@ type Props = {
 };
 
 export function TeamJoinCode({ compact, onJoined }: Props) {
+  const t = useT();
+  const td = useTDynamic();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -32,7 +35,7 @@ export function TeamJoinCode({ compact, onJoined }: Props) {
     event.preventDefault();
     const token = normalizeInvite(code);
     if (!token) {
-      setError("Código inválido.");
+      setError(t("Código inválido."));
       return;
     }
     setBusy(true);
@@ -46,7 +49,7 @@ export function TeamJoinCode({ compact, onJoined }: Props) {
       }
       window.location.assign(safeNext(result.next, "/swimmer"));
     } catch (err) {
-      setError((err as { detail?: string }).detail || "Não foi possível entrar na equipa.");
+      setError(td((err as { detail?: string }).detail || "Não foi possível entrar na equipa."));
       setBusy(false);
     }
   }
@@ -55,14 +58,14 @@ export function TeamJoinCode({ compact, onJoined }: Props) {
     <form className={compact ? "space-y-2" : "card space-y-3 p-4"} onSubmit={(event) => void join(event)}>
       {!compact ? (
         <div>
-          <h2 className="text-lg font-semibold">Código da equipa</h2>
+          <h2 className="text-lg font-semibold">{t("Código da equipa")}</h2>
           <p className="mt-1 text-sm text-mute">
-            Pede ao treinador o código de 8 caracteres (ex.: ABCD1234). Também podes usar o link de convite.
+            {t("Pede ao treinador o código de 8 caracteres (ex.: ABCD1234). Também podes usar o link de convite.")}
           </p>
         </div>
       ) : null}
       <label className="block text-sm" htmlFor="team-join-code">
-        Código
+        {t("Código")}
         <input
           id="team-join-code"
           className="field mt-1.5 uppercase tracking-widest"
@@ -78,9 +81,9 @@ export function TeamJoinCode({ compact, onJoined }: Props) {
           maxLength={8}
         />
       </label>
-      {teamName ? <p className="text-sm text-aqua">Equipa: {teamName}</p> : null}
+      {teamName ? <p className="text-sm text-aqua">{t("Equipa: {name}", { name: teamName })}</p> : null}
       <button type="submit" disabled={busy || code.length < 4} className="btn-primary h-10 w-full">
-        {busy ? "A entrar…" : "Entrar na equipa"}
+        {busy ? t("A entrar…") : t("Entrar na equipa")}
       </button>
       {error ? (
         <p className="text-sm text-coral" role="alert">

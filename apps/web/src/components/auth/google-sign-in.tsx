@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useT } from "@/i18n/provider";
 import { writeInviteCookie } from "@/lib/invite";
 
 export function GoogleSignIn({
@@ -10,6 +11,7 @@ export function GoogleSignIn({
   invite?: string;
   disabled?: boolean;
 }) {
+  const t = useT();
   useEffect(() => {
     if (invite) writeInviteCookie(invite);
   }, [invite]);
@@ -22,7 +24,7 @@ export function GoogleSignIn({
     <div>
       <div className="my-6 flex items-center gap-3 text-xs text-mute">
         <span className="h-px flex-1 bg-line" />
-        ou
+        {t("ou")}
         <span className="h-px flex-1 bg-line" />
       </div>
       <a
@@ -33,7 +35,7 @@ export function GoogleSignIn({
         }`}
       >
         <GoogleMark />
-        Continuar com Google
+        {t("Continuar com Google")}
       </a>
     </div>
   );

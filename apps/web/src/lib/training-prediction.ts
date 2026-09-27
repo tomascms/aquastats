@@ -1,3 +1,4 @@
+import { tx, type MessageKey } from "@/i18n";
 import { weekStartMonday } from "./dates";
 import { isPlausibleRep, type TrainingRep } from "./training-context";
 
@@ -44,7 +45,7 @@ const PATTERN_HALF_LIFE_DAYS = 180;
 const RIDGE_LAMBDA = 4;
 const MIN_GROUP_REFS = 2;
 const BREAK_DAYS = 10;
-const WEEKDAY_NAMES = ["Segundas", "Terças", "Quartas", "Quintas", "Sextas", "Sábados", "Domingos"];
+const WEEKDAY_NAMES: MessageKey[] = ["Segundas", "Terças", "Quartas", "Quintas", "Sextas", "Sábados", "Domingos"];
 
 const DAY_MS = 86_400_000;
 const dayNumber = (iso: string) => Math.round(Date.parse(`${iso}T12:00:00Z`) / DAY_MS);
@@ -76,7 +77,7 @@ function sessionContext(rows: TrainingRep[]): Map<string, Context> {
   return out;
 }
 
-type FeatureSpec = { key: string; label: string; step: number; value: (row: TrainingRep, extra: RowExtra) => number };
+type FeatureSpec = { key: string; label: MessageKey; step: number; value: (row: TrainingRep, extra: RowExtra) => number };
 type RowExtra = { ctx: Context; restDelta: number | null };
 
 const FEATURES: FeatureSpec[] = [
@@ -268,7 +269,7 @@ export function predictTrainingTargets(rows: TrainingRep[]): Map<string, Trainin
       confidence,
       groupN: sample.level.n,
       trainN: fit.n,
-      basis: `${sample.level.n} reps anteriores iguais · padrões de ${fit.n} reps`,
+      basis: tx("{same} reps anteriores iguais · padrões de {total} reps", { same: sample.level.n, total: fit.n }),
     });
   }
   return out;
@@ -290,7 +291,7 @@ export function learnedPatterns(rows: TrainingRep[]): { effects: LearnedEffect[]
   const effects: LearnedEffect[] = FEATURES.map((spec, i) => {
     const raw = fit.beta[i + 1] * spec.step;
     const pct = (spec.key.startsWith("weekday-") ? raw - dayMean : raw) * 100;
-    return { key: spec.key, label: spec.key.startsWith("weekday-") ? `${spec.label} face à média da semana` : spec.label, pct, support: support[i] };
+    return { key: spec.key, label: spec.key.startsWith("weekday-") ? tx("{day} face à média da semana", { day: tx(spec.label) }) : tx(spec.label), pct, support: support[i] };
   }).filter((effect) => effect.support >= 5 && (effect.key !== "sendoff" || effect.support >= 5));
 
   return { effects, n: fit.n };

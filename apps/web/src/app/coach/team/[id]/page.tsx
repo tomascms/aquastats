@@ -1,21 +1,27 @@
 "use client";
 
 import Link from "next/link";
+import { GoalsPanel } from "@/components/goals/goals-panel";
+import { SwimRankingsCard } from "@/components/team/swimrankings-card";
+import { WellnessCalendar } from "@/components/wellness/wellness-calendar";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo } from "react";
-import { COURSE_LABEL, GENDER_LABEL, ageFromDob, formatDatePt, formatEvent, initials, strokeLabel } from "@/lib/labels";
+import { useMemo, useState } from "react";
+import { COURSE_LABEL, GENDER_LABEL, ageFromDob, displayTitle, formatDatePt, formatEvent, initials, strokeLabel } from "@/lib/labels";
 import { formatRaceClock } from "@/lib/race";
 import { athleteVolumeM, formatMeters, weeklyVolume, workoutMeters } from "@/lib/rankings";
 import { personalRecords } from "@/lib/records";
 import { formatSet } from "@/lib/set";
 import { actions, useAppState } from "@/lib/store";
 import { hasClockTime } from "@/lib/swim-time";
+import { useT } from "@/i18n/provider";
 
 export default function AthletePage() {
+  const t = useT();
   const params = useParams<{ id: string }>();
   const { athletes, workouts, timeLogs, competitions, meetEntries, meetResults, raceSessions } = useAppState();
   const athlete = athletes.find((item) => item.id === params.id);
   const router = useRouter();
+  const [openMeet, setOpenMeet] = useState<string | null>(null);
 
   const records = useMemo(
     () => personalRecords(competitions, meetEntries, meetResults, athlete?.id, athlete?.seedRecords),
@@ -37,9 +43,9 @@ export default function AthletePage() {
   if (!athlete) {
     return (
       <div className="py-10 text-center text-mute">
-        Atleta não encontrado.
+        {t("Atleta não encontrado.")}
         <Link href="/coach/team" className="mt-3 block text-aqua">
-          Voltar à equipa
+          {t("Voltar à equipa")}
         </Link>
       </div>
     );
@@ -56,7 +62,7 @@ export default function AthletePage() {
   return (
     <div className="space-y-6">
       <Link href="/coach/team" className="text-sm font-semibold text-pool hover:underline">
-        ← Equipa
+        ← {t("Equipa")}
       </Link>
 
       <section className="overflow-hidden rounded-2xl bg-aqua text-white">
@@ -70,36 +76,29 @@ export default function AthletePage() {
               {[
                 strokeLabel(athlete.primaryStroke),
                 athlete.gender === "M" || athlete.gender === "F" ? GENDER_LABEL[athlete.gender] : "",
-                age != null ? `${age} anos` : "",
+                age != null ? t("{age} anos", { age }) : "",
               ]
                 .filter(Boolean)
-                .join(" · ") || "Sem dados de perfil"}
+                .join(" · ") || t("Sem dados de perfil")}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-white/65">Género</span>
-              {(["M", "F"] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={athlete.gender === value}
-                  onClick={() =>
-                    void actions.updateAthlete(athlete.id, {
-                      name: athlete.name,
-                      primaryStroke: athlete.primaryStroke || "",
-                      isPlaceholder: Boolean(athlete.isPlaceholder),
-                      gender: value,
-                    })
-                  }
-                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
-                    athlete.gender === value ? "bg-white text-aqua" : "border border-white/30 text-white/80 hover:border-white/70"
-                  }`}
-                >
-                  {GENDER_LABEL[value]}
-                </button>
-              ))}
-              {athlete.gender !== "M" && athlete.gender !== "F" ? (
-                <span className="text-xs text-[#ffd8a8]">Necessário para calcular os pontos FINA.</span>
-              ) : null}
+
+              {athlete.gender === "M" || athlete.gender === "F" ? null : (
+                <>
+                  <span className="text-xs text-white/65">{t("Género")}</span>
+                  {(["M", "F"] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => void actions.coachUpdateAthlete(athlete.id, { gender: value })}
+                      className="rounded-md border border-white/30 px-2.5 py-1 text-xs font-semibold text-white/80 transition-colors hover:border-white/70"
+                    >
+                      {GENDER_LABEL[value]}
+                    </button>
+                  ))}
+                  <span className="text-xs text-[#ffd8a8]">{t("Necessário para calcular os pontos FINA.")}</span>
+                </>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -107,14 +106,16 @@ export default function AthletePage() {
               href={`/coach/provas?atleta=${athlete.id}`}
               className="inline-flex min-h-10 items-center rounded-lg bg-white px-4 text-sm font-semibold text-aqua hover:bg-aqua-soft"
             >
-              Ver análise
+              {t("Ver análise")}
             </Link>
             <button
               type="button"
               onClick={() => {
                 if (
                   window.confirm(
-                    `Remover ${athlete.name} da equipa?\n\nPerde acesso à equipa na app, mas o histórico de treinos e provas fica guardado para análises.`,
+                    t("Remover {name} da equipa?", { name: athlete.name }) +
+                      "\n\n" +
+                      t("Perde acesso à equipa na app, mas o histórico de treinos e provas fica guardado para análises."),
                   )
                 ) {
                   void actions.removeAthlete(athlete.id).then(() => router.push("/coach/team"));
@@ -122,16 +123,16 @@ export default function AthletePage() {
               }}
               className="min-h-10 rounded-lg border border-white/25 px-4 text-sm font-semibold text-white/85 hover:border-white/60"
             >
-              Remover da equipa
+              {t("Remover da equipa")}
             </button>
           </div>
         </div>
         <dl className="grid grid-cols-2 border-t border-white/15 sm:grid-cols-4">
           {[
-            { label: "Volume total", value: formatMeters(total) },
-            { label: "Esta semana", value: formatMeters(thisWeek) },
-            { label: "Treinos", value: String(mineWorkouts.length) },
-            { label: "Registos de prova", value: String(raceCount) },
+            { label: t("Volume total"), value: formatMeters(total) },
+            { label: t("Esta semana"), value: formatMeters(thisWeek) },
+            { label: t("Treinos"), value: String(mineWorkouts.length) },
+            { label: t("Registos de prova"), value: String(raceCount) },
           ].map((item) => (
             <div key={item.label} className="border-white/15 px-6 py-4 [&:not(:last-child)]:border-r">
               <dt className="text-xs text-white/65">{item.label}</dt>
@@ -141,10 +142,16 @@ export default function AthletePage() {
         </dl>
       </section>
 
+      <SwimRankingsCard athlete={athlete} role="coach" />
+
+      <WellnessCalendar athlete={athlete} editable={false} />
+
+      <GoalsPanel athleteId={athlete.id} role="coach" />
+
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <section className="rounded-2xl border border-line bg-panel p-5">
-          <h2 className="font-display text-2xl font-bold">Volume semanal</h2>
-          <p className="text-sm text-mute">Últimas 10 semanas.</p>
+          <h2 className="font-display text-2xl font-bold">{t("Volume semanal")}</h2>
+          <p className="text-sm text-mute">{t("Últimas 10 semanas.")}</p>
           <div className="mt-5 flex h-44 items-end gap-2">
             {weeks.map((week, index) => {
               const current = index === weeks.length - 1;
@@ -163,88 +170,72 @@ export default function AthletePage() {
               );
             })}
           </div>
-          <p className="mt-2 text-xs text-mute">Valores em km. A semana atual está destacada.</p>
+          <p className="mt-2 text-xs text-mute">{t("Valores em km. A semana atual está destacada.")}</p>
         </section>
 
-        <section className="overflow-hidden rounded-2xl border border-line bg-panel">
-          <div className="px-5 pb-3 pt-5">
-            <h2 className="font-display text-2xl font-bold">Recordes pessoais</h2>
-          </div>
-          {records.length === 0 ? (
-            <p className="px-5 pb-6 text-sm text-mute">Ainda não há recordes pessoais.</p>
-          ) : (
-            <table className="w-full text-left text-sm">
-              <thead className="bg-panel-2 text-xs font-semibold text-mute">
-                <tr>
-                  <th className="px-5 py-2.5">Prova</th>
-                  <th className="px-3 py-2.5">Piscina</th>
-                  <th className="px-5 py-2.5 text-right">Tempo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((record) => (
-                  <tr key={`${record.course}-${record.stroke}-${record.distanceM}`} className="border-t border-line">
-                    <td className="px-5 py-3">
-                      <span className="font-semibold text-mist">{formatEvent(record.distanceM, record.stroke)}</span>
-                      <span className="block text-xs text-mute">{record.date ? formatDatePt(record.date) : "—"}</span>
-                    </td>
-                    <td className="px-3 py-3 text-mute">{COURSE_LABEL[record.course]}</td>
-                    <td className="px-5 py-3 text-right">
-                      <span className="font-display text-2xl font-bold tabular text-mist">
-                        {formatRaceClock(seconds(record.mm, record.ss, record.cc))}
-                      </span>
-                      {record.source === "seed" && record.splits?.length ? (
-                        <span className="block text-[11px] text-mute">
-                          {record.splits.map((split) => `${split.atM} m ${formatRaceClock(seconds(split.mm, split.ss, split.cc))}`).join(" · ")}
-                        </span>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
+
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <section className="overflow-hidden rounded-2xl border border-line bg-panel">
-          <h2 className="px-5 pb-3 pt-5 font-display text-2xl font-bold">Competições</h2>
+          <h2 className="px-5 pb-3 pt-5 font-display text-2xl font-bold">{t("Competições")}</h2>
           {mineResults.length === 0 ? (
-            <p className="px-5 pb-6 text-sm text-mute">Ainda não foi convocado.</p>
+            <p className="px-5 pb-6 text-sm text-mute">{t("Ainda não foi convocado.")}</p>
           ) : (
             <ul>
-              {mineResults.map(({ entry, meet, result }) => (
-                <li key={entry.id} className="border-t border-line">
-                  <Link
-                    href={`/coach/competicoes/${meet?.id}/resultados/${entry.id}`}
-                    className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-panel-2"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold text-mist">
-                        {formatEvent(entry.distanceM, entry.stroke)} · {meet?.title}
+              {[...new Map(mineResults.map((item) => [item.meet!.id, item.meet!])).values()].map((meet) => {
+                const rows = mineResults.filter((item) => item.meet?.id === meet.id);
+                const open = openMeet === meet.id;
+                return (
+                  <li key={meet.id} className="border-t border-line">
+                    <button
+                      type="button"
+                      aria-expanded={open}
+                      onClick={() => setOpenMeet(open ? null : meet.id)}
+                      className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left hover:bg-panel-2"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold text-mist">{meet.title}</span>
+                        <span className="block text-xs text-mute">
+                          {formatDatePt(meet.date)} · {COURSE_LABEL[meet.course]} · {t("{count} provas", { count: rows.length })}
+                        </span>
                       </span>
-                      <span className="block text-xs text-mute">
-                        {formatDatePt(meet?.date ?? "")}
-                        {meet ? ` · ${COURSE_LABEL[meet.course]}` : ""}
-                      </span>
-                    </span>
-                    <span className="font-display text-xl font-bold tabular text-mist">
-                      {result && hasClockTime(result.mm, result.ss, result.cc)
-                        ? formatRaceClock(seconds(result.mm, result.ss, result.cc))
-                        : "—"}
-                    </span>
-                  </Link>
-                </li>
-              ))}
+                      <span className="text-mute">{open ? "▾" : "▸"}</span>
+                    </button>
+                    {open ? (
+                      <table className="w-full text-sm tabular">
+                        <tbody>
+                          {rows.map(({ entry, result }) => {
+                            const final = result?.swims?.final ?? result?.swims?.heat;
+                            return (
+                              <tr key={entry.id} className="border-t border-line bg-panel-2/50">
+                                <td className="px-5 py-2 font-semibold text-mist">{formatEvent(entry.distanceM, entry.stroke)}</td>
+                                <td className="px-2 py-2 text-right text-xs text-mute">{final?.place ? `${final.place}.º ${final.category ?? ""}` : ""}</td>
+                                <td className="px-2 py-2 text-right font-display text-lg font-bold">
+                                  {result && hasClockTime(result.mm, result.ss, result.cc) ? formatRaceClock(seconds(result.mm, result.ss, result.cc)) : "—"}
+                                </td>
+                                <td className="px-5 py-2 text-right text-xs font-semibold">
+                                  <Link href={`/coach/competicoes/${meet.id}/resultados/${entry.id}`} className="text-pool hover:underline">
+                                    {t("Detalhes")}
+                                  </Link>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
 
         <section className="overflow-hidden rounded-2xl border border-line bg-panel">
-          <h2 className="px-5 pb-3 pt-5 font-display text-2xl font-bold">Treinos</h2>
+          <h2 className="px-5 pb-3 pt-5 font-display text-2xl font-bold">{t("Treinos")}</h2>
           {mineWorkouts.length === 0 ? (
-            <p className="px-5 pb-6 text-sm text-mute">Ainda não entrou em nenhum treino.</p>
+            <p className="px-5 pb-6 text-sm text-mute">{t("Ainda não entrou em nenhum treino.")}</p>
           ) : (
             <ul className="max-h-[420px] overflow-auto">
               {mineWorkouts.map((workout) => {
@@ -253,11 +244,11 @@ export default function AthletePage() {
                   <li key={workout.id} className="border-t border-line">
                     <Link href={`/coach/workouts/${workout.id}`} className="block px-5 py-3 hover:bg-panel-2">
                       <span className="flex items-baseline justify-between gap-3">
-                        <span className="font-semibold text-mist">{workout.title}</span>
+                        <span className="font-semibold text-mist">{displayTitle(workout.title)}</span>
                         <span className="font-display text-lg font-bold tabular">{formatMeters(workoutMeters(workout))}</span>
                       </span>
                       <span className="block text-xs text-mute">
-                        {formatDatePt(workout.date)} · {logs.length} tempos
+                        {formatDatePt(workout.date)} · {t("{count} tempos", { count: logs.length })}
                       </span>
                       <span className="mt-1 block truncate text-xs text-sand">{workout.blocks.map((block) => formatSet(block)).join(" · ")}</span>
                     </Link>

@@ -96,10 +96,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+# Official meet files (Lenex/PDF, base64) are bigger than normal JSON; bounded separately.
+_UPLOAD_PREFIXES = ("/api/v1/meet-files/", "/api/v1/hr/")
+UPLOAD_BODY_BYTES = 21 * 1024 * 1024  # 15 MB files, base64-encoded
+
+
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         length = request.headers.get("content-length")
-        if length and length.isdigit() and int(length) > get_settings().max_request_body_bytes:
+        limit = UPLOAD_BODY_BYTES if request.url.path.startswith(_UPLOAD_PREFIXES) else get_settings().max_request_body_bytes
+        if length and length.isdigit() and int(length) > limit:
             return JSONResponse({"detail": "Pedido demasiado grande."}, status_code=413)
         return await call_next(request)
 

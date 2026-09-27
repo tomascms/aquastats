@@ -6,8 +6,10 @@ import { RaceResultSheet } from "@/components/competicoes/race-result-sheet";
 import { formatEvent } from "@/lib/labels";
 import { sessionForEntry } from "@/lib/race";
 import { useAppState } from "@/lib/store";
+import { useT } from "@/i18n/provider";
 
 export default function ResultEditPage() {
+  const t = useT();
   const params = useParams<{ id: string; entryId: string }>();
   const { athletes, competitions, meetEntries, meetResults, raceSessions } = useAppState();
   const meet = competitions.find((item) => item.id === params.id);
@@ -19,9 +21,9 @@ export default function ResultEditPage() {
   if (!meet || !entry || !athlete) {
     return (
       <div className="py-10 text-center text-mute">
-        Resultado não encontrado.
-        <Link href={meet ? `/coach/competicoes/${meet.id}/resultados` : "/coach/competicoes"} className="mt-3 block text-aqua">
-          Voltar
+        {t("Resultado não encontrado.")}
+        <Link href={meet ? `/coach/competicoes/${meet.id}` : "/coach/competicoes"} className="mt-3 block text-aqua">
+          {t("Voltar")}
         </Link>
       </div>
     );

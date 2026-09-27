@@ -1,10 +1,11 @@
+import { localizedMap } from "@/i18n";
 import { cleanSplitMarks, formatDistance, formatReps, MIN_DISTANCE } from "./distances";
 import { DEFAULT_SEND_OFF, snapSendOff } from "./send-off";
-import type { BlockType, DraftBlock, Gear, Intensity, RepDetail, SetSegment, WorkoutBlock } from "./types";
+import type { BlockType, DraftBlock, Gear, Intensity, RepDetail, SegmentBand, SetSegment, WorkoutBlock } from "./types";
 
 export const INTENSITIES: Intensity[] = ["SUAVE", "A1", "A2", "A3", "PA", "MAX", "P50", "P100", "P200", "P400"];
 
-export const INTENSITY_LABEL: Record<Intensity, string> = {
+export const INTENSITY_LABEL = localizedMap<Intensity>({
   SUAVE: "Suave",
   A1: "A1",
   A2: "A2",
@@ -15,7 +16,7 @@ export const INTENSITY_LABEL: Record<Intensity, string> = {
   P100: "Ritmo 100",
   P200: "Ritmo 200",
   P400: "Ritmo 400",
-};
+});
 
 export function needsClockTime(intensity: Intensity): boolean {
   return intensity !== "SUAVE" && intensity !== "A1";
@@ -23,14 +24,14 @@ export function needsClockTime(intensity: Intensity): boolean {
 
 export const GEARS: Gear[] = ["legs", "arms", "paddles", "pullbuoy", "parachute", "fins"];
 
-export const GEAR_LABEL: Record<Gear, string> = {
+export const GEAR_LABEL = localizedMap<Gear>({
   legs: "Pernas",
   arms: "Braços",
   paddles: "Palas",
   pullbuoy: "Pullbuoy",
   parachute: "Paraquedas",
   fins: "Barbatanas",
-};
+});
 
 export type FlatInner = {
   index: number;
@@ -176,7 +177,22 @@ export function normalizeSegment(segment: Partial<SetSegment> | undefined): SetS
     details: [],
   };
   next.details = resizeDetails(segment?.details, reps, makeDetail(next));
+  const bands = cleanBands(segment?.bands);
+  if (bands.length) next.bands = bands;
   return next;
+}
+
+function cleanBands(bands: SegmentBand[] | undefined): SegmentBand[] {
+  const seen = new Set<string>();
+  return (bands ?? [])
+    .map((band) => ({ group: String(band?.group ?? "").trim().slice(0, 40), sendOffSeconds: snapSendOff(band?.sendOffSeconds) }))
+    .filter((band) => band.group && !seen.has(band.group) && seen.add(band.group));
+}
+
+/** Send-off a swimmer of `group` actually leaves on for this rep. */
+export function sendOffFor(segment: SetSegment | undefined, detailSendOff: number | null, group?: string): number | null {
+  if (detailSendOff == null || !segment?.bands?.length || !group) return detailSendOff;
+  return segment.bands.find((band) => band.group === group)?.sendOffSeconds ?? detailSendOff;
 }
 
 export function applySegmentDefaults(
