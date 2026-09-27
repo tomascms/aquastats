@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -22,22 +24,41 @@ def integrations_status(payload: dict = Depends(require_member), session: Sessio
     return {"polar": polar.status(session, payload)}
 
 
+NONCE_COOKIE = "polar_nonce"
+NONCE_PATH = "/api/v1/integrations/polar"
+
+
 @router.get("/polar/start")
 def polar_start(payload: dict = Depends(require_member)):
-    return RedirectResponse(polar.authorize_url(payload), status_code=303)
+    nonce = secrets.token_urlsafe(32)
+    response = RedirectResponse(polar.authorize_url(payload, nonce), status_code=303)
+    settings = get_settings()
+    response.set_cookie(
+        NONCE_COOKIE,
+        nonce,
+        max_age=600,
+        httponly=True,
+        secure=settings.is_production or settings.app_url.startswith("https://"),
+        samesite="lax",
+        path=NONCE_PATH,
+    )
+    return response
 
 
 @router.get("/polar/callback")
 def polar_callback(request: Request, session: Session = Depends(get_session)):
     code, state = request.query_params.get("code"), request.query_params.get("state")
     if request.query_params.get("error") or not code or not state:
-        return _back("cancelled")
-    set_system_context(session)
-    try:
-        polar.finish(session, code, state)
-    except HTTPException:
-        return _back("error")
-    return _back("ok")
+        response = _back("cancelled")
+    else:
+        set_system_context(session)
+        try:
+            polar.finish(session, code, state, request.cookies.get(NONCE_COOKIE))
+            response = _back("ok")
+        except HTTPException:
+            response = _back("error")
+    response.delete_cookie(NONCE_COOKIE, path=NONCE_PATH)
+    return response
 
 
 @router.post("/polar/sync")

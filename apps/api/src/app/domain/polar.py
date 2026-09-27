@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import os
 import time
 import urllib.parse
@@ -60,14 +61,27 @@ def _open(sealed: str) -> str:
     return AESGCM(_key()).decrypt(raw[:12], raw[12:], None).decode()
 
 
-def authorize_url(payload: dict) -> str:
+def _nonce_hash(nonce: str) -> str:
+    return hashlib.sha256(("polar-nonce:" + nonce).encode()).hexdigest()
+
+
+def authorize_url(payload: dict, nonce: str) -> str:
+    """The state carries a hash of `nonce`, which the caller also sets as a browser cookie, so a
+    consent link started by one person can't be finished in someone else's browser."""
     if not enabled():
         raise HTTPException(status_code=503, detail="Ligação à Polar indisponível.")
     athlete_id = payload.get("athlete_uuid")
     if payload.get("role") != "swimmer" or not athlete_id:
         raise HTTPException(status_code=403, detail="Só o atleta pode ligar a sua conta Polar.")
     state = sign_oauth_state(
-        {"k": "polar", "a": str(athlete_id), "u": str(payload["user_id"]), "t": str(payload["team_uuid"]), "exp": int(time.time()) + 600}
+        {
+            "k": "polar",
+            "a": str(athlete_id),
+            "u": str(payload["user_id"]),
+            "t": str(payload["team_uuid"]),
+            "n": _nonce_hash(nonce),
+            "exp": int(time.time()) + 600,
+        }
     )
     params = {"response_type": "code", "client_id": get_settings().polar_client_id, "redirect_uri": redirect_uri(), "state": state}
     return f"{AUTH_URL}?{urllib.parse.urlencode(params)}"
@@ -82,10 +96,12 @@ def _basic() -> str:
     return "Basic " + base64.b64encode(f"{settings.polar_client_id}:{settings.polar_client_secret}".encode()).decode()
 
 
-def finish(session: Session, code: str, state: str) -> None:
+def finish(session: Session, code: str, state: str, nonce: str | None) -> None:
     data = read_oauth_state(state)
     if not data or data.get("k") != "polar":
         raise HTTPException(status_code=400, detail="Ligação à Polar expirou. Tenta outra vez.")
+    if not nonce or not hmac.compare_digest(str(data.get("n") or ""), _nonce_hash(nonce)):
+        raise HTTPException(status_code=400, detail="Ligação à Polar tem de ser concluída no mesmo browser.")
     assert_safe_url(TOKEN_URL)
     with _client() as client:
         response = client.post(
