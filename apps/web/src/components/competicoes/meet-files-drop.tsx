@@ -284,12 +284,6 @@ function RulesPreview({
   const [start, setStart] = useState(summary.meet?.date ?? "");
   const [end, setEnd] = useState(summary.meet?.endDate ?? "");
   const ready = !creates || (title.trim() && course && start);
-  // Fields the reading couldn't confirm in the PDF (or where two readings disagree) are highlighted.
-  const toCheck = new Set(summary.check ?? []);
-  const flagged = toCheck.size > 0 || Boolean(summary.facts?.some((fact) => fact.check));
-  const confirm = (key: string) => (toCheck.has(key) ? " border-[#e0a100] bg-[#fff8e6]" : "");
-  const hint = (key: string) =>
-    toCheck.has(key) ? <span className="mt-1 block text-[11px] font-medium text-[#8a5a00]">{t("Confirma no PDF")}</span> : null;
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-panel">
       <header className="border-b border-line bg-panel-2 px-4 py-3">
@@ -297,55 +291,44 @@ function RulesPreview({
           {t("Regulamento")} · {name}
         </p>
         {creates ? <p className="mt-0.5 text-sm text-mist">{t("Confirma os dados e a competição fica criada. A start list juntas quando sair.")}</p> : null}
-        {flagged ? (
-          <p className="mt-2 rounded-md bg-[#fff8e6] px-2.5 py-1.5 text-xs font-medium text-[#8a5a00]">
-            {t("Os campos destacados não foram confirmados no PDF. Verifica-os antes de continuar.")}
-          </p>
-        ) : null}
       </header>
       {creates ? (
         <div className="grid gap-3 border-b border-line px-4 py-3 sm:grid-cols-4">
           <label className="text-xs font-semibold text-mute sm:col-span-4">
             {t("Nome da competição")}
-            <input className={`field mt-1${confirm("name")}`} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={120} />
-            {hint("name")}
+            <input className="field mt-1" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={120} />
           </label>
           <div className="text-xs font-semibold text-mute">
             {t("Piscina")}
-            <div className={`mt-1 grid grid-cols-2 gap-1 rounded-lg border border-line p-0.5${confirm("course")}`}>
+            <div className="mt-1 grid grid-cols-2 gap-1 rounded-lg border border-line p-0.5">
               {(["scm", "lcm"] as const).map((item) => (
                 <button
                   key={item}
                   type="button"
                   onClick={() => setCourse(item)}
-                  className={`rounded-md py-1.5 text-sm font-semibold ${course === item ? "bg-ink text-white" : "text-mute"}`}
+                  className={`rounded-md py-1.5 text-sm font-semibold ${course === item ? "bg-mist text-white" : "text-mute"}`}
                 >
                   {COURSE_LABEL[item]}
                 </button>
               ))}
             </div>
-            {hint("course")}
           </div>
           <label className="text-xs font-semibold text-mute">
             {t("De")}
-            <input type="date" className={`field mt-1${confirm("dates")}`} value={start} onChange={(event) => setStart(event.target.value)} />
-            {hint("dates")}
+            <input type="date" className="field mt-1" value={start} onChange={(event) => setStart(event.target.value)} />
           </label>
           <label className="text-xs font-semibold text-mute">
             {t("Até")}
-            <input type="date" className={`field mt-1${confirm("dates")}`} value={end} min={start} onChange={(event) => setEnd(event.target.value)} />
+            <input type="date" className="field mt-1" value={end} min={start} onChange={(event) => setEnd(event.target.value)} />
           </label>
         </div>
       ) : null}
       <table className="w-full text-sm">
         <tbody>
           {summary.facts?.map((fact) => (
-            <tr key={fact.label} className={`border-b border-line last:border-0 ${fact.check ? "bg-[#fff8e6]" : ""}`}>
+            <tr key={fact.label} className="border-b border-line last:border-0">
               <th className="w-44 bg-panel-2/60 px-4 py-2 text-left align-top text-xs font-semibold text-mute">{td(fact.label)}</th>
-              <td className="px-4 py-2 text-mist">
-                {fact.value}
-                {fact.check ? <span className="ml-2 whitespace-nowrap text-[11px] font-semibold text-[#8a5a00]">{t("Confirma no PDF")}</span> : null}
-              </td>
+              <td className="px-4 py-2 text-mist">{fact.value}</td>
             </tr>
           ))}
         </tbody>

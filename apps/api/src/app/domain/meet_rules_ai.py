@@ -6,6 +6,7 @@ problem — no key, timeout, quota, bad answer — so the caller falls back to t
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
@@ -83,16 +84,20 @@ def _pt(day: date) -> str:
 _CACHE: dict[str, dict] = {}
 
 
-def read_regulations(text: str) -> dict | None:
+MAX_PDF_BYTES = 15 * 1024 * 1024
+
+
+def read_regulations(text: str, pdf: bytes | None = None) -> dict | None:
     """{"name", "venue", "course", "dates": (start, end) | None, "facts": [...]} or None.
-    Preview and confirm send the same file, so answers are kept per text for the instance's life."""
+    The PDF itself is sent when available (tables and layout are read as printed; extracted text
+    breaks them). Preview and confirm send the same file, so answers are kept per file."""
     settings = get_settings()
-    if not settings.gemini_api_key or not text.strip():
+    if not settings.gemini_api_key or not (text.strip() or pdf):
         return None
-    key = hashlib.sha256(text[:MAX_CHARS].encode()).hexdigest()
+    key = hashlib.sha256(pdf or text[:MAX_CHARS].encode()).hexdigest()
     if key in _CACHE:
         return _CACHE[key]
-    result = _ask(text, settings)
+    result = _ask(text, settings, pdf if pdf and len(pdf) <= MAX_PDF_BYTES else None)
     if result is not None:
         if len(_CACHE) > 200:
             _CACHE.clear()
@@ -100,21 +105,31 @@ def read_regulations(text: str) -> dict | None:
     return result
 
 
-def _ask(text: str, settings) -> dict | None:
+def _ask(text: str, settings, pdf: bytes | None = None) -> dict | None:
+    parts = (
+        [{"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(pdf).decode()}}, {"text": "Extract the facts from this regulation."}]
+        if pdf
+        else [{"text": text[:MAX_CHARS]}]
+    )
     body = {
         "systemInstruction": {"parts": [{"text": PROMPT}]},
-        "contents": [{"role": "user", "parts": [{"text": text[:MAX_CHARS]}]}],
+        "contents": [{"role": "user", "parts": parts}],
         "generationConfig": {"temperature": 0, "responseMimeType": "application/json", "responseSchema": SCHEMA},
     }
     # The free tier is often busy (429/503). The full model reads tables better, so it gets a few
     # tries with a short wait before the lighter one is used.
-    attempts = [(settings.gemini_model, 0), (settings.gemini_model, 3), (settings.gemini_model, 6), ("gemini-flash-lite-latest", 0)]
+    attempts = [(settings.gemini_model, 0), (settings.gemini_model, 2), (settings.gemini_model, 4), (settings.gemini_model, 8), ("gemini-flash-lite-latest", 0)]
     data = None
+    # The coach is waiting on the preview: never more than ~40 s, then the local reading answers.
+    deadline = time.monotonic() + 40
     for model, wait in attempts:
+        left = deadline - time.monotonic() - wait
+        if left < 5:
+            break
         if wait:
             time.sleep(wait)
         try:
-            response = httpx.post(URL.format(model=model), json=body, headers={"x-goog-api-key": settings.gemini_api_key}, timeout=30.0)
+            response = httpx.post(URL.format(model=model), json=body, headers={"x-goog-api-key": settings.gemini_api_key}, timeout=min(30.0, left))
             response.raise_for_status()
             data = json.loads(response.json()["candidates"][0]["content"]["parts"][0]["text"])
             break

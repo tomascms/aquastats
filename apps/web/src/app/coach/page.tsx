@@ -124,7 +124,7 @@ function CoachCalendar() {
             type="button"
             aria-pressed={group === value}
             onClick={() => setGroup(value)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${group === value ? "bg-ink text-white" : "text-mute hover:text-mist"}`}
+            className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${group === value ? "bg-mist text-white" : "text-mute hover:text-mist"}`}
           >
             {value ? GROUP_LABEL[value] : t("Equipa toda")}
           </button>

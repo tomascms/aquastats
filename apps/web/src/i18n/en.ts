@@ -1229,7 +1229,9 @@ export const en = {
   "Mais rápido no treino do que o habitual (28 dias)": "Faster in training than usual (28 days)",
   "Quebra nas séries fortes face ao habitual (28 dias)": "Fade in hard sets vs usual (28 days)",
   "Reps fortes ao nível habitual por semana (28 dias)": "Hard reps at usual level per week (28 days)",
-  "Confirma no PDF": "Check in the PDF",
-  "Os campos destacados não foram confirmados no PDF. Verifica-os antes de continuar.": "The highlighted fields couldn't be confirmed in the PDF. Check them before continuing.",
+  "Histórico": "History",
+  "Tempos do treino": "Workout times",
+  "Tipo de conta": "Account type",
+  "Aprovar treinador": "Approve coach",
   // @@APPEND@@
 } as const;

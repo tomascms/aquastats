@@ -264,7 +264,7 @@ export function TreinoDashboard({
                     setPicked([]);
                   }}
                   className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                    value === activeCourse ? "bg-ink text-white" : "text-mute hover:text-mist"
+                    value === activeCourse ? "bg-mist text-white" : "text-mute hover:text-mist"
                   }`}
                 >
                   {value === "scm" || value === "lcm" ? COURSE_LABEL[value] : t("Piscina não indicada")}

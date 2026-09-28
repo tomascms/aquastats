@@ -200,7 +200,7 @@ function EditMeet({ meet, onDone }: { meet: Competition; onDone: () => void }) {
         {t("Piscina")}
         <div className="mt-1 grid grid-cols-2 gap-1 rounded-lg border border-line p-0.5">
           {(["scm", "lcm"] as const).map((item) => (
-            <button key={item} type="button" onClick={() => setCourse(item)} className={`rounded-md py-1.5 text-sm font-semibold ${course === item ? "bg-ink text-white" : "text-mute"}`}>
+            <button key={item} type="button" onClick={() => setCourse(item)} className={`rounded-md py-1.5 text-sm font-semibold ${course === item ? "bg-mist text-white" : "text-mute"}`}>
               {COURSE_LABEL[item]}
             </button>
           ))}

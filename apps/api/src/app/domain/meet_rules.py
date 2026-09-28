@@ -231,7 +231,9 @@ def extract_rules(text: str) -> list[dict]:
     window = re.search(r"entre\s+(" + LONG_DATE + r")\s+e\s+(" + LONG_DATE + ")", flat, re.IGNORECASE)
     add("Tempos de admissão válidos", f"{window.group(1)} a {window.group(2)}" if window else None)
 
-    add("Formato (individuais)", _between(flat, r"Provas Individuais\s*:", [r"Exce[cç][aã]o", r"Provas de Estafetas", r"Limite"], 200))
+    fmt = _between(flat, r"Provas Individuais\s*:", [r"Exce[cç][aã]o", r"Provas de Estafetas", r"Limite", r";"], 200)
+    # "Provas individuais: 6€" is a fee line, not the format.
+    add("Formato (individuais)", fmt if fmt and re.search(r"final|elimin|s[eé]rie|heat", fmt, re.IGNORECASE) else None)
     add("Exceção", _between(flat, r"Exce[cç][aã]o\s*:", [r"Provas de Estafetas", r"Limite", r"Inscri"], 200))
     add("Participação", _between(flat, r"Participa[cç][aã]o\s*:", [r"Nadadores n[aã]o", r"Programa"], 160))
     add("Prémios", _between(flat, r"Pr[eé]mios\s*:", [r"\d\.\s*ANEXOS", r"Regulamento das"], 160))
@@ -386,33 +388,24 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
     dates = _range_dates(next((f["value"] for f in facts if f["label"] == "Datas"), None))
     detected = detect_course(flat)
     # Gemini reads any association / country / language; the local parser is the fallback.
-    ai = read_regulations(text)
-    check: set[str] = set()
+    ai = read_regulations(text, data)
     if ai:
-        check = set(ai["check"])
-        # Gemini's facts first; anything only the local parser found (e.g. qualifying times) is kept too.
-        known = {fact["label"] for fact in ai["facts"]}
-        facts = ai["facts"] + [fact for fact in facts if fact["label"] not in known] if ai["facts"] else facts
+        # Gemini read the PDF as printed. A value it gave that the text can't back up is replaced by the
+        # local reading when there is one; never shown as if it were confirmed.
+        local = {fact["label"]: fact for fact in facts}
+        merged = []
+        for fact in ai["facts"]:
+            if fact.get("check") and fact["label"] in local:
+                merged.append(local[fact["label"]])
+            else:
+                merged.append({"label": fact["label"], "value": fact["value"]})
+        known = {fact["label"] for fact in merged}
+        facts = merged + [fact for fact in facts if fact["label"] not in known]
         title = ai["name"] or title
-        # Dates: Gemini's if the PDF prints them; otherwise the local reading, and the coach confirms.
-        if ai["dates"] and ("dates" not in check or not dates):
+        if ai["dates"] and not ("dates" in ai["check"] and dates):
             dates = ai["dates"]
-        elif ai["dates"] and dates and ai["dates"] != dates:
-            check.add("dates")
-        # Pool: the two readings must agree; if they don't, or only one found it, the coach confirms.
-        if ai["course"] and detected and ai["course"] != detected:
-            check.add("course")
-        elif bool(ai["course"]) != bool(detected):
-            check.add("course")
         detected = ai["course"] or detected
-    elif not detected:
-        check.add("course")
-    if not dates:
-        check.add("dates")
-    if not title:
-        check.add("name")
-    for fact in facts:
-        fact["check"] = bool(fact.get("check")) or (fact["label"] == "Datas" and "dates" in check) or (fact["label"] == "Piscina" and "course" in check)
+    facts = [{"label": fact["label"], "value": fact["value"]} for fact in facts]
     # Any regulation is accepted with whatever it states; the coach fills in what's missing.
     looks_like_rules = re.search(r"regulamento|regulations?|reglamento|r[eè]glement|nata[cç][aã]o|nataci[oó]n|natation|swimming|piscina|piscine|pool", flat, re.IGNORECASE)
     if len(flat) < 80 or not (facts or title or looks_like_rules):
@@ -438,8 +431,6 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
         "facts": facts,
         "competitionId": str(target.id) if target else None,
         "createsCompetition": target is None,
-        # Fields the coach should confirm: not found in the PDF, or the two readings disagree.
-        "check": sorted(check),
         "meet": {
             "name": title,
             "city": venue,
