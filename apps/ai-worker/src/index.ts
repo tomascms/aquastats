@@ -11,7 +11,7 @@ interface Env {
   AI_KEY: string;
 }
 
-const MODELS = ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/google/gemma-4-26b-a4b-it"] as const;
+const MODELS = ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/openai/gpt-oss-120b"] as const;
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
 const MAX_MARKDOWN = 60_000;
 
