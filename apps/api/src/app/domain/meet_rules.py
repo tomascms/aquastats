@@ -379,6 +379,9 @@ def _numbered_wording(flat: str, add, seen: set[str], facts_ref: list[dict]) -> 
         once("Tempos limite", " · ".join(rows))
 
 
+ESSENTIAL = ("Local", "Datas", "Piscina", "Sessões")
+
+
 def process_rules(session: Session, payload: dict, data: bytes, body: dict, request) -> dict:
     pages = extract_pages(data)
     text = "\n".join(pages[:12])
@@ -405,7 +408,8 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
         if ai["dates"] and not ("dates" in ai["check"] and dates):
             dates = ai["dates"]
         detected = ai["course"] or detected
-    facts = [{"label": fact["label"], "value": fact["value"]} for fact in facts]
+    # Only what a coach needs to plan the meet; the name goes in meet.name.
+    facts = [{"label": fact["label"], "value": fact["value"]} for fact in facts if fact["label"] in ESSENTIAL]
     # Any regulation is accepted with whatever it states; the coach fills in what's missing.
     looks_like_rules = re.search(r"regulamento|regulations?|reglamento|r[eè]glement|nata[cç][aã]o|nataci[oó]n|natation|swimming|piscina|piscine|pool", flat, re.IGNORECASE)
     if len(flat) < 80 or not (facts or title or looks_like_rules):

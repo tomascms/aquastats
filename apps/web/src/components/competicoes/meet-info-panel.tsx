@@ -107,13 +107,13 @@ export function MeetInfoPanel({ meet, highlightLive = false }: { meet: Competiti
         )}
       </div>
 
-      {meet.rules?.length ? (
+      {essentialRules(meet.rules).length ? (
         <table className="w-full text-sm">
           <caption className="bg-panel-2 px-4 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-mute">
             {t("Regulamento")}
           </caption>
           <tbody>
-            {meet.rules.map((fact) => (
+            {essentialRules(meet.rules).map((fact) => (
               <tr key={fact.label} className="border-t border-line">
                 <th className="w-40 px-4 py-1.5 text-left align-top text-xs font-semibold text-mute">{td(fact.label)}</th>
                 <td className="px-4 py-1.5 text-mist">{fact.value}</td>
@@ -124,4 +124,10 @@ export function MeetInfoPanel({ meet, highlightLive = false }: { meet: Competiti
       ) : null}
     </section>
   );
+}
+
+// Meets saved before the reading was narrowed carry deadlines, fees… — show only what matters.
+const ESSENTIAL = ["Local", "Datas", "Piscina", "Sessões"];
+function essentialRules(rules: { label: string; value: string }[] | null | undefined) {
+  return (rules ?? []).filter((fact) => ESSENTIAL.includes(fact.label));
 }

@@ -31,11 +31,6 @@ Return only what the document states; use null (or an empty list) for anything i
 - course: "lcm" for a 50 m competition pool, "scm" for 25 m. Ignore warm-up pools and pools where entry times were swum.
 - lanes: number of lanes of the competition pool.
 - sessions: each competition session with date (YYYY-MM-DD), start time of the races (HH:MM, not warm-up) and a short label in Portuguese (e.g. "Eliminatórias", "Finais", "Sessão A"). Copy every time exactly as printed in the document; never compute, shift or estimate a time. In schedule tables the race start is the "Início"/"Start" column, not the warm-up one. If a session's start time is not printed, leave that session out.
-- entryDeadline (YYYY-MM-DD): the normal deadline to send entries (not withdrawals or changes). entryEmail: where entries are sent.
-- maxEvents: individual events allowed per swimmer, short Portuguese text (e.g. "4 individuais, 2 por dia").
-- entryFee: short Portuguese text (e.g. "6 € por prova individual").
-- qualifyingWindow: period in which entry times must have been achieved, short Portuguese text.
-- format: heats/finals format, one short Portuguese sentence.
 Write every free-text value in European Portuguese."""
 
 SCHEMA = {
@@ -56,12 +51,6 @@ SCHEMA = {
                 "required": ["date", "time"],
             },
         },
-        "entryDeadline": {"type": "STRING", "nullable": True},
-        "entryEmail": {"type": "STRING", "nullable": True},
-        "maxEvents": {"type": "STRING", "nullable": True},
-        "entryFee": {"type": "STRING", "nullable": True},
-        "qualifyingWindow": {"type": "STRING", "nullable": True},
-        "format": {"type": "STRING", "nullable": True},
     },
 }
 
@@ -226,11 +215,6 @@ def _words_in(flat: str, value: str) -> bool:
     return not words or sum(w in lower for w in words) / len(words) >= 0.7
 
 
-def _numbers_in(flat: str, value: str) -> bool:
-    compact = re.sub(r"\s+", "", flat)
-    return all(n in compact for n in re.findall(r"\d+(?:[.,]\d+)?", value))
-
-
 def _to_facts(data: dict, flat: str = "") -> dict:
     start, end = _day(data.get("startDate")), _day(data.get("endDate"))
     if start and (not end or end < start):
@@ -277,11 +261,4 @@ def _to_facts(data: dict, flat: str = "") -> dict:
     if sessions:
         sessions.sort(key=lambda s: (s[0], s[1], s[2]))
         add("Sessões", " · ".join(f"{d.strftime('%d/%m')} {h}h{m}" + (f" {label.lower()}" if label else "") for d, h, m, label in sessions), not dropped)
-    deadline = _day(data.get("entryDeadline"))
-    add("Prazo de inscrição", _pt(deadline) if deadline else None, not deadline or _day_in(flat, deadline))
-    email = _text(data.get("entryEmail"), 120)
-    add("Enviar inscrições para", email if "@" in email and email.lower() in flat.lower() else None)
-    for label, key in (("Limite de provas", "maxEvents"), ("Taxa de inscrição", "entryFee"), ("Tempos de admissão válidos", "qualifyingWindow"), ("Formato (individuais)", "format")):
-        value = _text(data.get(key), 400)
-        add(label, value, _numbers_in(flat, value))
     return {"name": name, "venue": venue, "course": course, "dates": dates, "facts": facts, "check": check}

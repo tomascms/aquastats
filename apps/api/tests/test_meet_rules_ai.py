@@ -33,8 +33,6 @@ def test_answer_becomes_facts_and_missing_fields_stay_out():
     assert out["dates"] == (date(2026, 2, 14), date(2026, 2, 15)) and out["course"] == "lcm"
     assert facts["Piscina"] == "50 m, 10 pistas"
     assert facts["Sessões"] == "14/02 8h30 sessão a · 14/02 16h30 finais"
-    assert facts["Prazo de inscrição"] == "02/02/2026"
-    assert "Limite de provas" not in facts
 
 
 def test_gemini_failure_falls_back(monkeypatch):
@@ -78,9 +76,6 @@ def test_values_not_printed_in_the_pdf_are_dropped_or_flagged():
     assert facts["Sessões"]["value"] == "14/02 8h30 sessão a · 14/02 16h30 finais"
     assert facts["Sessões"]["check"] is True
     assert facts["Datas"]["check"] is False
-    assert facts["Prazo de inscrição"]["check"] is True
-    assert "Enviar inscrições para" not in facts
-    assert facts["Taxa de inscrição"]["check"] is False
     assert out["check"] == set()
 
 
