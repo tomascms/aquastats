@@ -139,8 +139,8 @@ def detect_course(flat: str) -> str | None:
     """Pool length for the meet: "scm" (25 m) or "lcm" (50 m), or None when the text doesn't say."""
     # "tempos obtidos em piscina de 50 metros" talks about entry times, not about this pool.
     text = re.sub(r"(?:tempos?|marcas?|times?)[^.]{0,80}?(?:piscina|pool)\s+(?:de\s+)?(?:25|50)\s*m\w*", " ", flat.lower())
-    long_votes = len(re.findall(r"ol[ií]mpic|piscina\s+longa|long\s+course|\blcm\b|\(pl\)|50\s*m(?:etros)?\s*(?:x|×)\s*\d+\s*pistas|piscina\s+(?:coberta\s+|descoberta\s+)?de\s+50\s*m|50\s*(?:m|metros)\s+pool|pool\s*:?\s*50", text))
-    short_votes = len(re.findall(r"piscina\s+curta|short\s+course|\bscm\b|\(pc\)|25\s*m(?:etros)?\s*(?:x|×)\s*\d+\s*pistas|piscina\s+(?:coberta\s+|descoberta\s+)?de\s+25\s*m|25\s*(?:m|metros)\s+pool|pool\s*:?\s*25", text))
+    long_votes = len(re.findall(r"ol[ií]mpic|piscina\s+longa|long\s+course|\blcm\b|\(pl\)|50\s*m(?:etros)?\s*(?:x|×|/|,|-|com)\s*\d+\s*(?:pistas|lanes)|piscina\s+(?:coberta\s+|descoberta\s+)?de\s+50\s*m|50\s*(?:m|metros)\s+pool|pool\s*:?\s*50", text))
+    short_votes = len(re.findall(r"piscina\s+curta|short\s+course|\bscm\b|\(pc\)|25\s*m(?:etros)?\s*(?:x|×|/|,|-|com)\s*\d+\s*(?:pistas|lanes)|piscina\s+(?:coberta\s+|descoberta\s+)?de\s+25\s*m|25\s*(?:m|metros)\s+pool|pool\s*:?\s*25", text))
     if long_votes > short_votes:
         return "lcm"
     if short_votes > long_votes:
@@ -148,15 +148,36 @@ def detect_course(flat: str) -> str | None:
     return None
 
 
+SMALL_WORDS = {"de", "do", "da", "dos", "das", "e", "of", "the", "and", "em", "a", "o"}
+
+
+def _title_case(value: str) -> str:
+    """ "XII MEETING INTERNACIONAL DO ALGARVE" → "XII Meeting Internacional do Algarve"; mixed case is kept."""
+    if value != value.upper():
+        return value
+    words = []
+    for index, word in enumerate(value.split()):
+        low = word.lower()
+        if re.fullmatch(r"[IVXLC]+", word) or re.search(r"\d", word) or (len(word) <= 5 and word.isalpha() and index and low not in SMALL_WORDS and word in {"FPN", "ANL", "ANNP", "ANCNP", "ANA", "LEN", "ANDL", "ANCM"}):
+            words.append(word)
+        elif index and low in SMALL_WORDS:
+            words.append(low)
+        else:
+            words.append(low[:1].upper() + low[1:])
+    return " ".join(words)
+
+
 MEET_WORDS = r"(?:Campeonatos?|Torneio|Meeting|Taça|Trof[eé]u|Encontro|Festival|Open|Grand Prix)"
 
 
 def extract_title(text: str) -> str:
     # A cover page usually has the name alone on a line ("Meeting Internacional do Porto").
+    # Optional edition in front: "XII Meeting…", "41.º Torneio…", "3rd Open…".
+    edition = r"(?:[IVXLC]+\s+|\d+\s*\.?\s*[ªºa-z]{0,2}\s+)?"
     for line in text.splitlines()[:40]:
         line = _clean(line, 120)
-        if re.match(MEET_WORDS + r"\b", line, re.IGNORECASE) and 2 <= len(line.split()) <= 12:
-            return line
+        if re.match(edition + MEET_WORDS + r"\b", line, re.IGNORECASE) and 2 <= len(line.split()) <= 12:
+            return _title_case(line)
     flat = " ".join(text.split())
     match = re.search(r"(?:^|\s)[a-z]\)\s*((?:Campeonato|Torneio|Meeting|Taça|Trofeu|Troféu|Encontro|Festival)[^.:]{3,120}?)(?=Introdu|Local|Data|$)", flat)
     if match:
@@ -214,7 +235,20 @@ def extract_rules(text: str) -> list[dict]:
     add("Participação", _between(flat, r"Participa[cç][aã]o\s*:", [r"Nadadores n[aã]o", r"Programa"], 160))
     add("Prémios", _between(flat, r"Pr[eé]mios\s*:", [r"\d\.\s*ANEXOS", r"Regulamento das"], 160))
     _numbered_wording(flat, add, {f["label"] for f in facts}, facts)
+    _tidy(facts)
     return facts
+
+
+def _tidy(facts: list[dict]) -> None:
+    """Values cut from running text can drag the next section along ("… Albufeira (25m…). 3. ARBITRAGEM")."""
+    for fact in facts:
+        value = fact["value"]
+        if fact["label"] == "Local":
+            value = re.split(r"\s\d+(?:\.\d+)*\.?\s+[A-ZÀ-Ý]{3}|\s\(", value)[0]
+        elif fact["label"] == "Datas":
+            found = _first_dates(value)
+            value = found[1] if found else value
+        fact["value"] = _clean(value)
 
 
 def _numeric_date(value: str) -> str:
@@ -298,6 +332,41 @@ def _numbered_wording(flat: str, add, seen: set[str], facts_ref: list[dict]) -> 
 
     fee = re.search(r"prova\s+individual[^.]{0,80}?(\d+(?:,\d{2})?\s*€)", flat, re.IGNORECASE)
     once("Taxa de inscrição", f"{fee.group(1).replace(' ', '')} por prova individual" if fee else None)
+    fee = re.search(r"(?:taxa\s+de\s+inscri[cç][aã]o|entry\s+fee)[^.]{0,40}?(\d+(?:[,.]\d{2})?)\s*(?:€|euros?|eur)\s*(por\s+(?:cada\s+)?(?:prova|atleta|nadador)|per\s+(?:event|swimmer))?", flat, re.IGNORECASE)
+    once("Taxa de inscrição", f"{fee.group(1)}€" + (f" {fee.group(2)}" if fee and fee.group(2) else "") if fee else None)
+
+    # Entry deadline in other wordings: "inscrições … até às 24h00 do dia 03 de Novembro de 2026".
+    any_date = r"(" + LONG_DATE + r"|\d{1,2}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{4})"
+    # Skip withdrawal / change deadlines ("desistências … anulação de inscrições … até 07-11").
+    deadline = next(
+        (
+            match
+            # A dot followed by a letter (inscricoes@analgarve.com) doesn't end the sentence.
+            for match in re.finditer(r"inscri[cç][oõ]es(?:[^.]|\.(?=\w)){0,160}?at[eé](?:[^.]|\.(?=\w)){0,40}?" + any_date, flat, re.IGNORECASE)
+            if not re.search(r"desist|anula|baixa|altera|substitu", flat[max(0, match.start() - 80): match.end()], re.IGNORECASE)
+        ),
+        None,
+    ) or re.search(
+        r"(?:entry|entries)\s+(?:deadline|close)[^.]{0,40}?(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})", flat, re.IGNORECASE
+    )
+    once("Prazo de inscrição", _numeric_date(deadline.group(1)) if deadline and "/" in deadline.group(1) else _clean(deadline.group(1)) if deadline else None)
+
+    most = re.search(r"m[aá]ximo\s+de\s+(\d+)\s+provas(?:\s+individuais)?", flat, re.IGNORECASE)
+    once("Limite de provas", f"{most.group(1)} por nadador" if most else None)
+
+    # Schedule tables: one row per session, "13-11-2026 … 14:00 15:15 15:30" (warm-up, end, start).
+    if "Sessões" not in seen and re.search(r"in[ií]cio|start|hor[aá]rio", flat, re.IGNORECASE):
+        rows = re.findall(r"(\d{2})[-/.](\d{2})[-/.]\d{4}((?:(?!\d{2}[-/.]\d{2}[-/.]\d{4}).){0,70})", flat)
+        starts: list[tuple[int, int, str]] = []
+        for day, month, rest in rows:
+            times = re.findall(r"\b(\d{1,2})[:h](\d{2})\b", rest)
+            if not times or len(times) > 4:
+                continue
+            h, mi = times[2] if len(times) >= 3 else times[-1]
+            starts.append((int(month), int(day), f"{day}/{month} {int(h)}h{mi}"))
+        ordered = [label for *_, label in sorted(set(starts), key=lambda item: (item[0], item[1], int(item[2].split()[1].split("h")[0]), item[2]))]
+        if len(ordered) >= 2:
+            once("Sessões", " · ".join(ordered))
 
     limits = re.findall(r"(\d{2}:\d{2},\d{2})\s+(\d{2,4})\s+(LIVRES|COSTAS|BRU[CÇ]OS|MARIPOSA|ESTILOS)\s+(\d{2}:\d{2},\d{2})", flat)
     if limits:

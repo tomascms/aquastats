@@ -72,3 +72,35 @@ def test_meet_dates_in_any_wording(text, expected):
 )
 def test_pool_length_detection(text, course):
     assert detect_course(text) == course
+
+
+# Regional association layout (Analgarve): uppercase title with edition, "25m / 8 pistas", schedule table.
+ALGARVE = """Associação de Natação do Algarve Época 2026-27
+XII MEETING INTERNACIONAL DO ALGARVE
+1. DATA
+13, 14 e 15 de Novembro de 2026
+2. LOCAL
+Complexo de Piscinas Municipais de Albufeira (25m / 8 pistas + tanque 17m p/ aquecimento e descontração).
+3. ARBITRAGEM
+4.6. As desistências de provas (anulação de inscrições) deverão ser comunicadas à organização até às 24h00m do dia 07-11-2026.
+4.7. HORÁRIOS DE AQUECIMENTOS E PROVAS Data Dia Sessões Aquecimento Termino aquecimento Início das provas
+13-11-2026 1ª Única 14:00 15:15 15:30
+14-11-2026 2ª 1ª 1ª ronda: 08:00 08:45 09:00
+14-11-2026 2ª 2ª 14:30 15:45 16:00
+6.2. Cada nadador poderá ser inscrito num máximo de 6 provas, ao longo de toda a competição.
+9.2. As inscrições deverão ser enviadas para inscricoes@analgarve.com até às 24h00 do dia 03 de Novembro de 2026.
+9.3. A taxa de inscrição será de 6 € por cada prova.
+"""
+
+
+def test_regional_layout_with_schedule_table():
+    facts = {f["label"]: f["value"] for f in extract_rules(ALGARVE)}
+    assert extract_title(ALGARVE) == "XII Meeting Internacional do Algarve"
+    assert facts["Local"] == "Complexo de Piscinas Municipais de Albufeira"
+    assert _range_dates(facts["Datas"]) == (date(2026, 11, 13), date(2026, 11, 15))
+    assert detect_course(" ".join(ALGARVE.split())) == "scm"
+    assert facts["Prazo de inscrição"] == "03 de Novembro de 2026"
+    assert facts["Enviar inscrições para"] == "inscricoes@analgarve.com"
+    assert facts["Sessões"] == "13/11 15h30 · 14/11 9h00 · 14/11 16h00"
+    assert facts["Taxa de inscrição"] == "6€ por cada prova"
+    assert facts["Limite de provas"] == "6 por nadador"
