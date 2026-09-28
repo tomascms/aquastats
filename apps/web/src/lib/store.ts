@@ -518,8 +518,9 @@ export const actions = {
       athletes: current.athletes.map((item) => (item.id === id ? athlete : item)),
     }));
   },
-  async removeAthlete(id: string) {
-    await api(`/api/v1/athletes/${id}`, { method: "DELETE", idempotencyKey: `athlete-del-${id}` });
+  /** `purge`: also delete every record of theirs in this team (times, races, goals…). */
+  async removeAthlete(id: string, purge = false) {
+    await api(`/api/v1/athletes/${id}${purge ? "?purge=1" : ""}`, { method: "DELETE", idempotencyKey: `athlete-del-${id}${purge ? "-purge" : ""}` });
     await refreshSnapshot();
   },
   async addWorkout(input: WorkoutInput) {

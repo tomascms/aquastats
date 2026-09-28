@@ -1236,5 +1236,11 @@ export const en = {
   "Ainda sem atletas da equipa nos resultados": "No team swimmers in the results yet",
   "Adicionar detalhes da prova": "Add race details",
   "Carrega num tempo para ver ou juntar os detalhes da prova (reação, 15 m, subaquático, parciais…). SR = tempo vindo do SwimRankings.": "Tap a time to see or add the race details (reaction, 15 m, underwater, splits…). SR = time from SwimRankings.",
+  "Remover e manter o histórico": "Remove and keep the history",
+  "Deixa de ter acesso à equipa. Os treinos, tempos e provas ficam guardados para as análises da equipa.": "They lose access to the team. Workouts, times and races stay for the team's analyses.",
+  "Remover e apagar todos os dados": "Remove and delete all data",
+  "Apaga os tempos de treino, provas, recordes, objetivos e frequência cardíaca deste atleta nesta equipa. Não pode ser desfeito.": "Deletes this swimmer's training times, races, records, goals and heart rate in this team. This can't be undone.",
+  "Percebo que os dados de {name} são apagados para sempre.": "I understand {name}'s data is deleted for good.",
+  "Remover e apagar dados": "Remove and delete data",
   // @@APPEND@@
 } as const;

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { GoalsPanel } from "@/components/goals/goals-panel";
+import { Modal } from "@/components/ui/modal";
 import { SwimRankingsCard } from "@/components/team/swimrankings-card";
 import { WellnessCalendar } from "@/components/wellness/wellness-calendar";
 import { useParams, useRouter } from "next/navigation";
@@ -22,6 +23,7 @@ export default function AthletePage() {
   const athlete = athletes.find((item) => item.id === params.id);
   const router = useRouter();
   const [openMeet, setOpenMeet] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   const records = useMemo(
     () => personalRecords(competitions, meetEntries, meetResults, athlete?.id, athlete?.seedRecords),
@@ -110,17 +112,7 @@ export default function AthletePage() {
             </Link>
             <button
               type="button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    t("Remover {name} da equipa?", { name: athlete.name }) +
-                      "\n\n" +
-                      t("Perde acesso à equipa na app, mas o histórico de treinos e provas fica guardado para análises."),
-                  )
-                ) {
-                  void actions.removeAthlete(athlete.id).then(() => router.push("/coach/team"));
-                }
-              }}
+              onClick={() => setRemoving(true)}
               className="min-h-10 rounded-lg border border-white/25 px-4 text-sm font-semibold text-white/85 hover:border-white/60"
             >
               {t("Remover da equipa")}
@@ -141,6 +133,16 @@ export default function AthletePage() {
           ))}
         </dl>
       </section>
+
+      <RemoveAthleteDialog
+        open={removing}
+        name={athlete.name}
+        onClose={() => setRemoving(false)}
+        onConfirm={async (purge) => {
+          await actions.removeAthlete(athlete.id, purge);
+          router.push("/coach/team");
+        }}
+      />
 
       <SwimRankingsCard athlete={athlete} role="coach" />
 
@@ -265,5 +267,79 @@ export default function AthletePage() {
         </section>
       </div>
     </div>
+  );
+}
+
+/** The coach decides: remove and keep the history for the team's analyses, or remove and delete it all. */
+function RemoveAthleteDialog({
+  open,
+  name,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  name: string;
+  onClose: () => void;
+  onConfirm: (purge: boolean) => Promise<void>;
+}) {
+  const t = useT();
+  const [purge, setPurge] = useState(false);
+  const [sure, setSure] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const option = (value: boolean, title: string, text: string) => (
+    <label
+      className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${
+        purge === value ? (value ? "border-coral bg-[#fdecea]" : "border-pool bg-pool-soft") : "border-line"
+      }`}
+    >
+      <input
+        type="radio"
+        name="remove-mode"
+        className="mt-1"
+        checked={purge === value}
+        onChange={() => {
+          setPurge(value);
+          setSure(false);
+        }}
+      />
+      <span>
+        <span className="block text-sm font-semibold text-mist">{title}</span>
+        <span className="block text-xs text-mute">{text}</span>
+      </span>
+    </label>
+  );
+  return (
+    <Modal open={open} title={t("Remover {name} da equipa?", { name })} onClose={() => !busy && onClose()}>
+      <div className="space-y-2">
+        {option(false, t("Remover e manter o histórico"), t("Deixa de ter acesso à equipa. Os treinos, tempos e provas ficam guardados para as análises da equipa."))}
+        {option(true, t("Remover e apagar todos os dados"), t("Apaga os tempos de treino, provas, recordes, objetivos e frequência cardíaca deste atleta nesta equipa. Não pode ser desfeito."))}
+        {purge ? (
+          <label className="flex items-start gap-2 pt-1 text-xs font-semibold text-coral">
+            <input type="checkbox" className="mt-0.5" checked={sure} onChange={(event) => setSure(event.target.checked)} />
+            {t("Percebo que os dados de {name} são apagados para sempre.", { name })}
+          </label>
+        ) : null}
+      </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" className="btn-ghost" onClick={onClose} disabled={busy}>
+          {t("Cancelar")}
+        </button>
+        <button
+          type="button"
+          className={purge ? "btn-primary !bg-coral" : "btn-primary"}
+          disabled={busy || (purge && !sure)}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await onConfirm(purge);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {purge ? t("Remover e apagar dados") : t("Remover da equipa")}
+        </button>
+      </div>
+    </Modal>
   );
 }

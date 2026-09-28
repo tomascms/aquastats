@@ -376,8 +376,14 @@ def coach_update_athlete(session: Session, payload: dict, athlete_id: str, body:
     return athlete_out(row)
 
 
-def delete_athlete(session: Session, payload: dict, athlete_id: str, request) -> dict:
+def delete_athlete(session: Session, payload: dict, athlete_id: str, request, purge: bool = False) -> dict:
+    """Removes a swimmer from the team. By default their history stays for the team's analyses;
+    with `purge` every record of theirs in this team is deleted for good."""
     row = _owned_athlete(session, payload["team_uuid"], as_uuid(athlete_id, "athleteId"))
+    if purge:
+        _purge_athlete(session, payload["team_uuid"], row)
+        _audit(session, payload, "athlete.purge", "athlete", row.id, request)
+        return {"ok": True, "purged": True}
     stamp = _now()
     if row.user_id:
         member = session.scalar(
@@ -394,6 +400,38 @@ def delete_athlete(session: Session, payload: dict, athlete_id: str, request) ->
     row.updated_at = stamp
     _audit(session, payload, "athlete.kick", "athlete", row.id, request)
     return {"ok": True}
+
+
+def _purge_athlete(session: Session, team_id, athlete: Athlete) -> None:
+    from sqlalchemy import func
+
+    from .models import Goal, HrSession, PolarLink
+
+    aid = athlete.id
+    if athlete.user_id:
+        member = session.scalar(select(TeamMember).where(TeamMember.user_id == athlete.user_id, TeamMember.team_id == team_id))
+        if member:
+            session.delete(member)
+    entries = select(MeetEntry.id).where(MeetEntry.athlete_id == aid)
+    session.execute(delete(PersonalRecord).where(PersonalRecord.athlete_id == aid))
+    session.execute(delete(MeetResult).where(MeetResult.entry_id.in_(entries)))
+    for model in (MeetEntry, TimeLog, RaceSession, Goal, HrSession, PolarLink):
+        session.execute(delete(model).where(model.athlete_id == aid))
+    # Their place in selections and workouts, and their attendance marks.
+    for model in (Workout, Competition):
+        session.execute(
+            update(model)
+            .where(model.team_id == team_id, model.athlete_ids.any(aid))
+            .values(athlete_ids=func.array_remove(model.athlete_ids, aid))
+        )
+    for sheet in session.scalars(select(AttendanceSession).where(AttendanceSession.team_id == team_id)):
+        marks = [mark for mark in (sheet.marks or []) if str(mark.get("athleteId")) != str(aid)]
+        if len(marks) != len(sheet.marks or []):
+            sheet.marks = marks
+            flag_modified(sheet, "marks")
+    session.flush()
+    session.delete(athlete)
+    session.flush()
 
 
 def _ordered_workout_blocks(blocks: list) -> list:

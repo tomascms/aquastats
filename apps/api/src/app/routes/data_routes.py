@@ -108,7 +108,11 @@ def coach_update_athlete(athlete_id: str, body: dict, request: Request, payload:
 
 @router.delete("/athletes/{athlete_id}")
 def delete_athlete(athlete_id: str, request: Request, payload: dict = Depends(require_coach), session: Session = Depends(get_session)):
-    return _command(session, payload, request, "athlete.delete", {"id": athlete_id}, lambda: (200, commands.delete_athlete(session, payload, athlete_id, request)))
+    purge = request.query_params.get("purge") == "1"
+    return _command(
+        session, payload, request, "athlete.delete", {"id": athlete_id, "purge": purge},
+        lambda: (200, commands.delete_athlete(session, payload, athlete_id, request, purge=purge)),
+    )
 
 
 @router.post("/workouts")
