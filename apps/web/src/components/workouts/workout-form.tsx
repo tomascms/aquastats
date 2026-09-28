@@ -376,11 +376,13 @@ function SetLine({
           {!split ? (
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="w-16 text-[11px] font-semibold text-mute">{t("Estilo")}</span>
-              <Chip small active={!segment.stroke} onClick={() => onChange((current) => applySegmentDefaults(current, { stroke: "" }))}>
-                {t("Sem estilo fixo")}
-              </Chip>
               {WORKOUT_STROKES.map((item) => (
-                <Chip key={item} small active={segment.stroke === item} onClick={() => onChange((current) => applySegmentDefaults(current, { stroke: item }))}>
+                <Chip
+                  key={item}
+                  small
+                  active={item === "free" ? !segment.stroke || segment.stroke === "free" : segment.stroke === item}
+                  onClick={() => onChange((current) => applySegmentDefaults(current, { stroke: item === "free" ? "" : item }))}
+                >
                   {WORKOUT_STROKE_LABEL[item]}
                 </Chip>
               ))}
@@ -494,11 +496,13 @@ function PartsEditor({
           <span className="w-6 font-mono text-[11px] text-mute">{index + 1}.</span>
           <DistanceSelect compact value={part.distanceM} onChange={(distanceM) => set(index, { distanceM })} />
           <IntensitySelect compact value={part.intensity} onChange={(intensity) => set(index, { intensity })} />
-          <Chip small active={!part.stroke} onClick={() => set(index, { stroke: "" })}>
-            {t("Sem estilo fixo")}
-          </Chip>
           {WORKOUT_STROKES.map((item) => (
-            <Chip key={item} small active={part.stroke === item} onClick={() => set(index, { stroke: item })}>
+            <Chip
+              key={item}
+              small
+              active={item === "free" ? !part.stroke || part.stroke === "free" : part.stroke === item}
+              onClick={() => set(index, { stroke: item === "free" ? "" : item })}
+            >
               {WORKOUT_STROKE_LABEL[item]}
             </Chip>
           ))}

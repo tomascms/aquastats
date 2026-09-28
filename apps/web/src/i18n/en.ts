@@ -1256,7 +1256,6 @@ export const en = {
   "Percebo que os meus dados são apagados para sempre.": "I understand my data is deleted for good.",
   "Sair e apagar dados": "Leave and delete data",
   "Prog": "Prog",
-  "Sem estilo fixo": "No fixed stroke",
   "Ver detalhes da prova": "See race details",
   "Sem informação desta prova (reação, 15 m, subaquático, viragens…). Só o treinador pode adicioná-la.":
     "No information for this race (reaction, 15 m, underwater, turns…). Only the coach can add it.",

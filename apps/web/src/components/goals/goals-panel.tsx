@@ -15,7 +15,6 @@ import { ConfirmButton } from "@/components/ui/confirm-button";
 import type { Goal, GoalKind, GoalMetric, PoolCourse, Stroke } from "@/lib/types";
 
 const DISTANCES = [50, 100, 200, 400, 800, 1500];
-const METRICS: GoalMetric[] = ["reaction", "at15", "dps", "sr", "underwater"];
 
 type Draft = {
   id?: string;
