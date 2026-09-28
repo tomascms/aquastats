@@ -18,6 +18,7 @@ from uuid import uuid4
 from .commands import _audit, _now
 from .models import Competition
 from .serializers import as_uuid, competition_out
+from .meet_rules_ai import read_regulations
 from .splash_pdf import extract_pages
 
 MONTHS = {
@@ -382,11 +383,19 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
     flat = " ".join(text.split())
     facts = extract_rules(text)
     title = extract_title(text)
+    dates = _range_dates(next((f["value"] for f in facts if f["label"] == "Datas"), None))
+    detected = detect_course(flat)
+    # Gemini reads any association / country / language; the local parser is the fallback.
+    ai = read_regulations(text)
+    if ai:
+        facts = ai["facts"] or facts
+        title = ai["name"] or title
+        dates = ai["dates"] or dates
+        detected = ai["course"] or detected
     # Any regulation is accepted with whatever it states; the coach fills in what's missing.
-    looks_like_rules = re.search(r"regulamento|regulations?|nata[cç][aã]o|swimming|piscina|pool", flat, re.IGNORECASE)
+    looks_like_rules = re.search(r"regulamento|regulations?|reglamento|r[eè]glement|nata[cç][aã]o|nataci[oó]n|natation|swimming|piscina|piscine|pool", flat, re.IGNORECASE)
     if len(flat) < 80 or not (facts or title or looks_like_rules):
         raise HTTPException(status_code=400, detail="Não reconheci este PDF (nem start list, nem resultados, nem regulamento).")
-    dates = _range_dates(next((f["value"] for f in facts if f["label"] == "Datas"), None))
     target = None
     if body.get("competitionId"):
         target = session.get(Competition, as_uuid(body["competitionId"], "competitionId"))
@@ -403,7 +412,6 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
         ).all()
         target = candidates[0] if len(candidates) == 1 else None
     venue = next((f["value"] for f in facts if f["label"] == "Local"), "")
-    detected = detect_course(flat)
     summary = {
         "kind": "rules",
         "facts": facts,

@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     coach_request_email: str = "aquastats@outlook.com"
     polar_client_id: str = ""
     polar_client_secret: str = ""
+    # Google AI Studio key: meet regulations are read by Gemini when set, by the local parser otherwise.
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-flash-latest"
 
     @property
     def is_production(self) -> bool:
