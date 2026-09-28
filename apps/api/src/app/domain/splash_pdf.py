@@ -51,6 +51,16 @@ START_RE = re.compile(
     rf"^(?P<wdr>WDR)?(?P<lane>\d)(?P<last>[A-ZÀ-ÖØ-Þ'´`\-][A-ZÀ-ÖØ-Þ'´`\- ]*?),\s*(?P<first>[^\d,]*?)\s*(?P<yob>\d{{2}})\s+"
     rf"(?P<lic>\d{{5,8}})?\s*(?P<club>.+?)\s*(?P<entry>{TIME}|NT)?\s*(?P<course>25m|50m)?_*[:._]*$"
 )
+# Newer SPLASH layout: "3 Marco Exemplo, DEMO 900004 06 Abs Penafiel 26.20 25m 27.53 LT" — given names
+# first, SURNAME after the comma, licence before the two-digit year, optional category, then entry time,
+# the pool it was swum in and the converted time. Foreign swimmers may have no licence.
+START_GIVEN_FIRST_RE = re.compile(
+    rf"^(?P<lane>\d{{1,2}})\s+(?P<first>[^\d,]+?),\s*(?P<last>[A-ZÀ-ÖØ-Þ'´`\-][A-ZÀ-ÖØ-Þ'´`\- ]*?)\s+"
+    rf"(?:(?P<lic>\d{{4,8}})\s+)?(?P<yob>\d{{2}})\s+"
+    rf"(?:(?:Abs\w*|Jun\w*|Juv\w*|Inf\w*|Sen\w*|Cad\w*|Mast\w*|Open|Absol\w*)\.?\s+)?"
+    rf"(?P<club>.+?)\s+(?P<entry>{TIME}|NT)(?:\s+(?P<course>25m|50m))?(?:\s+(?:{TIME}|NT))?"
+    rf"(?P<flags>(?:\s+(?:LT|WDR|DNS|EXH|X))*)$"
+)
 # "2 - 1ª Jornada - Finais 23/07/2026 - 17:00": the session tells heats from finals on start lists.
 SESSION_RE = re.compile(r"^\d+\s*-\s*.*?(?P<kind>Eliminat\w*|Finais|Final|Heats|Finals)", re.IGNORECASE)
 SPLIT_PAIR_RE = re.compile(rf"(?P<at>\d{{2,4}})m:\s*(?P<cum>{TIME})")
@@ -109,11 +119,23 @@ def extract_pages(data: bytes) -> list[str]:
 
 
 def _meet_header(pages: list[str]) -> tuple[str, str, str, str]:
-    lines = [line.strip() for line in pages[0].splitlines() if line.strip()]
-    if not lines or "splash" not in lines[0].lower():
+    # The "Splash Meet Manager …" stamp is on every page, but a cover (no text) or a legend line may come
+    # first. After it: organiser (sometimes), meet name, then "City, 06 - 07/06/2026".
+    lines: list[str] = []
+    for page in pages[:6]:
+        page_lines = [line.strip() for line in page.splitlines() if line.strip()]
+        stamp = next((i for i, line in enumerate(page_lines) if "splash meet manager" in line.lower()), None)
+        if stamp is not None:
+            lines = page_lines[stamp:]
+            break
+    if not lines:
         raise LenexError("Este PDF não parece uma start list ou resultados do Splash Meet Manager.")
-    name = lines[1] if len(lines) > 1 else ""
-    place = lines[2] if len(lines) > 2 else ""
+    place_at = next((i for i, line in enumerate(lines[1:6], start=1) if MEET_DATES_RE.search(line) or DATE_TIME_RE.search(line)), None)
+    if place_at is None:
+        name = lines[1] if len(lines) > 1 else ""
+        place = lines[2] if len(lines) > 2 else ""
+    else:
+        name, place = lines[place_at - 1], lines[place_at]
     city, start, end = place.split(",")[0].strip(), "", ""
     match = MEET_DATES_RE.search(place)
     if match:
@@ -310,8 +332,12 @@ def _result_line(line: str, event: dict, lap_columns: list[int], event_date: str
 
 def _start_line(line: str, event: dict, heat: int | None, event_date: str | None, session_time: str | None, reference_year: int):
     match = START_RE.match(line)
-    if not match or match["wdr"]:
+    if match and match["wdr"]:
         return None
+    if not match:
+        match = START_GIVEN_FIRST_RE.match(line)
+        if not match or "WDR" in (match["flags"] or ""):
+            return None
     first = match["first"].strip()
     club = match["club"].strip().rstrip("_:. ")
     if not first or not club:

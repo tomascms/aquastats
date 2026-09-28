@@ -32,13 +32,34 @@ def process_file(session: Session, payload: dict, body: dict, request) -> dict:
     """Any file the coach drops: Lenex, SPLASH start list/results PDF, or the meet regulations PDF."""
     data = _bytes(body)
     if data[:5] == b"%PDF-":
-        from .meet_rules import process_rules
+        from .meet_files_ai import looks_like_meet_file, read_meet
+        from .meet_rules import detect_course, process_rules
+        from .splash_pdf import _meet_header, extract_pages
 
+        meet = None
         try:
             meet = parse_splash_pdf(data).meet
         except LenexError as exc:
-            if "Splash" not in str(exc):
+            if "Splash" not in str(exc) and "nadadores" not in str(exc):
                 raise HTTPException(status_code=400, detail=str(exc))
+        team_id = payload["team_uuid"]
+        athletes = list(session.scalars(select(Athlete).where(Athlete.team_id == team_id, Athlete.deleted_at.is_(None))))
+        found = meet is not None and any(
+            match_athlete(person, athletes, strict=is_selection(club))[0] is not None for club in meet.clubs for person in club.athletes
+        )
+        if not found:
+            # Unknown layout, or none of ours found: our AI reads the lines that mention our swimmers.
+            pages = extract_pages(data)
+            if meet is not None or looks_like_meet_file(pages):
+                try:
+                    header = _meet_header(pages)
+                except LenexError:
+                    header = None
+                course = meet.course if meet else (detect_course(" ".join(" ".join(pages[:3]).split())) or "lcm")
+                ai_meet = read_meet(pages, athletes, header, course)
+                if ai_meet is not None:
+                    meet = ai_meet
+        if meet is None:
             return process_rules(session, payload, data, body, request)
         return process_lenex(session, payload, body, request, meet=meet)
     return process_lenex(session, payload, body, request)

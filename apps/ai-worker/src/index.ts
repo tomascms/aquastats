@@ -47,13 +47,15 @@ export default {
     } catch {
       return Response.json({ error: "bad json" }, { status: 400 });
     }
-    if (!body.pdf || !body.system || !body.schema) return Response.json({ error: "missing fields" }, { status: 400 });
-    const bytes = Uint8Array.from(atob(body.pdf), (c) => c.charCodeAt(0));
-    if (bytes.byteLength > MAX_PDF_BYTES) return Response.json({ error: "too large" }, { status: 413 });
-
-    const converted = await env.AI.toMarkdown([{ name: "regulamento.pdf", blob: new Blob([bytes], { type: "application/pdf" }) }]);
-    const first = Array.isArray(converted) ? converted[0] : converted;
-    const markdown = first && "data" in first && typeof first.data === "string" ? first.data.slice(0, MAX_MARKDOWN) : "";
+    if ((!body.pdf && !body.text) || !body.system || !body.schema) return Response.json({ error: "missing fields" }, { status: 400 });
+    let markdown = "";
+    if (body.pdf) {
+      const bytes = Uint8Array.from(atob(body.pdf), (c) => c.charCodeAt(0));
+      if (bytes.byteLength > MAX_PDF_BYTES) return Response.json({ error: "too large" }, { status: 413 });
+      const converted = await env.AI.toMarkdown([{ name: "document.pdf", blob: new Blob([bytes], { type: "application/pdf" }) }]);
+      const first = Array.isArray(converted) ? converted[0] : converted;
+      markdown = first && "data" in first && typeof first.data === "string" ? first.data.slice(0, MAX_MARKDOWN) : "";
+    }
     // The Markdown keeps tables but can miss whole pages; the caller's plain extraction has every word.
     const plain = (body.text ?? "").slice(0, MAX_MARKDOWN);
     if (!markdown.trim() && !plain.trim()) return Response.json({ error: "no text" }, { status: 422 });
@@ -67,15 +69,15 @@ export default {
             {
               role: "user",
               content:
-                "Fill EVERY field of this JSON schema that the regulation states (null only when it truly does not say):\n" +
+                "Fill EVERY field of this JSON schema that the document states (null only when it truly does not say):\n" +
                 JSON.stringify((body.schema as { schema?: unknown }).schema ?? body.schema) +
-                `\n\nRegulation, reading 1 (PDF to Markdown, keeps tables, may miss pages):\n\n${markdown}` +
-                `\n\nRegulation, reading 2 (plain text of every page, tables flattened):\n\n${plain}\n\nAnswer with the JSON object only.`,
+                (markdown ? `\n\nDocument, reading 1 (PDF to Markdown, keeps tables, may miss pages):\n\n${markdown}` : "") +
+                `\n\nDocument${markdown ? ", reading 2 (plain text of every page, tables flattened)" : ""}:\n\n${plain}\n\nAnswer with the JSON object only.`,
             },
           ],
           response_format: { type: "json_object" },
           temperature: 0,
-          max_tokens: 2000,
+          max_tokens: 8000,
         } as never);
         const data = parse(output);
         if (data) return Response.json({ model, markdown, data });
