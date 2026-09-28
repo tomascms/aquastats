@@ -38,17 +38,114 @@ def _between(text: str, start: str, stops: list[str], limit: int = 160) -> str |
     return _clean(match["v"], limit) if match else None
 
 
+def _month(word: str) -> int | None:
+    word = word.lower()
+    return MONTHS.get(word) or MONTHS.get(word[:3]) or EN_MONTHS.get(word[:3])
+
+
+def _safe(year: int, month: int, day: int) -> date | None:
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
+ORD = r"(?:st|nd|rd|th|\.?º)?"
+SEP = r"\s*(?:a|e|-|–|to|and|&)\s*"
+_DATE_PATTERNS = [
+    # 30 de maio a 1 de junho de 2026 · 30 May - 1 June 2026
+    (rf"(\d{{1,2}}){ORD}\s+(?:de\s+)?([a-zç]+){SEP}(\d{{1,2}}){ORD}\s+(?:de\s+)?([a-zç]+)\s+(?:de\s+)?(\d{{4}})", "dm-dm-y"),
+    # 6 e 7 de junho de 2026 · 6, 7 e 8 de junho de 2026 · 6-7 June 2026
+    (rf"(\d{{1,2}}){ORD}(?:\s*,\s*\d{{1,2}}{ORD})*{SEP}(\d{{1,2}}){ORD}\s+(?:de\s+|of\s+)?([a-zç]+),?\s+(?:de\s+)?(\d{{4}})", "d-d-m-y"),
+    # June 6-7, 2026
+    (rf"([A-Za-z]+)\s+(\d{{1,2}}){ORD}{SEP}(\d{{1,2}}){ORD},?\s+(\d{{4}})", "m-d-d-y"),
+    # 06/06/2026 a 07/06/2026
+    (r"(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{4})" + SEP + r"(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{4})", "n-n"),
+    # 6 e 7/06/2026
+    (r"(\d{1,2})" + SEP + r"(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{4})", "d-d/m/y"),
+    # 6 de junho de 2026 · June 6, 2026 · 06/06/2026 (single day)
+    (rf"(\d{{1,2}}){ORD}\s+(?:de\s+|of\s+)?([a-zç]+),?\s+(?:de\s+)?(\d{{4}})", "d-m-y"),
+    (rf"([A-Za-z]+)\s+(\d{{1,2}}){ORD},?\s+(\d{{4}})", "m-d-y"),
+    (r"(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{4})", "n"),
+]
+
+
+def _dates_from(match: re.Match, kind: str) -> tuple[date, date] | None:
+    g = match.groups()
+    if kind == "dm-dm-y":
+        m1, m2 = _month(g[1]), _month(g[3])
+        return (_safe(int(g[4]) - (1 if m1 and m2 and m1 > m2 else 0), m1, int(g[0])), _safe(int(g[4]), m2, int(g[2]))) if m1 and m2 else None
+    if kind == "d-d-m-y":
+        m = _month(g[2])
+        return (_safe(int(g[3]), m, int(g[0])), _safe(int(g[3]), m, int(g[1]))) if m else None
+    if kind == "m-d-d-y":
+        m = _month(g[0])
+        return (_safe(int(g[3]), m, int(g[1])), _safe(int(g[3]), m, int(g[2]))) if m else None
+    if kind == "n-n":
+        return _safe(int(g[2]), int(g[1]), int(g[0])), _safe(int(g[5]), int(g[4]), int(g[3]))
+    if kind == "d-d/m/y":
+        return _safe(int(g[3]), int(g[2]), int(g[0])), _safe(int(g[3]), int(g[2]), int(g[1]))
+    if kind == "d-m-y":
+        m = _month(g[1])
+        day = _safe(int(g[2]), m, int(g[0])) if m else None
+        return (day, day) if day else None
+    if kind == "m-d-y":
+        m = _month(g[0])
+        day = _safe(int(g[2]), m, int(g[1])) if m else None
+        return (day, day) if day else None
+    day = _safe(int(g[2]), int(g[1]), int(g[0]))
+    return (day, day) if day else None
+
+
+def _first_dates(text: str) -> tuple[tuple[date, date], str] | None:
+    # PDF text often splits years ("de 20 26").
+    text = re.sub(r"(?<=de )(19|20)\s(\d{2})\b", r"\1\2", text)
+    for pattern, kind in _DATE_PATTERNS:
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            found = _dates_from(match, kind)
+            if found and found[0] and found[1] and timedelta(0) <= found[1] - found[0] <= timedelta(days=10):
+                return found, _clean(match.group(0), 60)
+    return None
+
+
+def find_meet_dates(flat: str) -> tuple[tuple[date, date], str] | None:
+    """When the meet happens, whatever the wording. Looks first where the date is announced (cover page,
+    "realiza-se / disputa-se / data / dates"), so an entry deadline further down isn't taken for it."""
+    deadline = re.compile(r"inscri|entr(?:y|ies)|limite|deadline|at[eé]\s*(?:ao|à|a)?\s*(?:dia)?\s*$|until|prazo|tempos", re.IGNORECASE)
+
+    def around(cues: str) -> tuple[tuple[date, date], str] | None:
+        for match in re.finditer(cues, flat, re.IGNORECASE):
+            if deadline.search(flat[max(0, match.start() - 60): match.start()]):
+                continue
+            found = _first_dates(flat[match.start(): match.start() + 140])
+            if found:
+                return found
+        return None
+
+    return (
+        around(r"(?:realiza|disputa|decorre|ter[aá]\s+lugar|will\s+be\s+held|takes\s+place|held\s+on)")
+        or _first_dates(flat[:600])
+        or around(r"(?:(?<![a-z])datas?\b|(?<![a-z])dates?\b|(?<![a-z])dias?\b)")
+        or _first_dates(flat)
+    )
+
+
 def _range_dates(value: str | None) -> tuple[date, date] | None:
-    if not value:
-        return None
-    match = re.search(r"(\d{1,2})(?:st|nd|rd|th)?\s*(?:a|-|–|e|to)\s*(\d{1,2})(?:st|nd|rd|th)?\s+(?:de\s+|of\s+)?([a-zç]+)\s+(?:de\s+)?(\d{4})", value, re.IGNORECASE)
-    if not match:
-        return None
-    month = MONTHS.get(match.group(3).lower()) or MONTHS.get(match.group(3).lower()[:3]) or EN_MONTHS.get(match.group(3).lower()[:3])
-    if not month:
-        return None
-    year = int(match.group(4))
-    return date(year, month, int(match.group(1))), date(year, month, int(match.group(2)))
+    found = _first_dates(value or "")
+    return found[0] if found else None
+
+
+def detect_course(flat: str) -> str | None:
+    """Pool length for the meet: "scm" (25 m) or "lcm" (50 m), or None when the text doesn't say."""
+    # "tempos obtidos em piscina de 50 metros" talks about entry times, not about this pool.
+    text = re.sub(r"(?:tempos?|marcas?|times?)[^.]{0,80}?(?:piscina|pool)\s+(?:de\s+)?(?:25|50)\s*m\w*", " ", flat.lower())
+    long_votes = len(re.findall(r"ol[ií]mpic|piscina\s+longa|long\s+course|\blcm\b|\(pl\)|50\s*m(?:etros)?\s*(?:x|×)\s*\d+\s*pistas|piscina\s+(?:coberta\s+|descoberta\s+)?de\s+50\s*m|50\s*(?:m|metros)\s+pool|pool\s*:?\s*50", text))
+    short_votes = len(re.findall(r"piscina\s+curta|short\s+course|\bscm\b|\(pc\)|25\s*m(?:etros)?\s*(?:x|×)\s*\d+\s*pistas|piscina\s+(?:coberta\s+|descoberta\s+)?de\s+25\s*m|25\s*(?:m|metros)\s+pool|pool\s*:?\s*25", text))
+    if long_votes > short_votes:
+        return "lcm"
+    if short_votes > long_votes:
+        return "scm"
+    return None
 
 
 MEET_WORDS = r"(?:Campeonatos?|Torneio|Meeting|Taça|Trof[eé]u|Encontro|Festival|Open|Grand Prix)"
@@ -116,7 +213,7 @@ def extract_rules(text: str) -> list[dict]:
     add("Exceção", _between(flat, r"Exce[cç][aã]o\s*:", [r"Provas de Estafetas", r"Limite", r"Inscri"], 200))
     add("Participação", _between(flat, r"Participa[cç][aã]o\s*:", [r"Nadadores n[aã]o", r"Programa"], 160))
     add("Prémios", _between(flat, r"Pr[eé]mios\s*:", [r"\d\.\s*ANEXOS", r"Regulamento das"], 160))
-    _numbered_wording(flat, add, {f["label"] for f in facts})
+    _numbered_wording(flat, add, {f["label"] for f in facts}, facts)
     return facts
 
 
@@ -124,7 +221,7 @@ def _numeric_date(value: str) -> str:
     return re.sub(r"\s+", "", value)
 
 
-def _numbered_wording(flat: str, add, seen: set[str]) -> None:
+def _numbered_wording(flat: str, add, seen: set[str], facts_ref: list[dict]) -> None:
     """Regulations written as numbered clauses (ANNP / regional associations): facts sit inside
     sentences rather than after "Label:" headings."""
 
@@ -138,15 +235,20 @@ def _numbered_wording(flat: str, add, seen: set[str]) -> None:
         city = re.search(r"Piscina[^.,]{0,60},\s+(?:no|na|em)\s+([A-ZÀ-Ý][\w-]+(?:\s[A-ZÀ-Ý][\w-]+)?)", flat)
         if venue:
             once("Local", _clean(venue.group(1)) + (f", {city.group(1)}" if city else ""))
-    if "Datas" not in seen:
-        span = re.search(r"\b(\d{1,2}\s*(?:a|e|-|–)\s*\d{1,2}\s+de\s+[a-zç]+\s+de\s+\d{4})", flat, re.IGNORECASE)
-        once("Datas", _clean(span.group(1)) if span else None)
+    # Keep a "Data:" label only if it holds a real date; otherwise find the meet dates in any wording.
+    labelled = next((f for f in facts_ref if f["label"] == "Datas"), None)
+    if labelled is None or not _range_dates(labelled["value"]):
+        found = find_meet_dates(flat)
+        if found:
+            if labelled is not None:
+                facts_ref.remove(labelled)
+                seen.discard("Datas")
+            once("Datas", found[1])
 
-    if re.search(r"dimens[oõ]es\s+ol[ií]mpicas|piscina\s+de\s+50\s*m", flat, re.IGNORECASE):
-        lanes = re.search(r"(\d+)\s+pistas", flat)
-        once("Piscina", "50 m" + (f", {lanes.group(1)} pistas" if lanes else ""))
-    elif re.search(r"piscina\s+de\s+25\s*m", flat, re.IGNORECASE):
-        once("Piscina", "25 m")
+    course = detect_course(flat)
+    if course:
+        lanes = re.search(r"(\d+)\s+(?:pistas|lanes)", flat, re.IGNORECASE)
+        once("Piscina", ("50 m" if course == "lcm" else "25 m") + (f", {lanes.group(1)} pistas" if lanes else ""))
 
     num = r"(\d{1,2}\s*/\s*\d{1,2}\s*/\s*\d{4})"
     deadline = re.search(r"inscri[cç][oõ]es\s+at[eé]\s+(?:ao\s+dia\s+|dia\s+)?" + num, flat, re.IGNORECASE)
@@ -175,6 +277,16 @@ def _numbered_wording(flat: str, add, seen: set[str]) -> None:
         flat,
         re.IGNORECASE,
     )
+    if not sessions and "Sessões" not in seen:
+        # Generic "1.ª Sessão … 9h30" / "Session 1 … 09:30".
+        generic = re.findall(
+            r"(\d)\s*\.?\s*[ªº]?\s*(?:Sess[aã]o|Session)[^0-9]{0,60}?(\d{1,2}[h:]\d{2})|(?:Sess[aã]o|Session)\s*(\d)[^0-9]{0,60}?(\d{1,2}[h:]\d{2})",
+            flat,
+            re.IGNORECASE,
+        )
+        found = sorted({(int(a or c), (b or d).replace(":", "h")) for a, b, c, d in generic})
+        if found:
+            once("Sessões", " · ".join(f"{n}ª {hour}" for n, hour in found))
     if sessions:
         def when(item):
             _, day, hour = item
@@ -197,8 +309,13 @@ def _numbered_wording(flat: str, add, seen: set[str]) -> None:
 
 def process_rules(session: Session, payload: dict, data: bytes, body: dict, request) -> dict:
     pages = extract_pages(data)
-    facts = extract_rules("\n".join(pages[:12]))
-    if len(facts) < 2:
+    text = "\n".join(pages[:12])
+    flat = " ".join(text.split())
+    facts = extract_rules(text)
+    title = extract_title(text)
+    # Any regulation is accepted with whatever it states; the coach fills in what's missing.
+    looks_like_rules = re.search(r"regulamento|regulations?|nata[cç][aã]o|swimming|piscina|pool", flat, re.IGNORECASE)
+    if len(flat) < 80 or not (facts or title or looks_like_rules):
         raise HTTPException(status_code=400, detail="Não reconheci este PDF (nem start list, nem resultados, nem regulamento).")
     dates = _range_dates(next((f["value"] for f in facts if f["label"] == "Datas"), None))
     target = None
@@ -216,11 +333,8 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
             )
         ).all()
         target = candidates[0] if len(candidates) == 1 else None
-    text = "\n".join(pages[:12])
-    title = extract_title(text)
     venue = next((f["value"] for f in facts if f["label"] == "Local"), "")
-    pool = next((f["value"] for f in facts if f["label"] == "Piscina"), "")
-    detected = "lcm" if pool.startswith("50") else "scm" if pool.startswith("25") else None
+    detected = detect_course(flat)
     summary = {
         "kind": "rules",
         "facts": facts,
@@ -229,7 +343,7 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
         "meet": {
             "name": title,
             "city": venue,
-            "course": body.get("course") if body.get("course") in ("scm", "lcm") else (detected or "lcm"),
+            "course": body.get("course") if body.get("course") in ("scm", "lcm") else (detected or ""),
             "date": dates[0].isoformat() if dates else "",
             "endDate": dates[1].isoformat() if dates else "",
         },

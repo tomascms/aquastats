@@ -278,7 +278,9 @@ function RulesPreview({
   const td = useTDynamic();
   const creates = Boolean(summary.createsCompetition);
   const [title, setTitle] = useState(summary.meet?.name ?? "");
-  const [course, setCourse] = useState<"scm" | "lcm" | "">("");
+  // Pre-filled when the regulations say the pool length; otherwise the coach picks it.
+  const detected = summary.meet?.course;
+  const [course, setCourse] = useState<"scm" | "lcm" | "">(detected === "scm" || detected === "lcm" ? detected : "");
   const [start, setStart] = useState(summary.meet?.date ?? "");
   const [end, setEnd] = useState(summary.meet?.endDate ?? "");
   const ready = !creates || (title.trim() && course && start);
