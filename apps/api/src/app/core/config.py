@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     # Google AI Studio key: meet regulations are read by Gemini when set, by the local parser otherwise.
     gemini_api_key: str = ""
     gemini_model: str = "gemini-flash-latest"
+    # Our own reader on Workers AI (apps/ai-worker): tried first, Gemini is the fallback.
+    ai_worker_url: str = ""
+    ai_worker_key: str = ""
 
     @property
     def is_production(self) -> bool:

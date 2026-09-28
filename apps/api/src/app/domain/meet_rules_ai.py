@@ -26,11 +26,11 @@ MAX_CHARS = 40_000
 PROMPT = """You read swimming competition regulations (any country, any language) and extract facts for a coach.
 Return only what the document states; use null (or an empty list) for anything it does not say. Never guess.
 - name: the competition's name as printed (title case, keep the edition number, e.g. "XII Meeting Internacional do Algarve").
-- venue: pool / complex name; city: the city.
+- venue: pool / complex name; city: the city. Keep place names exactly as printed (never translate them).
 - startDate / endDate: days the competition itself is swum (not deadlines, not training days), YYYY-MM-DD.
 - course: "lcm" for a 50 m competition pool, "scm" for 25 m. Ignore warm-up pools and pools where entry times were swum.
 - lanes: number of lanes of the competition pool.
-- sessions: each competition session with date (YYYY-MM-DD), start time of the races (HH:MM, not warm-up) and a short label in Portuguese (e.g. "Eliminatórias", "Finais", "Sessão A").
+- sessions: each competition session with date (YYYY-MM-DD), start time of the races (HH:MM, not warm-up) and a short label in Portuguese (e.g. "Eliminatórias", "Finais", "Sessão A"). Copy every time exactly as printed in the document; never compute, shift or estimate a time. In schedule tables the race start is the "Início"/"Start" column, not the warm-up one. If a session's start time is not printed, leave that session out.
 - entryDeadline (YYYY-MM-DD): the normal deadline to send entries (not withdrawals or changes). entryEmail: where entries are sent.
 - maxEvents: individual events allowed per swimmer, short Portuguese text (e.g. "4 individuais, 2 por dia").
 - entryFee: short Portuguese text (e.g. "6 € por prova individual").
@@ -92,17 +92,62 @@ def read_regulations(text: str, pdf: bytes | None = None) -> dict | None:
     The PDF itself is sent when available (tables and layout are read as printed; extracted text
     breaks them). Preview and confirm send the same file, so answers are kept per file."""
     settings = get_settings()
-    if not settings.gemini_api_key or not (text.strip() or pdf):
+    own = bool(settings.ai_worker_url and settings.ai_worker_key and pdf)
+    if not (own or settings.gemini_api_key) or not (text.strip() or pdf):
         return None
     key = hashlib.sha256(pdf or text[:MAX_CHARS].encode()).hexdigest()
     if key in _CACHE:
         return _CACHE[key]
-    result = _ask(text, settings, pdf if pdf and len(pdf) <= MAX_PDF_BYTES else None)
+    small_pdf = pdf if pdf and len(pdf) <= MAX_PDF_BYTES else None
+    result = (_ask_own(text, settings, small_pdf) if own and small_pdf else None) or (
+        _ask(text, settings, small_pdf) if settings.gemini_api_key else None
+    )
     if result is not None:
         if len(_CACHE) > 200:
             _CACHE.clear()
         _CACHE[key] = result
     return result
+
+
+def _json_schema(node: dict) -> dict:
+    """Gemini's schema dialect (OBJECT/STRING, nullable) → standard JSON Schema for Workers AI."""
+    kind = node["type"].lower()
+    out: dict = {"type": [kind, "null"] if node.get("nullable") else kind}
+    if "enum" in node:
+        out["enum"] = [*node["enum"], *([None] if node.get("nullable") else [])]
+    if kind == "object":
+        out["properties"] = {name: _json_schema(child) for name, child in node["properties"].items()}
+        if node.get("required"):
+            out["required"] = node["required"]
+    if kind == "array":
+        out["items"] = _json_schema(node["items"])
+    return out
+
+
+def _ask_own(text: str, settings, pdf: bytes) -> dict | None:
+    """Our reader on Workers AI: PDF → Markdown (tables kept) → open model with the same schema."""
+    try:
+        response = httpx.post(
+            settings.ai_worker_url,
+            json={
+                "pdf": base64.b64encode(pdf).decode(),
+                "text": text[:MAX_CHARS],
+                "system": PROMPT,
+                "schema": {"name": "regulation", "schema": _json_schema(SCHEMA)},
+            },
+            headers={"x-aquastats-key": settings.ai_worker_key},
+            timeout=60.0,
+        )
+        response.raise_for_status()
+        answer = response.json()
+        data, markdown = answer.get("data"), answer.get("markdown") or ""
+    except (httpx.HTTPError, ValueError, AttributeError) as exc:
+        log.warning("own reader failed: %s", type(exc).__name__)
+        return None
+    if not isinstance(data, dict):
+        return None
+    # Values are checked against both readings of the PDF (Markdown and extracted text).
+    return _to_facts(data, " ".join((markdown + " " + text).split()))
 
 
 def _ask(text: str, settings, pdf: bytes | None = None) -> dict | None:

@@ -1,0 +1,9 @@
+{
+  "$schema": "../web/node_modules/wrangler/config-schema.json",
+  "name": "aquastats-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-20",
+  "workers_dev": true,
+  "ai": { "binding": "AI" },
+  "observability": { "enabled": true }
+}
