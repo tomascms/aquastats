@@ -76,8 +76,11 @@ export type MeetFileSummary = {
   kind: "entries" | "results" | "rules";
   status: "needsClub" | "needsCompetition" | "ready" | "done";
   competition?: Competition;
-  facts?: { label: string; value: string }[];
-  meet: { name: string; city: string; course: "scm" | "lcm"; date: string; endDate: string };
+  /** `check`: not found in the PDF as read, or the two readings disagree — the coach confirms it. */
+  facts?: { label: string; value: string; check?: boolean }[];
+  /** Meet fields to confirm before creating: "name" | "dates" | "course" | "venue". */
+  check?: string[];
+  meet: { name: string; city: string; course: "scm" | "lcm" | ""; date: string; endDate: string };
   clubs?: { key: string; name: string; code: string | null; athletes: number }[];
   club?: { key: string; name: string };
   competitionId?: string | null;

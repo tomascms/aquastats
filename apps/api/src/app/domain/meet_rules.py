@@ -387,13 +387,32 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
     detected = detect_course(flat)
     # Gemini reads any association / country / language; the local parser is the fallback.
     ai = read_regulations(text)
+    check: set[str] = set()
     if ai:
+        check = set(ai["check"])
         # Gemini's facts first; anything only the local parser found (e.g. qualifying times) is kept too.
         known = {fact["label"] for fact in ai["facts"]}
         facts = ai["facts"] + [fact for fact in facts if fact["label"] not in known] if ai["facts"] else facts
         title = ai["name"] or title
-        dates = ai["dates"] or dates
+        # Dates: Gemini's if the PDF prints them; otherwise the local reading, and the coach confirms.
+        if ai["dates"] and ("dates" not in check or not dates):
+            dates = ai["dates"]
+        elif ai["dates"] and dates and ai["dates"] != dates:
+            check.add("dates")
+        # Pool: the two readings must agree; if they don't, or only one found it, the coach confirms.
+        if ai["course"] and detected and ai["course"] != detected:
+            check.add("course")
+        elif bool(ai["course"]) != bool(detected):
+            check.add("course")
         detected = ai["course"] or detected
+    elif not detected:
+        check.add("course")
+    if not dates:
+        check.add("dates")
+    if not title:
+        check.add("name")
+    for fact in facts:
+        fact["check"] = bool(fact.get("check")) or (fact["label"] == "Datas" and "dates" in check) or (fact["label"] == "Piscina" and "course" in check)
     # Any regulation is accepted with whatever it states; the coach fills in what's missing.
     looks_like_rules = re.search(r"regulamento|regulations?|reglamento|r[eè]glement|nata[cç][aã]o|nataci[oó]n|natation|swimming|piscina|piscine|pool", flat, re.IGNORECASE)
     if len(flat) < 80 or not (facts or title or looks_like_rules):
@@ -419,6 +438,8 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
         "facts": facts,
         "competitionId": str(target.id) if target else None,
         "createsCompetition": target is None,
+        # Fields the coach should confirm: not found in the PDF, or the two readings disagree.
+        "check": sorted(check),
         "meet": {
             "name": title,
             "city": venue,
@@ -454,7 +475,7 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
         session.add(target)
         session.flush()
     extra = dict(target.extra or {})
-    extra["rules"] = facts
+    extra["rules"] = [{"label": fact["label"], "value": fact["value"]} for fact in facts]
     target.extra = extra
     flag_modified(target, "extra")
     _audit(session, payload, "meet.import_rules", "competition", target.id, request)

@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import re
+import time
 from datetime import date
 
 import httpx
@@ -105,11 +106,15 @@ def _ask(text: str, settings) -> dict | None:
         "contents": [{"role": "user", "parts": [{"text": text[:MAX_CHARS]}]}],
         "generationConfig": {"temperature": 0, "responseMimeType": "application/json", "responseSchema": SCHEMA},
     }
-    # The free tier is often busy (429/503): try the configured model, then the lighter one.
+    # The free tier is often busy (429/503). The full model reads tables better, so it gets a few
+    # tries with a short wait before the lighter one is used.
+    attempts = [(settings.gemini_model, 0), (settings.gemini_model, 3), (settings.gemini_model, 6), ("gemini-flash-lite-latest", 0)]
     data = None
-    for model in dict.fromkeys([settings.gemini_model, "gemini-flash-lite-latest"]):
+    for model, wait in attempts:
+        if wait:
+            time.sleep(wait)
         try:
-            response = httpx.post(URL.format(model=model), json=body, headers={"x-goog-api-key": settings.gemini_api_key}, timeout=40.0)
+            response = httpx.post(URL.format(model=model), json=body, headers={"x-goog-api-key": settings.gemini_api_key}, timeout=30.0)
             response.raise_for_status()
             data = json.loads(response.json()["candidates"][0]["content"]["parts"][0]["text"])
             break
@@ -121,46 +126,102 @@ def _ask(text: str, settings) -> dict | None:
             log.warning("gemini %s failed: %s", model, type(exc).__name__)
     if not isinstance(data, dict):
         return None
-    return _to_facts(data)
+    return _to_facts(data, " ".join(text.split()))
 
 
-def _to_facts(data: dict) -> dict:
+# Every value the model returns is checked against the regulation text. What can't be found there
+# is dropped (times, emails) or flagged for the coach to confirm (dates, names, summaries).
+MONTH_WORDS = {
+    1: "jan|janeiro|january|enero|janvier|gennaio|januar",
+    2: "fev|fevereiro|feb|february|febrero|f[eé]vrier|febbraio|februar",
+    3: "mar|mar[cç]o|march|marzo|mars|m[aä]rz",
+    4: "abr|abril|apr|april|avril|aprile",
+    5: "mai|maio|may|mayo|maggio",
+    6: "jun|junho|june|junio|juin|giugno|juni",
+    7: "jul|julho|july|julio|juillet|luglio|juli",
+    8: "ago|agosto|aug|august|ao[uû]t",
+    9: "set|setembro|sep|sept|september|septiembre|septembre|settembre",
+    10: "out|outubro|oct|october|octubre|octobre|ottobre|okt|oktober",
+    11: "nov|novembro|november|noviembre|novembre",
+    12: "dez|dezembro|dec|december|diciembre|d[eé]cembre|dicembre|dezember",
+}
+
+
+def _time_in(flat: str, hour: int, minute: str) -> bool:
+    return re.search(rf"(?<!\d)0?{hour}\s*[:hH.]\s*{minute}(?!\d)", flat) is not None
+
+
+def _day_in(flat: str, day: date) -> bool:
+    d, m = day.day, day.month
+    numeric = rf"(?<!\d)0?{d}\s*[./-]\s*0?{m}(?!\d)"
+    # "13, 14 e 15 de Novembro": the day can sit a few numbers before the month word.
+    worded = rf"(?<!\d)0?{d}(?:st|nd|rd|th|\.?º)?(?:[^\d]{{0,6}}\d{{1,2}}){{0,3}}[^\d]{{0,8}}(?:{MONTH_WORDS[m]})\b"
+    reverse = rf"\b(?:{MONTH_WORDS[m]})\.?\s+(?:\d{{1,2}}\D{{1,5}}){{0,3}}0?{d}(?!\d)"
+    return any(re.search(p, flat, re.IGNORECASE) for p in (numeric, worded, reverse))
+
+
+def _words_in(flat: str, value: str) -> bool:
+    words = [w for w in re.findall(r"[\wÀ-ÿ]{3,}", value.lower()) if w not in {"das", "dos", "the", "and"}]
+    lower = flat.lower()
+    return not words or sum(w in lower for w in words) / len(words) >= 0.7
+
+
+def _numbers_in(flat: str, value: str) -> bool:
+    compact = re.sub(r"\s+", "", flat)
+    return all(n in compact for n in re.findall(r"\d+(?:[.,]\d+)?", value))
+
+
+def _to_facts(data: dict, flat: str = "") -> dict:
     start, end = _day(data.get("startDate")), _day(data.get("endDate"))
     if start and (not end or end < start):
         end = start
     dates = (start, end) if start and end and (end - start).days <= 14 else None
     course = data.get("course") if data.get("course") in ("lcm", "scm") else None
     venue = ", ".join(part for part in (_text(data.get("venue"), 100), _text(data.get("city"), 60)) if part)
+    name = _text(data.get("name"), 120)
 
     facts: list[dict] = []
+    check: set[str] = set()
 
-    def add(label: str, value: str | None) -> None:
+    def add(label: str, value: str | None, ok: bool = True) -> None:
         value = _text(value, 400)
         if value:
-            facts.append({"label": label, "value": value})
+            facts.append({"label": label, "value": value, "check": not ok})
 
-    add("Local", venue)
+    if name and not _words_in(flat, name):
+        check.add("name")
+    venue_ok = _words_in(flat, venue)
+    if venue and not venue_ok:
+        check.add("venue")
+    add("Local", venue, venue_ok)
     if dates:
-        add("Datas", _pt(dates[0]) if dates[0] == dates[1] else f"{_pt(dates[0])} a {_pt(dates[1])}")
+        dates_ok = _day_in(flat, dates[0]) and _day_in(flat, dates[1])
+        if not dates_ok:
+            check.add("dates")
+        add("Datas", _pt(dates[0]) if dates[0] == dates[1] else f"{_pt(dates[0])} a {_pt(dates[1])}", dates_ok)
     if course:
         lanes = data.get("lanes")
-        add("Piscina", ("50 m" if course == "lcm" else "25 m") + (f", {int(lanes)} pistas" if isinstance(lanes, int) and 0 < lanes < 20 else ""))
-    sessions = []
+        lanes_ok = isinstance(lanes, int) and 0 < lanes < 20 and re.search(rf"(?<!\d){lanes}\s*(?:pistas|lanes|calles|couloirs|corsie|bahnen)", flat, re.IGNORECASE)
+        add("Piscina", ("50 m" if course == "lcm" else "25 m") + (f", {int(lanes)} pistas" if lanes_ok else ""))
+    sessions, dropped = [], 0
     for item in data.get("sessions") or []:
         day = _day(item.get("date")) if isinstance(item, dict) else None
-        time = re.match(r"(\d{1,2})[:h.](\d{2})", str(item.get("time") or "")) if day else None
-        if day and time:
-            label = _text(item.get("label"), 30)
-            sessions.append((day, int(time.group(1)), time.group(2), label))
+        found = re.match(r"(\d{1,2})[:h.](\d{2})", str(item.get("time") or "")) if day else None
+        if not (day and found):
+            continue
+        hour, minute = int(found.group(1)), found.group(2)
+        if flat and not _time_in(flat, hour, minute):
+            dropped += 1  # a time that isn't printed anywhere in the regulation is never shown
+            continue
+        sessions.append((day, hour, minute, _text(item.get("label"), 30)))
     if sessions:
         sessions.sort(key=lambda s: (s[0], s[1], s[2]))
-        add("Sessões", " · ".join(f"{d.strftime('%d/%m')} {h}h{m}" + (f" {label.lower()}" if label else "") for d, h, m, label in sessions))
+        add("Sessões", " · ".join(f"{d.strftime('%d/%m')} {h}h{m}" + (f" {label.lower()}" if label else "") for d, h, m, label in sessions), not dropped)
     deadline = _day(data.get("entryDeadline"))
-    add("Prazo de inscrição", _pt(deadline) if deadline else None)
+    add("Prazo de inscrição", _pt(deadline) if deadline else None, not deadline or _day_in(flat, deadline))
     email = _text(data.get("entryEmail"), 120)
-    add("Enviar inscrições para", email if "@" in email else None)
-    add("Limite de provas", data.get("maxEvents"))
-    add("Taxa de inscrição", data.get("entryFee"))
-    add("Tempos de admissão válidos", data.get("qualifyingWindow"))
-    add("Formato (individuais)", data.get("format"))
-    return {"name": _text(data.get("name"), 120), "venue": venue, "course": course, "dates": dates, "facts": facts}
+    add("Enviar inscrições para", email if "@" in email and email.lower() in flat.lower() else None)
+    for label, key in (("Limite de provas", "maxEvents"), ("Taxa de inscrição", "entryFee"), ("Tempos de admissão válidos", "qualifyingWindow"), ("Formato (individuais)", "format")):
+        value = _text(data.get(key), 400)
+        add(label, value, _numbers_in(flat, value))
+    return {"name": name, "venue": venue, "course": course, "dates": dates, "facts": facts, "check": check}
