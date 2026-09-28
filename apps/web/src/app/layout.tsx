@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastHost } from "@/components/ui/toast-host";
+import { ConfirmHost } from "@/components/ui/confirm-host";
 import { INTL_LOCALE, translate } from "@/i18n";
 import { LocaleProvider } from "@/i18n/provider";
 import { getServerLocale } from "@/i18n/server";
@@ -91,6 +92,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <div id="conteudo" className="min-h-dvh w-full">
             {children}
             <ToastHost />
+            <ConfirmHost />
           </div>
         </LocaleProvider>
       </body>

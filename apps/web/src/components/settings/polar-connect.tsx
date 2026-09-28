@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { actions } from "@/lib/store";
 import { toast } from "@/lib/toast";
 import { formatDatePt } from "@/lib/labels";
+import { confirmDialog } from "@/lib/confirm";
 
 type PolarStatus = { available: boolean; linked: boolean; lastSyncAt: string | null };
 
@@ -44,7 +45,15 @@ export function PolarConnect() {
   }
 
   async function disconnect() {
-    if (!window.confirm(t("Desligar a conta Polar? Os batimentos já importados ficam."))) return;
+    if (
+      !(await confirmDialog({
+        title: t("Desligar a conta Polar?"),
+        message: t("Os batimentos já importados ficam."),
+        confirmLabel: t("Desligar"),
+        destructive: true,
+      }))
+    )
+      return;
     setBusy(true);
     try {
       await api("/api/v1/integrations/polar", { method: "DELETE", idempotencyKey: `polar-off-${Date.now()}` });

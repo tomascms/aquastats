@@ -17,6 +17,7 @@ import { actions, useAppState, useAuthBoot } from "@/lib/store";
 import type { Competition, Workout } from "@/lib/types";
 import { useT } from "@/i18n/provider";
 import { GROUPS, GROUP_LABEL, groupLabel, parallelVolume, type TrainingGroup } from "@/lib/groups";
+import { confirmDialog } from "@/lib/confirm";
 
 
 export default function CoachHomePage() {
@@ -245,8 +246,8 @@ function CoachCalendar() {
                     <button
                       type="button"
                       className="btn-ghost h-10 text-coral"
-                      onClick={() => {
-                        if (!window.confirm(t("Apagar este treino e os tempos?"))) return;
+                      onClick={async () => {
+                        if (!(await confirmDialog({ title: t("Apagar este treino e os tempos?"), confirmLabel: t("Apagar"), destructive: true }))) return;
                         void actions.deleteWorkout(workout.id);
                       }}
                     >

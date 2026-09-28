@@ -6,6 +6,7 @@ import { WorkoutForm } from "@/components/workouts/workout-form";
 import { actions, useAppState } from "@/lib/store";
 import { normalizeDraft } from "@/lib/set";
 import { useT } from "@/i18n/provider";
+import { confirmDialog } from "@/lib/confirm";
 
 export default function EditWorkoutPage() {
   const t = useT();
@@ -50,8 +51,8 @@ export default function EditWorkoutPage() {
       <button
         type="button"
         className="mt-3 h-12 w-full rounded-2xl border border-coral/40 text-sm font-semibold text-coral"
-        onClick={() => {
-          if (!window.confirm(t("Apagar este treino e os tempos?"))) return;
+        onClick={async () => {
+          if (!(await confirmDialog({ title: t("Apagar este treino e os tempos?"), confirmLabel: t("Apagar"), destructive: true }))) return;
           void actions.deleteWorkout(workout.id).then(() => router.push(`/coach?date=${workout.date}`));
         }}
       >

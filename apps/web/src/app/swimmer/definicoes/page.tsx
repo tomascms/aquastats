@@ -14,6 +14,7 @@ import { actions, useAppState } from "@/lib/store";
 import { todayIso } from "@/lib/dates";
 import type { MessageKey } from "@/i18n";
 import type { Gender, GymType, SeedRecord, Stroke, WellnessEntry } from "@/lib/types";
+import { confirmDialog } from "@/lib/confirm";
 
 const STROKES: Stroke[] = ["free", "back", "breast", "fly", "im"];
 const GENDERS: Gender[] = ["M", "F"];
@@ -101,7 +102,15 @@ export default function SwimmerDefinicoesPage() {
   }
 
   async function leaveTeam() {
-    if (!window.confirm(t("Queres sair da equipa? Os teus tempos e dados ficam na equipa e não passam para outra."))) return;
+    if (
+      !(await confirmDialog({
+        title: t("Queres sair da equipa?"),
+        message: t("Os teus tempos e dados ficam na equipa e não passam para outra."),
+        confirmLabel: t("Sair da equipa"),
+        destructive: true,
+      }))
+    )
+      return;
     setBusy(true);
     setError("");
     try {

@@ -9,6 +9,7 @@ import { actions, useAppState } from "@/lib/store";
 import { useT } from "@/i18n/provider";
 import { HrChart } from "@/components/heart-rate/hr-chart";
 import { sessionFor } from "@/lib/heart-rate";
+import { confirmDialog } from "@/lib/confirm";
 
 export default function ViewWorkoutPage() {
   const t = useT();
@@ -97,8 +98,8 @@ export default function ViewWorkoutPage() {
           <button
             type="button"
             className="min-h-10 w-full rounded-lg text-sm font-semibold text-coral hover:bg-[#fdecea]"
-            onClick={() => {
-              if (!window.confirm(t("Apagar este treino e os tempos?"))) return;
+            onClick={async () => {
+              if (!(await confirmDialog({ title: t("Apagar este treino e os tempos?"), confirmLabel: t("Apagar"), destructive: true }))) return;
               void actions.deleteWorkout(workout.id).then(() => router.push(`/coach?date=${workout.date}`));
             }}
           >

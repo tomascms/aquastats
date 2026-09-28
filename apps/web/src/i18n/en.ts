@@ -1242,5 +1242,9 @@ export const en = {
   "Apaga os tempos de treino, provas, recordes, objetivos e frequência cardíaca deste atleta nesta equipa. Não pode ser desfeito.": "Deletes this swimmer's training times, races, records, goals and heart rate in this team. This can't be undone.",
   "Percebo que os dados de {name} são apagados para sempre.": "I understand {name}'s data is deleted for good.",
   "Remover e apagar dados": "Remove and delete data",
+  "Desligar a conta Polar?": "Disconnect the Polar account?",
+  "Os batimentos já importados ficam.": "Heart rate already imported stays.",
+  "Queres sair da equipa?": "Leave the team?",
+  "Os teus tempos e dados ficam na equipa e não passam para outra.": "Your times and data stay with the team and don't move to another one.",
   // @@APPEND@@
 } as const;

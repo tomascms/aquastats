@@ -27,6 +27,7 @@ import { actions } from "@/lib/store";
 import { EMPTY_PARTS, hasClockTime } from "@/lib/swim-time";
 import type { Competition, DayPart, MeetEntry, MeetResult, RaceLap, RaceSession, TimeParts } from "@/lib/types";
 import { useT } from "@/i18n/provider";
+import { confirmDialog } from "@/lib/confirm";
 
 function clockToSeconds(parts: TimeParts): number {
   const committed = {
@@ -663,8 +664,8 @@ export function RaceResultSheet({
               <button
                 type="button"
                 className="h-11 rounded-2xl border border-coral/40 px-4 text-sm font-semibold text-coral"
-                onClick={() => {
-                  if (!window.confirm(t("Apagar este resultado?"))) return;
+                onClick={async () => {
+                  if (!(await confirmDialog({ title: t("Apagar este resultado?"), confirmLabel: t("Apagar"), destructive: true }))) return;
                   void actions.deleteCompetitionResult(entry.id, existing.id).then(() => {
                     const blank = emptyLaps(entry.distanceM, course);
                     setLaps(blank);
