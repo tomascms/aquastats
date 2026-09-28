@@ -143,11 +143,31 @@ def absorb_user(session: Session, source: User, target: User) -> User:
         target.email = normalize_email(source.email)
     if target.role == "pending" and source.role in {"coach", "swimmer"}:
         target.role = source.role
-    source.email = None
-    source.is_active = False
-    source.deleted_at = stamp
-    source.updated_at = stamp
     target.updated_at = stamp
+    # The merged-away account is deleted for good; what it authored now belongs to the account kept.
+    from sqlalchemy import text
+
+    session.flush()  # moved OAuth accounts / membership are saved before the bulk updates below
+    moved = {"s": source.id, "t": target.id}
+    for table, column in (
+        ("workouts", "created_by"),
+        ("competitions", "created_by"),
+        ("season_plans", "created_by"),
+        ("attendance_sessions", "created_by"),
+        ("race_sessions", "created_by"),
+        ("goals", "author_user_id"),
+        ("time_logs", "recorded_by"),
+        ("meet_results", "recorded_by"),
+        ("polar_links", "user_id"),
+        ("audit_logs", "user_id"),
+    ):
+        session.execute(text(f"update {table} set {column} = :t where {column} = :s"), moved)
+    for model in (TeamMember, RefreshToken, PasswordResetToken, EmailVerificationToken, IdempotencyKey, OAuthAccount):
+        session.execute(delete(model).where(model.user_id == source.id))
+    session.execute(delete(Profile).where(Profile.user_id == source.id))
+    session.flush()
+    session.delete(source)
+    session.flush()
     return target
 
 
@@ -167,54 +187,6 @@ def _copy_profile_to_athlete(session: Session, user: User, athlete: Athlete) -> 
         if key in profile_extra:
             extra[key] = profile_extra[key]
     athlete.extra = extra
-
-
-def _purge_athlete_data(session: Session, athlete_id: UUID, stamp: datetime) -> None:
-    session.execute(delete(TimeLog).where(TimeLog.athlete_id == athlete_id))
-    session.execute(delete(PersonalRecord).where(PersonalRecord.athlete_id == athlete_id))
-    entries = session.scalars(select(MeetEntry).where(MeetEntry.athlete_id == athlete_id)).all()
-    for entry in entries:
-        session.execute(delete(MeetResult).where(MeetResult.entry_id == entry.id))
-        session.delete(entry)
-    for row in session.scalars(
-        select(RaceSession).where(RaceSession.athlete_id == athlete_id, RaceSession.deleted_at.is_(None))
-    ):
-        row.deleted_at = stamp
-        row.updated_at = stamp
-    for workout in session.scalars(select(Workout).where(Workout.deleted_at.is_(None))):
-        ids = workout.athlete_ids or []
-        if athlete_id in ids:
-            workout.athlete_ids = [item for item in ids if item != athlete_id]
-    for meet in session.scalars(select(Competition).where(Competition.deleted_at.is_(None))):
-        ids = meet.athlete_ids or []
-        if athlete_id in ids:
-            meet.athlete_ids = [item for item in ids if item != athlete_id]
-
-
-def _soft_delete_athlete(session: Session, athlete: Athlete, stamp: datetime) -> None:
-    _purge_athlete_data(session, athlete.id, stamp)
-    athlete.user_id = None
-    athlete.deleted_at = stamp
-    athlete.updated_at = stamp
-
-
-def _purge_team_operational_data(session: Session, team_id: UUID, stamp: datetime) -> None:
-    for workout in session.scalars(select(Workout).where(Workout.team_id == team_id, Workout.deleted_at.is_(None))):
-        session.execute(delete(TimeLog).where(TimeLog.workout_id == workout.id))
-        workout.deleted_at = stamp
-        workout.updated_at = stamp
-    for meet in session.scalars(select(Competition).where(Competition.team_id == team_id, Competition.deleted_at.is_(None))):
-        meet.deleted_at = stamp
-        meet.updated_at = stamp
-    for row in session.scalars(select(RaceSession).where(RaceSession.team_id == team_id, RaceSession.deleted_at.is_(None))):
-        row.deleted_at = stamp
-        row.updated_at = stamp
-    for row in session.scalars(select(SeasonPlan).where(SeasonPlan.team_id == team_id, SeasonPlan.deleted_at.is_(None))):
-        row.deleted_at = stamp
-        row.updated_at = stamp
-    for row in session.scalars(select(AttendanceSession).where(AttendanceSession.team_id == team_id, AttendanceSession.deleted_at.is_(None))):
-        row.deleted_at = stamp
-        row.updated_at = stamp
 
 
 def join_team(session: Session, user: User, code: str, request: Request) -> str:

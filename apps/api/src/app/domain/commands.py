@@ -542,14 +542,15 @@ def update_workout(session: Session, payload: dict, workout_id: str, body: dict,
 
 def delete_workout(session: Session, payload: dict, workout_id: str, request) -> dict:
     row = _owned_workout(session, payload["team_uuid"], as_uuid(workout_id, "workoutId"))
-    now = _now()
+    from .models import HrSession
+
+    # Deleting is for good: the workout, its times and its attendance sheet go; heart rate stays unlinked.
     session.query(TimeLog).filter(TimeLog.workout_id == row.id).delete(synchronize_session=False)
-    for attendance in session.scalars(select(AttendanceSession).where(AttendanceSession.workout_id == row.id, AttendanceSession.deleted_at.is_(None))):
-        attendance.deleted_at = now
-        attendance.updated_at = now
-    row.deleted_at = now
-    row.updated_at = now
+    session.query(AttendanceSession).filter(AttendanceSession.workout_id == row.id).delete(synchronize_session=False)
+    session.query(HrSession).filter(HrSession.workout_id == row.id).update({"workout_id": None}, synchronize_session=False)
     _audit(session, payload, "workout.delete", "workout", row.id, request)
+    session.delete(row)
+    session.flush()
     return {"deleted": True, "id": str(row.id)}
 
 
@@ -690,18 +691,20 @@ def update_competition(session: Session, payload: dict, meet_id: str, body: dict
 
 def delete_competition(session: Session, payload: dict, meet_id: str, request) -> dict:
     row = _owned_meet(session, payload["team_uuid"], as_uuid(meet_id, "meetId"))
-    now = _now()
+    from .models import Goal
+
+    # Deleting is for good: entries, results, race analyses and the records set there go with it.
     entries = session.scalars(select(MeetEntry).where(MeetEntry.competition_id == row.id)).all()
     entry_ids = [entry.id for entry in entries]
     if entry_ids:
         session.query(MeetResult).filter(MeetResult.entry_id.in_(entry_ids)).delete(synchronize_session=False)
         session.query(MeetEntry).filter(MeetEntry.id.in_(entry_ids)).delete(synchronize_session=False)
-    for race in session.scalars(select(RaceSession).where(RaceSession.competition_id == row.id, RaceSession.deleted_at.is_(None))):
-        race.deleted_at = now
-        race.updated_at = now
-    row.deleted_at = now
-    row.updated_at = now
+    session.query(RaceSession).filter(RaceSession.competition_id == row.id).delete(synchronize_session=False)
+    session.query(PersonalRecord).filter(PersonalRecord.competition_id == row.id).delete(synchronize_session=False)
+    session.query(Goal).filter(Goal.competition_id == row.id).update({"competition_id": None}, synchronize_session=False)
     _audit(session, payload, "meet.delete", "competition", row.id, request)
+    session.delete(row)
+    session.flush()
     return {"deleted": True, "id": str(row.id)}
 
 
@@ -986,10 +989,9 @@ def save_race_session(session: Session, payload: dict, body: dict, request) -> d
 
 def delete_race_session(session: Session, payload: dict, race_id: str, request) -> dict:
     row = _owned_race(session, payload["team_uuid"], as_uuid(race_id, "id"))
-    now = _now()
-    row.deleted_at = now
-    row.updated_at = now
     _audit(session, payload, "race.delete", "race_session", row.id, request)
+    session.delete(row)
+    session.flush()
     return {"deleted": True, "id": str(row.id)}
 
 
@@ -1107,10 +1109,9 @@ def delete_season_plan(session: Session, payload: dict, plan_id: str, request) -
     row = session.get(SeasonPlan, as_uuid(plan_id, "id"))
     if not row or row.team_id != payload["team_uuid"] or row.deleted_at:
         raise HTTPException(status_code=404, detail="Plano não encontrado.")
-    now = _now()
-    row.deleted_at = now
-    row.updated_at = now
     _audit(session, payload, "plan.delete", "season_plan", row.id, request)
+    session.delete(row)
+    session.flush()
     return {"deleted": True, "id": str(row.id)}
 
 

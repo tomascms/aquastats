@@ -149,7 +149,7 @@ def delete_goal(session: Session, payload: dict, goal_id: str, request) -> dict:
     if not row or row.team_id != payload["team_uuid"] or row.deleted_at:
         raise HTTPException(status_code=404, detail="Objetivo não encontrado.")
     _athlete_for(session, payload, row.athlete_id)
-    row.deleted_at = _now()
-    row.updated_at = row.deleted_at
     _audit(session, payload, "goal.delete", "goal", row.id, request)
+    session.delete(row)
+    session.flush()
     return {"deleted": True, "id": str(row.id)}

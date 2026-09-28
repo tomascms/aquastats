@@ -177,7 +177,7 @@ def sync_link(session: Session, link: PolarLink, force: bool = False) -> int:
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         listing = client.get(f"{API}/exercises", headers=headers)
         if listing.status_code in (401, 403):
-            link.deleted_at = _now()  # the athlete revoked access on Polar's side
+            session.delete(link)  # the athlete revoked access on Polar's side
             return 0
         listing.raise_for_status()
         for exercise in (listing.json() or [])[:60]:
@@ -236,6 +236,6 @@ def disconnect(session: Session, payload: dict) -> dict:
             client.delete(f"{API}/users/{link.polar_user_id}", headers={"Authorization": f"Bearer {_open(link.token)}"})
     except httpx.HTTPError:
         pass
-    link.deleted_at = _now()
-    link.token = ""
+    session.delete(link)
+    session.flush()
     return {"linked": False}

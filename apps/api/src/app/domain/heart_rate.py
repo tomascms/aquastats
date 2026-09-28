@@ -305,6 +305,7 @@ def delete(session: Session, payload: dict, session_id: str, request) -> dict:
         raise HTTPException(status_code=404, detail="Não encontrado.")
     if payload.get("role") == "swimmer" and str(row.athlete_id) != str(payload.get("athlete_uuid")):
         raise HTTPException(status_code=403, detail="Sem acesso.")
-    row.deleted_at = _now()
     _audit(session, payload, "hr.delete", "hr_session", row.id, request)
+    session.delete(row)
+    session.flush()
     return {"deleted": True, "id": str(row.id)}

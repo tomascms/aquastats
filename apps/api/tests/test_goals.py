@@ -29,6 +29,9 @@ class FakeSession:
     def flush(self):
         pass
 
+    def delete(self, row):
+        self.rows.pop(row.id, None)
+
 
 @pytest.fixture(autouse=True)
 def _patch(monkeypatch):
