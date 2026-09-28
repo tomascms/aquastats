@@ -91,6 +91,8 @@ class LenexClub:
     code: str | None
     nation: str | None
     athletes: list[LenexAthlete] = field(default_factory=list)
+    # Lenex CLUB@type: CLUB, NATIONALTEAM, REGIONALTEAM, UNATTACHED (None when not given, e.g. PDFs).
+    kind: str | None = None
 
 
 @dataclass
@@ -233,6 +235,7 @@ def parse_lenex(data: bytes) -> LenexMeet:
             name=(club.get("name") or club.get("shortname") or "").strip(),
             code=(club.get("code") or "").strip() or None,
             nation=(club.get("nation") or "").strip() or None,
+            kind=(club.get("type") or "").strip().upper() or None,
         )
         for a_index, athlete in enumerate(club.findall("./ATHLETES/ATHLETE")):
             person = LenexAthlete(

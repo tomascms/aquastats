@@ -9,6 +9,7 @@ asked when something is genuinely ambiguous.
 from __future__ import annotations
 
 import base64
+import re
 import binascii
 from datetime import date
 from uuid import UUID, uuid4
@@ -75,22 +76,67 @@ def _birth_year(value) -> int | None:
     return value.year if isinstance(value, date) else int(str(value)[:4])
 
 
-def match_athlete(person: LenexAthlete, athletes: list[Athlete]) -> tuple[Athlete | None, str]:
-    """Licence first, then full name + birth year, then an unambiguous full-name match."""
+def match_athlete(person: LenexAthlete, athletes: list[Athlete], strict: bool = False) -> tuple[Athlete | None, str]:
+    """Licence first; otherwise the full name AND the year of birth must match.
+
+    A different year of birth is never accepted, however close the name. An athlete of ours without a
+    date of birth can only be matched by name in our own club (`strict=False`) and only if unambiguous;
+    in a selection (`strict=True`, "Miguel Oliveira — Portugal") name and year are both required.
+    """
     if person.license:
         for athlete in athletes:
             if (athlete.extra or {}).get("license") == person.license:
                 return athlete, "license"
-    scored = sorted(((name_score(person.name, a.name), a) for a in athletes), key=lambda item: item[0], reverse=True)
-    if not scored or scored[0][0] < 0.99:
+    top = [a for a in athletes if name_score(person.name, a.name) >= 0.99]
+    if not top:
         return None, "none"
-    lenex_year = int(person.birth_date[:4]) if person.birth_date else person.birth_year
-    top = [a for score, a in scored if score >= 0.99]
-    if lenex_year:
-        same_year = [a for a in top if _birth_year(a.date_of_birth) == lenex_year]
+    year = int(person.birth_date[:4]) if person.birth_date else person.birth_year
+    if year:
+        same_year = [a for a in top if _birth_year(a.date_of_birth) == year]
         if len(same_year) == 1:
             return same_year[0], "name+year"
+        if same_year or strict:
+            return None, "ambiguous" if same_year else "none"
+        undated = [a for a in top if not a.date_of_birth]
+        return (undated[0], "name") if len(undated) == 1 else (None, "none")
+    if strict:
+        return None, "none"
     return (top[0], "name") if len(top) == 1 else (None, "ambiguous")
+
+
+# Selections an athlete may swim for instead of their club ("Miguel Oliveira — Portugal").
+_SELECTION_WORDS = re.compile(
+    r"sele[cç]{1,2}[aã]o|selec[cç]i[oó]n|s[eé]lection|national\s*team|nationalmannschaft|nazionale|seleccao|team\s+(?:portugal|spain|france)",
+    re.IGNORECASE,
+)
+_COUNTRIES = {
+    normalize_name(name)
+    for name in (
+        "Portugal", "Espanha", "España", "Spain", "France", "França", "Italia", "Itália", "Italy", "Germany", "Alemanha",
+        "Deutschland", "Brasil", "Brazil", "Angola", "Moçambique", "Mozambique", "Cabo Verde", "Cape Verde", "Luxembourg",
+        "Luxemburgo", "Ireland", "Irlanda", "Great Britain", "Grã-Bretanha", "England", "Inglaterra", "Scotland", "Escócia",
+        "Wales", "Morocco", "Marrocos", "Belgium", "Bélgica", "Netherlands", "Holanda", "Países Baixos", "Switzerland",
+        "Suíça", "Austria", "Áustria", "Andorra", "Macau", "Macao", "Guiné-Bissau", "São Tomé e Príncipe", "Timor-Leste",
+        "Poland", "Polónia", "Czech Republic", "Chéquia", "Slovakia", "Eslováquia", "Hungary", "Hungria", "Greece", "Grécia",
+        "Turkey", "Turquia", "Israel", "Norway", "Noruega", "Sweden", "Suécia", "Denmark", "Dinamarca", "Finland",
+        "Finlândia", "Iceland", "Islândia", "Estonia", "Estónia", "Latvia", "Letónia", "Lithuania", "Lituânia", "Ukraine",
+        "Ucrânia", "Romania", "Roménia", "Bulgaria", "Bulgária", "Serbia", "Sérvia", "Croatia", "Croácia", "Slovenia",
+        "Eslovénia", "Malta", "Cyprus", "Chipre", "Gibraltar", "Faroe Islands", "USA", "United States", "Estados Unidos",
+        "Canada", "Canadá", "Mexico", "México", "Argentina", "Chile", "Uruguay", "Uruguai", "Venezuela", "Colombia",
+        "Colômbia", "South Africa", "África do Sul", "Australia", "Austrália", "Japan", "Japão", "China",
+    )
+}
+
+
+def is_selection(club: LenexClub) -> bool:
+    """National / regional selection rather than a club: Lenex type, a country name, the nation code
+    on its own ("POR") or words like "Seleção"."""
+    if club.kind in {"NATIONALTEAM", "REGIONALTEAM"}:
+        return True
+    name = normalize_name(club.name)
+    if name in _COUNTRIES or _SELECTION_WORDS.search(club.name):
+        return True
+    return bool(club.nation and club.name.strip().upper() == club.nation.upper())
 
 
 def _pick_club(meet: LenexMeet, team: Team | None, athletes: list[Athlete], forced: str | None) -> tuple[LenexClub | None, list[LenexClub]]:
@@ -98,7 +144,7 @@ def _pick_club(meet: LenexMeet, team: Team | None, athletes: list[Athlete], forc
         return next((club for club in meet.clubs if club.key == forced), None), meet.clubs
 
     def score(club: LenexClub) -> tuple[int, float]:
-        known = sum(1 for person in club.athletes if match_athlete(person, athletes)[0] is not None)
+        known = sum(1 for person in club.athletes if match_athlete(person, athletes, strict=is_selection(club))[0] is not None)
         return known, name_score(club.name, team.name) if team else 0.0
 
     ranked = sorted(meet.clubs, key=score, reverse=True)
@@ -176,11 +222,22 @@ def process_lenex(session: Session, payload: dict, body: dict, request, meet: Le
         forced = overrides.get(person.key)
         if forced == "skip":
             continue
-        athlete = _owned_athlete(session, team_id, as_uuid(forced, "athleteId")) if forced else match_athlete(person, athletes)[0]
+        athlete = _owned_athlete(session, team_id, as_uuid(forced, "athleteId")) if forced else match_athlete(person, athletes, strict=is_selection(club))[0]
         if athlete is None:
             unmatched.append({"key": person.key, "name": person.name, "birthDate": person.birth_date})
         else:
             matched.append((person, athlete))
+    # Our swimmers can also swim for a selection (national / regional team). There, name AND year of
+    # birth must both match, so a namesake from another country is never taken for ours.
+    for other in meet.clubs:
+        if other is club or not is_selection(other):
+            continue
+        for person in other.athletes:
+            if overrides.get(person.key) == "skip":
+                continue
+            athlete = match_athlete(person, athletes, strict=True)[0]
+            if athlete is not None and all(athlete.id != mine.id for _, mine in matched):
+                matched.append((person, athlete))
 
     competition = target or _find_competition(session, team_id, meet)
     summary = {

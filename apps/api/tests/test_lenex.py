@@ -136,3 +136,38 @@ def test_match_prefers_license_then_name_and_year():
 def test_name_score_ignores_accents_and_middle_names():
     assert name_score("João Pedro Silva", "Joao Silva") == 1.0
     assert name_score("Ana Costa", "Rui Costa") == 0.5
+
+
+def _ours(name, dob):
+    from datetime import date as _d
+    from uuid import uuid4
+
+    from app.domain.models import Athlete
+
+    return Athlete(id=uuid4(), name=name, date_of_birth=_d.fromisoformat(dob) if dob else None, extra={})
+
+
+def test_name_alone_is_not_enough_when_years_differ():
+    from app.domain.lenex import LenexAthlete
+    from app.domain.lenex_import import match_athlete
+
+    ours = [_ours("Miguel Oliveira", "2008-03-01")]
+    same = LenexAthlete(key="a", first_name="Miguel", last_name="Oliveira", birth_date="2008-03-01", gender="M", license=None)
+    older = LenexAthlete(key="b", first_name="Miguel", last_name="Oliveira", birth_date="1995-06-10", gender="M", license=None)
+    assert match_athlete(same, ours)[0] is ours[0]
+    assert match_athlete(older, ours)[0] is None
+
+
+def test_selection_needs_name_and_year():
+    from app.domain.lenex import LenexAthlete, LenexClub
+    from app.domain.lenex_import import is_selection, match_athlete
+
+    assert is_selection(LenexClub(key="1", name="Portugal", code="POR", nation="POR"))
+    assert is_selection(LenexClub(key="2", name="Seleção Regional do Algarve", code=None, nation="POR"))
+    assert is_selection(LenexClub(key="3", name="X", code=None, nation=None, kind="NATIONALTEAM"))
+    assert not is_selection(LenexClub(key="4", name="Sporting Clube de Portugal", code="SCP", nation="POR"))
+
+    undated = [_ours("Miguel Oliveira", None)]
+    person = LenexAthlete(key="c", first_name="Miguel", last_name="Oliveira", birth_date="2008-03-01", gender="M", license=None)
+    assert match_athlete(person, undated)[0] is undated[0]  # own club, unambiguous
+    assert match_athlete(person, undated, strict=True)[0] is None  # a selection needs the year on both sides
