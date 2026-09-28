@@ -1233,5 +1233,6 @@ export const en = {
   "Tempos do treino": "Workout times",
   "Tipo de conta": "Account type",
   "Aprovar treinador": "Approve coach",
+  "Ainda sem atletas da equipa nos resultados": "No team swimmers in the results yet",
   // @@APPEND@@
 } as const;

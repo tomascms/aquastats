@@ -13,6 +13,7 @@ const LIVE_STATUS: Record<string, string> = {
   catchingUp: "A importar…",
   finished: "Competição terminada",
   needsClub: "Não encontrei o clube nos resultados",
+  noneOfOurs: "Ainda sem atletas da equipa nos resultados",
 };
 
 /**

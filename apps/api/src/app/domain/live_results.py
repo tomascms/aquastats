@@ -20,7 +20,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from ..core.ssrf import assert_safe_url
 from .commands import _now
-from .lenex import LenexError, parse_lenex
+from .lenex import LenexAthlete, LenexClub, LenexError, LenexMeet, parse_lenex
 from .lenex_import import process_lenex
 from .models import Competition
 from .serializers import as_uuid
@@ -28,7 +28,7 @@ from .splash_pdf import parse_splash_pdf
 
 LIVE_HOSTS = frozenset({"live.swimrankings.net"})
 MIN_INTERVAL = timedelta(minutes=4)
-MAX_FILES_PER_RUN = 10
+MAX_FILES_PER_RUN = 200
 MAX_FILE_BYTES = 15 * 1024 * 1024
 LINK_RE = re.compile(r'href="((?:StartList|ResultList)_[0-9A-Za-z]+\.pdf|results\.lxf)"', re.IGNORECASE)
 
@@ -112,8 +112,6 @@ def sync(session: Session, payload: dict, row: Competition, request, force: bool
     session.flush()
 
     files: dict = dict(live.get("files") or {})
-    imported = 0
-    status = "waiting"
     body = {"dryRun": False}
     with httpx.Client(timeout=20.0, follow_redirects=False, headers={"User-Agent": "Aquastats live results follower"}) as client:
         index = _fetch(client, live["url"]).decode("utf-8", "ignore")
@@ -123,35 +121,64 @@ def sync(session: Session, payload: dict, row: Competition, request, force: bool
         else:
             # Results after start lists; within each, in index order.
             names = [n for n in names if n.startswith("StartList")] + [n for n in names if n.startswith("ResultList")]
-        for name in names:
-            if imported >= MAX_FILES_PER_RUN:
-                status = "catchingUp"
-                break
+        # Every file is read, and all of them are imported together: one event alone may have none of our
+        # swimmers, so the club and our swimmers are found across the whole meet, not file by file.
+        meets: list = []
+        changed = False
+        for name in names[:MAX_FILES_PER_RUN]:
             try:
                 data = _fetch(client, urljoin(live["url"], name))
             except (httpx.HTTPError, ValueError):
                 continue
             digest = hashlib.sha256(data).hexdigest()[:16]
-            if files.get(name) == digest and not force:
-                continue
-            try:
-                meet = parse_lenex(data) if name.endswith(".lxf") else parse_splash_pdf(data).meet
-            except LenexError:
-                files[name] = digest  # unreadable: don't retry the same bytes every run
-                continue
-            result = process_lenex(session, payload, body, request, meet=meet, target=row)
-            if result.get("status") == "needsClub":
-                live["status"] = "needsClub"
-                live["files"] = files
-                _store(row, live)
-                return {"imported": imported, "status": "needsClub"}
+            changed = changed or files.get(name) != digest
             files[name] = digest
-            imported += 1
-            status = "following"
+            try:
+                meets.append(parse_lenex(data) if name.endswith(".lxf") else parse_splash_pdf(data).meet)
+            except LenexError:
+                continue  # unreadable file: skipped, the rest of the meet still counts
     live["files"] = files
-    live["status"] = status if imported or status == "catchingUp" else live.get("status", "waiting")
+    if not meets or not (changed or force):
+        live["status"] = live.get("status", "waiting") if meets else "waiting"
+        _store(row, live)
+        return {"imported": 0, "status": live["status"]}
+    result = process_lenex(session, payload, body, request, meet=merge_meets(meets), target=row)
+    if result.get("status") == "needsClub":
+        # None of our swimmers anywhere in the meet (yet): keep following quietly.
+        live["status"] = "noneOfOurs"
+        _store(row, live)
+        return {"imported": 0, "status": "noneOfOurs"}
+    live["status"] = "following"
     _store(row, live)
-    return {"imported": imported, "status": live["status"]}
+    return {"imported": len(result.get("athletes") or []), "status": "following"}
+
+
+def merge_meets(meets: list) -> LenexMeet:
+    """One meet from many per-event files: clubs and swimmers merged by key, swims appended."""
+    clubs: dict[str, LenexClub] = {}
+    people: dict[str, LenexAthlete] = {}
+    for meet in meets:
+        for club in meet.clubs:
+            merged = clubs.setdefault(club.key, LenexClub(key=club.key, name=club.name, code=club.code, nation=club.nation, kind=club.kind))
+            for person in club.athletes:
+                known = people.get(person.key)
+                if known is None:
+                    known = LenexAthlete(
+                        key=person.key, first_name=person.first_name, last_name=person.last_name, birth_date=person.birth_date,
+                        gender=person.gender, license=person.license, birth_year=person.birth_year,
+                    )
+                    people[person.key] = known
+                    merged.athletes.append(known)
+                known.license = known.license or person.license
+                known.entries.extend(person.entries)
+                known.results.extend(person.results)
+    first = meets[0]
+    starts = [m.start for m in meets if m.start]
+    ends = [m.end for m in meets if m.end]
+    return LenexMeet(
+        name=first.name, city=first.city, course=first.course,
+        start=min(starts) if starts else first.start, end=max(ends) if ends else first.end, clubs=list(clubs.values()),
+    )
 
 
 def sync_team(session: Session, payload: dict, request) -> dict:

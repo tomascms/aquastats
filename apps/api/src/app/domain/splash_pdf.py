@@ -46,6 +46,12 @@ RESULT_RE = re.compile(
     rf"^(?P<status>\d+\.|EXH|WDR)?\s*(?P<last>[A-ZÀ-ÖØ-Þ'´`\-][A-ZÀ-ÖØ-Þ'´`\- ]*?),\s*(?P<first>[^\d,]*?)\s*(?P<yob>\d{{2}})\s+"
     rf"(?:(?P<nat>[A-Z]{{3}})\s+)?(?P<club>.+?)\s*(?P<time>{TIME})(?P<rest>(?:\s+.*)?)$"
 )
+# Newer SPLASH results: "1. Joao Exemplo, TESTE 99 900003 Naval Do Funchal 23.04 747 -A" (given names,
+# SURNAME, year, optional licence, club, time, points). Ties are printed without a place.
+RESULT_GIVEN_FIRST_RE = re.compile(
+    rf"^(?P<status>\d+\.|EXH)?\s*(?P<first>[^\d,]+?),\s*(?P<last>[A-ZÀ-ÖØ-Þ'´`\-][A-ZÀ-ÖØ-Þ'´`\- ]*?)\s+(?P<yob>\d{{2}})\s+"
+    rf"(?:(?P<lic>\d{{3,8}})\s+)?(?P<club>.+?)\s+(?P<time>{TIME})(?P<rest>(?:\s+.*)?)$"
+)
 # "3AMOSTRA, Carla Demo 11 900001Porto 19:34.5350m___:___.___" (lane glued to the name, licence to the club)
 START_RE = re.compile(
     rf"^(?P<wdr>WDR)?(?P<lane>\d)(?P<last>[A-ZÀ-ÖØ-Þ'´`\-][A-ZÀ-ÖØ-Þ'´`\- ]*?),\s*(?P<first>[^\d,]*?)\s*(?P<yob>\d{{2}})\s+"
@@ -285,8 +291,12 @@ def _title(value: str) -> str:
 
 def _result_line(line: str, event: dict, lap_columns: list[int], event_date: str | None, reference_year: int):
     match = RESULT_RE.match(line)
-    if not match or match["status"] == "WDR":
+    if match and match["status"] == "WDR":
         return None
+    if not match:
+        match = RESULT_GIVEN_FIRST_RE.match(line)
+        if not match:
+            return None
     first = match["first"].strip()
     club = match["club"].strip()
     if not first or not club:
@@ -314,7 +324,14 @@ def _result_line(line: str, event: dict, lap_columns: list[int], event_date: str
                     splits.append(LenexSplit(at_m=at_m, time_s=running))
         elif abs(laps[-1] - time_s) <= 0.02:
             splits = [LenexSplit(at_m=at_m, time_s=value) for at_m, value in zip(lap_columns, laps) if at_m < event["dist"]]
-    person = _Person(last=_title(match["last"]), first=first, year=_year(match["yob"], reference_year), club=club, gender=event["gender"])
+    person = _Person(
+        last=_title(match["last"]),
+        first=first,
+        year=_year(match["yob"], reference_year),
+        club=club,
+        license=match.groupdict().get("lic"),
+        gender=event["gender"],
+    )
     result = LenexResult(
         stroke=event["stroke"],
         distance_m=event["dist"],
