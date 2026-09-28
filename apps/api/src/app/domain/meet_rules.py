@@ -51,7 +51,15 @@ def _range_dates(value: str | None) -> tuple[date, date] | None:
     return date(year, month, int(match.group(1))), date(year, month, int(match.group(2)))
 
 
+MEET_WORDS = r"(?:Campeonatos?|Torneio|Meeting|Taça|Trof[eé]u|Encontro|Festival|Open|Grand Prix)"
+
+
 def extract_title(text: str) -> str:
+    # A cover page usually has the name alone on a line ("Meeting Internacional do Porto").
+    for line in text.splitlines()[:40]:
+        line = _clean(line, 120)
+        if re.match(MEET_WORDS + r"\b", line, re.IGNORECASE) and 2 <= len(line.split()) <= 12:
+            return line
     flat = " ".join(text.split())
     match = re.search(r"(?:^|\s)[a-z]\)\s*((?:Campeonato|Torneio|Meeting|Taça|Trofeu|Troféu|Encontro|Festival)[^.:]{3,120}?)(?=Introdu|Local|Data|$)", flat)
     if match:
@@ -108,7 +116,83 @@ def extract_rules(text: str) -> list[dict]:
     add("Exceção", _between(flat, r"Exce[cç][aã]o\s*:", [r"Provas de Estafetas", r"Limite", r"Inscri"], 200))
     add("Participação", _between(flat, r"Participa[cç][aã]o\s*:", [r"Nadadores n[aã]o", r"Programa"], 160))
     add("Prémios", _between(flat, r"Pr[eé]mios\s*:", [r"\d\.\s*ANEXOS", r"Regulamento das"], 160))
+    _numbered_wording(flat, add, {f["label"] for f in facts})
     return facts
+
+
+def _numeric_date(value: str) -> str:
+    return re.sub(r"\s+", "", value)
+
+
+def _numbered_wording(flat: str, add, seen: set[str]) -> None:
+    """Regulations written as numbered clauses (ANNP / regional associations): facts sit inside
+    sentences rather than after "Label:" headings."""
+
+    def once(label: str, value: str | None) -> None:
+        if label not in seen and value:
+            add(label, value)
+            seen.add(label)
+
+    if "Local" not in seen:
+        venue = re.search(r"\b((?:Piscina|Complexo|Centro de Nata[cç][aã]o|Est[aá]dio)\s+(?:[A-ZÀ-Ý][\w'’-]*|de|do|da|dos|das|\s)+?)(?=,|\.|\s+(?:no|na|em|com)\s|\s\d)", flat)
+        city = re.search(r"Piscina[^.,]{0,60},\s+(?:no|na|em)\s+([A-ZÀ-Ý][\w-]+(?:\s[A-ZÀ-Ý][\w-]+)?)", flat)
+        if venue:
+            once("Local", _clean(venue.group(1)) + (f", {city.group(1)}" if city else ""))
+    if "Datas" not in seen:
+        span = re.search(r"\b(\d{1,2}\s*(?:a|e|-|–)\s*\d{1,2}\s+de\s+[a-zç]+\s+de\s+\d{4})", flat, re.IGNORECASE)
+        once("Datas", _clean(span.group(1)) if span else None)
+
+    if re.search(r"dimens[oõ]es\s+ol[ií]mpicas|piscina\s+de\s+50\s*m", flat, re.IGNORECASE):
+        lanes = re.search(r"(\d+)\s+pistas", flat)
+        once("Piscina", "50 m" + (f", {lanes.group(1)} pistas" if lanes else ""))
+    elif re.search(r"piscina\s+de\s+25\s*m", flat, re.IGNORECASE):
+        once("Piscina", "25 m")
+
+    num = r"(\d{1,2}\s*/\s*\d{1,2}\s*/\s*\d{4})"
+    deadline = re.search(r"inscri[cç][oõ]es\s+at[eé]\s+(?:ao\s+dia\s+|dia\s+)?" + num, flat, re.IGNORECASE)
+    late = re.search(r"prazo\s+extraordin[aá]rio\s+at[eé]\s+(?:ao\s+dia\s+)?" + num, flat, re.IGNORECASE)
+    if deadline:
+        once("Prazo de inscrição", _numeric_date(deadline.group(1)) + (f" (extraordinário até {_numeric_date(late.group(1))})" if late else ""))
+    email = re.search(r"inscri[cç][oõ]es.{0,300}?\b([\w.+-]+@[\w-]+(?:\.[\w-]+)+)", flat, re.IGNORECASE)
+    once("Enviar inscrições para", email.group(1).rstrip(".") if email else None)
+
+    limit = re.search(r"(?:inscrito|participar)[^.]{0,60}?em\s+(\d+)\s+provas\s+individuais\s*(\([^)]{3,40}\))?", flat, re.IGNORECASE)
+    if limit:
+        once("Limite de provas", f"{limit.group(1)} individuais" + (f" {limit.group(2)}" if limit.group(2) else "") + " + estafetas")
+
+    since = re.search(r"tempos\s+de\s+inscri[cç][aã]o.{0,120}?(?:entre|desde|a\s+partir\s+de)\s+(" + LONG_DATE + ")", flat, re.IGNORECASE)
+    once("Tempos de admissão válidos", f"desde {since.group(1)}" if since else None)
+
+    heats = re.search(r"s[eé]ries\s+eliminat[oó]rias", flat, re.IGNORECASE)
+    finals = re.search(r"finais\s+A\s+e\s+B", flat, re.IGNORECASE)
+    if heats and finals:
+        once("Formato (individuais)", "Eliminatórias de manhã, finais A e B à tarde")
+    elif heats:
+        once("Formato (individuais)", "Séries eliminatórias")
+
+    sessions = re.findall(
+        r"(ELIMINAT[OÓ]RIAS|FINAIS)\s+[A-Za-zçá-]+,\s*(\d{1,2}/\d{1,2})/\d{4}\s+In[ií]cio\s+da\s+Competi[cç][aã]o\s+[aà]s\s+(\d{1,2}h\d{2})",
+        flat,
+        re.IGNORECASE,
+    )
+    if sessions:
+        def when(item):
+            _, day, hour = item
+            d, m = day.split("/")
+            h, mi = hour.split("h")
+            return (int(m), int(d), int(h), int(mi))
+        ordered = sorted(set(sessions), key=when)
+        once("Sessões", " · ".join(f"{day} {hour} {'eliminatórias' if kind.upper().startswith('ELIM') else 'finais'}" for kind, day, hour in ordered))
+
+    fee = re.search(r"prova\s+individual[^.]{0,80}?(\d+(?:,\d{2})?\s*€)", flat, re.IGNORECASE)
+    once("Taxa de inscrição", f"{fee.group(1).replace(' ', '')} por prova individual" if fee else None)
+
+    limits = re.findall(r"(\d{2}:\d{2},\d{2})\s+(\d{2,4})\s+(LIVRES|COSTAS|BRU[CÇ]OS|MARIPOSA|ESTILOS)\s+(\d{2}:\d{2},\d{2})", flat)
+    if limits:
+        def short(t: str) -> str:
+            return t[3:] if t.startswith("00:") else t.lstrip("0")
+        rows = [f"{d} {s.capitalize()} F {short(f)} / M {short(m)}" for f, d, s, m in limits]
+        once("Tempos limite", " · ".join(rows))
 
 
 def process_rules(session: Session, payload: dict, data: bytes, body: dict, request) -> dict:
@@ -135,6 +219,8 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
     text = "\n".join(pages[:12])
     title = extract_title(text)
     venue = next((f["value"] for f in facts if f["label"] == "Local"), "")
+    pool = next((f["value"] for f in facts if f["label"] == "Piscina"), "")
+    detected = "lcm" if pool.startswith("50") else "scm" if pool.startswith("25") else None
     summary = {
         "kind": "rules",
         "facts": facts,
@@ -143,7 +229,7 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
         "meet": {
             "name": title,
             "city": venue,
-            "course": body.get("course") if body.get("course") in ("scm", "lcm") else "lcm",
+            "course": body.get("course") if body.get("course") in ("scm", "lcm") else (detected or "lcm"),
             "date": dates[0].isoformat() if dates else "",
             "endDate": dates[1].isoformat() if dates else "",
         },
@@ -153,7 +239,7 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
     if target is None:
         # The regulations create the competition; the start list comes closer to the meet.
         name = " ".join(str(body.get("title") or title).split())[:120]
-        course = body.get("course") if body.get("course") in ("scm", "lcm") else None
+        course = body.get("course") if body.get("course") in ("scm", "lcm") else detected
         start = _iso(body.get("date")) or (dates[0] if dates else None)
         end = _iso(body.get("endDate")) or (dates[1] if dates else start)
         if not name or not course or not start:

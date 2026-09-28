@@ -2,6 +2,8 @@ import type { MessageKey } from "@/i18n";
 import { raceSegments, raceSummary } from "./race-analysis";
 import { workoutMeters } from "./rankings";
 import { workoutBands } from "./season";
+import type { TrainingRep } from "./training-context";
+import { formBefore } from "./training-prediction";
 import type { RaceSession, WellnessEntry, Workout } from "./types";
 
 /*
@@ -25,7 +27,7 @@ export type MetricKey =
   | "dps"
   | "fade";
 
-export type FactorKey = "vol21" | "hard21" | "restDays21" | "lastRest" | "taper" | "sleep7" | "recovery7" | "gym7";
+export type FactorKey = "speed28" | "hold28" | "quality28" | "vol21" | "hard21" | "restDays21" | "lastRest" | "taper" | "sleep7" | "recovery7" | "gym7";
 
 export const METRICS: { key: MetricKey; label: MessageKey; unit: string; lowerIsBetter: boolean; digits: number }[] = [
   { key: "final", label: "Tempo final", unit: "s", lowerIsBetter: true, digits: 2 },
@@ -43,6 +45,9 @@ export const METRICS: { key: MetricKey; label: MessageKey; unit: string; lowerIs
 ];
 
 export const FACTORS: { key: FactorKey; label: MessageKey; unit: string; digits: number }[] = [
+  { key: "speed28", label: "Mais rápido no treino do que o habitual (28 dias)", unit: "%", digits: 1 },
+  { key: "hold28", label: "Quebra nas séries fortes face ao habitual (28 dias)", unit: "pp", digits: 1 },
+  { key: "quality28", label: "Reps fortes ao nível habitual por semana (28 dias)", unit: "", digits: 1 },
   { key: "vol21", label: "Volume nos 21 dias antes", unit: "km", digits: 1 },
   { key: "hard21", label: "Intensidade alta nos 21 dias (A3, PA/MAX, ritmo de prova)", unit: "%", digits: 0 },
   { key: "restDays21", label: "Dias de descanso nos 21 dias", unit: "d", digits: 0 },
@@ -87,7 +92,7 @@ function metricsOf(session: RaceSession): Partial<Record<MetricKey, number>> {
   return out;
 }
 
-function factorsOf(session: RaceSession, workouts: Workout[], wellness: WellnessEntry[]): Partial<Record<FactorKey, number>> {
+function factorsOf(session: RaceSession, workouts: Workout[], wellness: WellnessEntry[], reps: TrainingRep[]): Partial<Record<FactorKey, number>> {
   const date = session.date;
   const mine = workouts.filter((workout) => workout.athleteIds.includes(session.athleteId) && workout.date < date);
   const within = (from: number, to: number) =>
@@ -98,6 +103,11 @@ function factorsOf(session: RaceSession, workouts: Workout[], wellness: Wellness
   const meters = (list: Workout[]) => list.reduce((sum, workout) => sum + workoutMeters(workout), 0);
   const last21 = within(1, 21);
   const out: Partial<Record<FactorKey, number>> = {};
+  // Form from every rep of the previous weeks, each against its own group — not only reps of the race distance.
+  const form = formBefore(reps, date);
+  if (form.speedPct != null && form.speedN >= 6) out.speed28 = -form.speedPct;
+  if (form.holdPct != null) out.hold28 = form.holdPct;
+  if (form.qualityPerWeek != null) out.quality28 = form.qualityPerWeek;
   if (last21.length) {
     out.vol21 = meters(last21) / 1000;
     const bands = last21.map((workout) => workoutBands(workout).bands);
@@ -122,9 +132,9 @@ function factorsOf(session: RaceSession, workouts: Workout[], wellness: Wellness
   if (wellness.length) out.gym7 = week.filter((entry) => daysBetween(date, entry.date) >= 1 && entry.gym).length;
   return out;
 }
-export function raceFacts(sessions: RaceSession[], workouts: Workout[], wellness: WellnessEntry[] = []): RaceFactsRow[] {
+export function raceFacts(sessions: RaceSession[], workouts: Workout[], wellness: WellnessEntry[] = [], reps: TrainingRep[] = []): RaceFactsRow[] {
   return sessions
-    .map((session) => ({ session, metrics: metricsOf(session), factors: factorsOf(session, workouts, wellness) }))
+    .map((session) => ({ session, metrics: metricsOf(session), factors: factorsOf(session, workouts, wellness, reps) }))
     .sort((a, b) => a.session.date.localeCompare(b.session.date));
 }
 

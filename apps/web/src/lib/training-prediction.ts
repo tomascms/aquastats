@@ -297,6 +297,120 @@ export function learnedPatterns(rows: TrainingRep[]): { effects: LearnedEffect[]
   return { effects, n: fit.n };
 }
 
+export type RaceForm = {
+  /** Median % gap of the window's reps to the athlete's own usual time in the same group (negative = faster). */
+  speedPct: number | null;
+  speedN: number;
+  /** How much more (+) or less (−) the hard sets faded from first to last reps than usual for those sets, in % points. */
+  holdPct: number | null;
+  holdN: number;
+  /** Hard reps per week at or faster than the athlete's usual time, in the window and before it. */
+  qualityPerWeek: number | null;
+  usualQualityPerWeek: number | null;
+  reps: number;
+  sessions: number;
+  weeks: FormPoint[];
+};
+
+const HARD: ReadonlySet<string> = new Set(["A3", "PA", "MAX", "P50", "P100", "P200", "P400"]);
+const FORM_WINDOW_DAYS = 28;
+const FORM_BASELINE_DAYS = 180;
+
+const median = (values: number[]) => {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
+/** First-third vs last-third % slowdown of one set (≥ 3 reps). */
+function setFade(reps: TrainingRep[]): number | null {
+  if (reps.length < 3) return null;
+  const ordered = [...reps].sort((a, b) => a.round - b.round || a.repInSegment - b.repInSegment);
+  const third = Math.max(1, Math.floor(ordered.length / 3));
+  const avg = (list: TrainingRep[]) => list.reduce((sum, row) => sum + row.timeS, 0) / list.length;
+  const first = avg(ordered.slice(0, third));
+  return first > 0 ? (avg(ordered.slice(-third)) / first - 1) * 100 : null;
+}
+
+function hardSets(rows: TrainingRep[]): Map<string, TrainingRep[]> {
+  const sets = new Map<string, TrainingRep[]>();
+  for (const row of rows) {
+    if (!HARD.has(row.intensity)) continue;
+    const key = `${row.workoutId}|${row.blockId}|${row.segmentIndex}|${groupKey(row)}`;
+    sets.set(key, [...(sets.get(key) ?? []), row]);
+  }
+  return sets;
+}
+
+/**
+ * Physical form in the weeks before a race, from every rep the athlete swam — whatever the distance.
+ * Each rep is compared only with the athlete's own earlier reps of the same group (pool, distance,
+ * stroke, intensity, gear), so a block of fast 50s says as much as a block of 200s. Measures:
+ * speed (faster/slower than usual), hold (hard sets fading more or less than usual) and how many hard
+ * reps per week reached the usual level. Nothing is converted between groups.
+ */
+export function formBefore(rows: TrainingRep[], raceDate: string): RaceForm {
+  const race = dayNumber(raceDate);
+  const valid = rows.filter(isPlausibleRep);
+  const inWindow = valid.filter((row) => {
+    const days = race - dayNumber(row.date);
+    return days >= 1 && days <= FORM_WINDOW_DAYS;
+  });
+  const baseline = valid.filter((row) => {
+    const days = race - dayNumber(row.date);
+    return days > FORM_WINDOW_DAYS && days <= FORM_BASELINE_DAYS;
+  });
+
+  const usual = new Map<string, number>();
+  const byGroup = new Map<string, number[]>();
+  for (const row of baseline) byGroup.set(groupKey(row), [...(byGroup.get(groupKey(row)) ?? []), row.timeS]);
+  for (const [key, list] of byGroup) if (list.length >= MIN_GROUP_REFS) usual.set(key, median(list)!);
+
+  const gaps: { week: string; pct: number }[] = [];
+  for (const row of inWindow) {
+    const base = usual.get(groupKey(row));
+    if (base) gaps.push({ week: weekStartMonday(row.date), pct: (row.timeS / base - 1) * 100 });
+  }
+  const weekMap = new Map<string, number[]>();
+  for (const gap of gaps) weekMap.set(gap.week, [...(weekMap.get(gap.week) ?? []), gap.pct]);
+  const weeks = [...weekMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([week, list]) => ({ week, indexPct: median(list)!, n: list.length }));
+
+  // Hold: each hard set's fade against the usual fade of sets in the same group.
+  const usualFade = new Map<string, number[]>();
+  for (const [key, reps] of hardSets(baseline)) {
+    const fade = setFade(reps);
+    const group = key.split("|").slice(3).join("|");
+    if (fade != null) usualFade.set(group, [...(usualFade.get(group) ?? []), fade]);
+  }
+  const holdDiffs: number[] = [];
+  for (const [key, reps] of hardSets(inWindow)) {
+    const fade = setFade(reps);
+    const ref = median(usualFade.get(key.split("|").slice(3).join("|")) ?? []);
+    if (fade != null && ref != null) holdDiffs.push(fade - ref);
+  }
+
+  const quality = (list: TrainingRep[], days: number) => {
+    const hits = list.filter((row) => HARD.has(row.intensity) && usual.has(groupKey(row)) && row.timeS <= usual.get(groupKey(row))!);
+    return days > 0 ? (hits.length / days) * 7 : null;
+  };
+  const baselineSpan = baseline.length ? Math.min(FORM_BASELINE_DAYS - FORM_WINDOW_DAYS, race - dayNumber(baseline.reduce((min, row) => (row.date < min ? row.date : min), raceDate)) - FORM_WINDOW_DAYS) : 0;
+
+  return {
+    speedPct: median(gaps.map((gap) => gap.pct)),
+    speedN: gaps.length,
+    holdPct: median(holdDiffs),
+    holdN: holdDiffs.length,
+    qualityPerWeek: usual.size && inWindow.length ? quality(inWindow, FORM_WINDOW_DAYS) : null,
+    usualQualityPerWeek: usual.size && baselineSpan > 0 ? quality(baseline, baselineSpan) : null,
+    reps: inWindow.length,
+    sessions: new Set(inWindow.map((row) => `${row.date}|${row.workoutId}`)).size,
+    weeks,
+  };
+}
+
 /**
  * Weekly form index: median gap of each week's reps to that group's all-time median (negative =
  * faster than usual). Breaks are gaps of 10+ days; recovery is weeks until the index is back to

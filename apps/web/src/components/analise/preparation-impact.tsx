@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useT } from "@/i18n/provider";
 import { formatDatePt } from "@/lib/labels";
 import { FACTORS, METRICS, findings, raceFacts, type FactorKey, type MetricKey } from "@/lib/race-factors";
+import type { TrainingRep } from "@/lib/training-context";
 import type { RaceSession, WellnessEntry, Workout } from "@/lib/types";
 
 const fmt = (value: number | undefined, digits: number) => (value == null || !Number.isFinite(value) ? "—" : value.toFixed(digits));
@@ -17,20 +18,22 @@ export function PreparationImpact({
   sessions,
   workouts,
   wellness,
+  reps,
 }: {
   session: RaceSession;
   sessions: RaceSession[];
   workouts: Workout[];
   wellness: WellnessEntry[];
+  reps: TrainingRep[];
 }) {
   const t = useT();
   const sameEvent = useMemo(
     () => sessions.filter((item) => item.stroke === session.stroke && item.distanceM === session.distanceM && item.course === session.course),
     [session, sessions],
   );
-  const rows = useMemo(() => raceFacts(sameEvent, workouts, wellness), [sameEvent, wellness, workouts]);
+  const rows = useMemo(() => raceFacts(sameEvent, workouts, wellness, reps), [reps, sameEvent, wellness, workouts]);
   // Reaction and 15 m say something about the start whatever the event; use all races for those links.
-  const allRows = useMemo(() => raceFacts(sessions, workouts, wellness), [sessions, wellness, workouts]);
+  const allRows = useMemo(() => raceFacts(sessions, workouts, wellness, reps), [reps, sessions, wellness, workouts]);
   const current = rows.find((row) => row.session.id === session.id);
   const others = rows.filter((row) => row.session.id !== session.id);
   const found = useMemo(() => {
