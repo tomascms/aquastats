@@ -311,7 +311,7 @@ function RemoveAthleteDialog({
   return (
     <Modal open={open} title={t("Remover {name} da equipa?", { name })} onClose={() => !busy && onClose()}>
       <div className="space-y-2">
-        {option(false, t("Remover e manter o histórico"), t("Deixa de ter acesso à equipa. Os treinos, tempos e provas ficam guardados para as análises da equipa."))}
+        {option(false, t("Remover e manter o histórico"), t("Deixa de ter acesso à equipa. O histórico fica guardado e, se entrar noutra equipa, vai com ele (tempos, provas, recordes, objetivos)."))}
         {option(true, t("Remover e apagar todos os dados"), t("Apaga os tempos de treino, provas, recordes, objetivos e frequência cardíaca deste atleta nesta equipa. Não pode ser desfeito."))}
         {purge ? (
           <label className="flex items-start gap-2 pt-1 text-xs font-semibold text-coral">

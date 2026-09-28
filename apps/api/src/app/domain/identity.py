@@ -277,6 +277,11 @@ def join_team(session: Session, user: User, code: str, request: Request) -> str:
                 from .commands import _upsert_seed_records
 
                 _upsert_seed_records(session, athlete.id, seed_records)
+    # History a previous coach let go with them (removed with "keep the data") moves to this team.
+    from .athlete_transfer import migrate_history
+
+    session.flush()
+    migrate_history(session, user.id, athlete, stamp)
     session.add(TeamMember(id=uuid4(), team_id=team.id, user_id=user.id, status="swimmer", created_at=stamp))
     session.add(
         AuditLog(

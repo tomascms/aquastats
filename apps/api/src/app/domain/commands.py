@@ -393,6 +393,8 @@ def delete_athlete(session: Session, payload: dict, athlete_id: str, request, pu
             session.delete(member)
         extra = dict(row.extra or {})
         extra["formerUserId"] = str(row.user_id)
+        # Keeping the data is the coach's consent for it to follow the swimmer to a new team.
+        extra["portable"] = True
         row.extra = extra
         flag_modified(row, "extra")
         row.user_id = None
