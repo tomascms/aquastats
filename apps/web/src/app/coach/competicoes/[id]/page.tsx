@@ -6,6 +6,7 @@ import { Fragment, useEffect, useState } from "react";
 import { MeetFilesDrop } from "@/components/competicoes/meet-files-drop";
 import { MeetInfoPanel } from "@/components/competicoes/meet-info-panel";
 import { ConfirmButton } from "@/components/ui/confirm-button";
+import { DateField } from "@/components/ui/date-field";
 import { formatApiError, type ApiError } from "@/lib/api";
 import { COURSE_LABEL, STROKES, STROKE_LABEL, formatDatePt, formatDateRange, formatEvent } from "@/lib/labels";
 import { goalsForEvent } from "@/lib/goals";
@@ -190,11 +191,11 @@ function EditMeet({ meet, onDone }: { meet: Competition; onDone: () => void }) {
       </label>
       <label className="text-xs font-semibold text-mute">
         {t("De")}
-        <input type="date" className="field mt-1" value={date} onChange={(event) => setDate(event.target.value)} required />
+        <DateField value={date} onChange={setDate} required className="mt-1" />
       </label>
       <label className="text-xs font-semibold text-mute">
         {t("Até")}
-        <input type="date" className="field mt-1" value={endDate} min={date} onChange={(event) => setEndDate(event.target.value)} required />
+        <DateField value={endDate} min={date} onChange={setEndDate} required className="mt-1" />
       </label>
       <div className="text-xs font-semibold text-mute">
         {t("Piscina")}
@@ -484,7 +485,7 @@ function EntryForm({
       </label>
       <label className={`${small} sm:col-span-2`}>
         {t("Dia")}
-        <input type="date" className={field} value={day} min={meet.date} max={meetEnd(meet)} onChange={(change) => setDay(change.target.value)} />
+        <DateField value={day} min={meet.date} max={meetEnd(meet)} onChange={setDay} inputClassName={field} />
       </label>
       <label className={small}>
         {t("Série (elim.)")}

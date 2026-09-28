@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { IconChevron } from "@/components/ui/icons";
+import { DateField } from "@/components/ui/date-field";
 import { DISTANCES, formatDistance } from "@/lib/distances";
 import { BLOCK_LABEL, COURSE_LABEL, SHIFT_LABEL, treinoTitle } from "@/lib/labels";
 import { formatMeters } from "@/lib/rankings";
@@ -108,15 +109,14 @@ export function WorkoutForm({
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="text-xs font-semibold text-mute">
               {t("Data")}
-              <input
-                type="date"
+              <DateField
                 value={date}
                 required
-                onChange={(event) => {
-                  setDate(event.target.value);
-                  if (!renaming) setTitle(treinoTitle(event.target.value));
+                onChange={(iso) => {
+                  setDate(iso);
+                  if (!renaming) setTitle(treinoTitle(iso));
                 }}
-                className="field mt-1 h-10 py-1"
+                className="mt-1"
               />
             </label>
             <Segmented label={t("Turno")} options={SHIFTS.map((item) => ({ value: item, label: SHIFT_LABEL[item] }))} value={shift} onChange={setShift} />
@@ -326,7 +326,7 @@ function SetLine({
   const split = Boolean(segment.parts?.length);
   const extras = [
     split ? t("dividido") : "",
-    !split && segment.stroke ? WORKOUT_STROKE_LABEL[segment.stroke] : "",
+    !split && segment.stroke && segment.stroke !== "free" ? WORKOUT_STROKE_LABEL[segment.stroke] : "",
     segment.gear.length ? segment.gear.map((item) => GEAR_LABEL[item]).join(", ") : "",
     showStart && segment.fromBlock ? t("bloco") : "",
   ].filter(Boolean);
@@ -377,7 +377,7 @@ function SetLine({
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="w-16 text-[11px] font-semibold text-mute">{t("Estilo")}</span>
               <Chip small active={!segment.stroke} onClick={() => onChange((current) => applySegmentDefaults(current, { stroke: "" }))}>
-                {t("Livre")}
+                {t("Sem estilo fixo")}
               </Chip>
               {WORKOUT_STROKES.map((item) => (
                 <Chip key={item} small active={segment.stroke === item} onClick={() => onChange((current) => applySegmentDefaults(current, { stroke: item }))}>
@@ -495,7 +495,7 @@ function PartsEditor({
           <DistanceSelect compact value={part.distanceM} onChange={(distanceM) => set(index, { distanceM })} />
           <IntensitySelect compact value={part.intensity} onChange={(intensity) => set(index, { intensity })} />
           <Chip small active={!part.stroke} onClick={() => set(index, { stroke: "" })}>
-            {t("Livre")}
+            {t("Sem estilo fixo")}
           </Chip>
           {WORKOUT_STROKES.map((item) => (
             <Chip key={item} small active={part.stroke === item} onClick={() => set(index, { stroke: item })}>

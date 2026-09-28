@@ -185,9 +185,17 @@ export function formatGear(gear: Gear[] | undefined): string {
 }
 
 /** "25 Prog + 25 A1", or with strokes "25 Prog Mariposa + 25 A1 Livres". */
+/** "Livres" (free) is the default assumption and never shown; any other stroke is spelled out. */
+function strokeLabelIfSet(stroke: WorkoutStroke | "" | undefined): string {
+  return stroke && stroke !== "free" ? WORKOUT_STROKE_LABEL[stroke] : "";
+}
+
 export function formatParts(parts: SegmentPart[]): string {
   return parts
-    .map((part) => `${formatDistance(part.distanceM)} ${INTENSITY_LABEL[part.intensity] || part.intensity}${part.stroke ? ` ${WORKOUT_STROKE_LABEL[part.stroke]}` : ""}`)
+    .map((part) => {
+      const stroke = strokeLabelIfSet(part.stroke);
+      return `${formatDistance(part.distanceM)} ${INTENSITY_LABEL[part.intensity] || part.intensity}${stroke ? ` ${stroke}` : ""}`;
+    })
     .join(" + ");
 }
 
@@ -203,7 +211,7 @@ export function formatSegment(segment: SetSegment): string {
   const gear = sameGear ? gears[0] : "";
   const strokes = details.map((detail) => detail.stroke || "");
   const sameStroke = strokes.every((item) => item === strokes[0]);
-  const stroke = sameStroke && strokes[0] ? WORKOUT_STROKE_LABEL[strokes[0] as WorkoutStroke] : "";
+  const stroke = sameStroke ? strokeLabelIfSet(strokes[0] as WorkoutStroke | "") : "";
   return `${formatReps(segment.reps, segment.distanceM)} ${vel}${stroke ? ` ${stroke}` : ""}${gear ? ` ${gear}` : ""}`;
 }
 

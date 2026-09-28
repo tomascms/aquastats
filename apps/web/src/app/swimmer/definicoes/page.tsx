@@ -15,6 +15,7 @@ import { todayIso } from "@/lib/dates";
 import type { MessageKey } from "@/i18n";
 import type { Gender, GymType, SeedRecord, Stroke, WellnessEntry } from "@/lib/types";
 import { Modal } from "@/components/ui/modal";
+import { DateField } from "@/components/ui/date-field";
 
 const STROKES: Stroke[] = ["free", "back", "breast", "fly", "im"];
 const GENDERS: Gender[] = ["M", "F"];
@@ -143,12 +144,7 @@ export default function SwimmerDefinicoesPage() {
         </label>
         <label className="block text-sm">
           {t("Data de nascimento")}
-          <input
-            type="date"
-            className="field mt-1.5"
-            value={dateOfBirth}
-            onChange={(event) => setDateOfBirth(event.target.value)}
-          />
+          <DateField value={dateOfBirth} onChange={setDateOfBirth} className="mt-1.5" />
         </label>
         <div>
           <p className="text-sm">{t("Estilo principal")}</p>

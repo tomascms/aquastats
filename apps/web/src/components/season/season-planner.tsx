@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "@/i18n/provider";
+import { DateField } from "@/components/ui/date-field";
 import { formatApiError, type ApiError } from "@/lib/api";
 import { addDays, todayIso, weekStartMonday, WEEKDAYS } from "@/lib/dates";
 import { groupLabel, parallelVolume } from "@/lib/groups";
@@ -89,11 +90,11 @@ export function SeasonPlanner() {
         </label>
         <label className="text-xs font-semibold text-mute">
           {t("De")}
-          <input type="date" className="field mt-1 h-9 py-1" value={plan.start} onChange={(event) => edit({ start: event.target.value })} />
+          <DateField value={plan.start} onChange={(iso) => edit({ start: iso })} className="mt-1" inputClassName="field h-9 py-1" />
         </label>
         <label className="text-xs font-semibold text-mute">
           {t("Até")}
-          <input type="date" className="field mt-1 h-9 py-1" value={plan.end} min={plan.start} onChange={(event) => edit({ end: event.target.value })} />
+          <DateField value={plan.end} min={plan.start} onChange={(iso) => edit({ end: iso })} className="mt-1" inputClassName="field h-9 py-1" />
         </label>
         <div className="ml-auto flex gap-2">
           {draft ? (
@@ -156,10 +157,10 @@ function MacroEditor({ plan, onChange }: { plan: SeasonPlan; onChange: (macros: 
                 />
               </td>
               <td className="px-2 py-1.5">
-                <input type="date" className="field h-8 py-1 text-sm" value={cycle.start} onChange={(event) => update(cycle.id, { start: event.target.value })} />
+                <DateField value={cycle.start} onChange={(iso) => update(cycle.id, { start: iso })} inputClassName="field h-8 py-1 text-sm" />
               </td>
               <td className="px-2 py-1.5">
-                <input type="date" className="field h-8 py-1 text-sm" value={cycle.end} min={cycle.start} onChange={(event) => update(cycle.id, { end: event.target.value })} />
+                <DateField value={cycle.end} min={cycle.start} onChange={(iso) => update(cycle.id, { end: iso })} inputClassName="field h-8 py-1 text-sm" />
               </td>
               <td className="px-2 py-1.5">
                 <span className="flex gap-1" role="group" aria-label={t("Cor")}>

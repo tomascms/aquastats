@@ -1256,7 +1256,13 @@ export const en = {
   "Percebo que os meus dados são apagados para sempre.": "I understand my data is deleted for good.",
   "Sair e apagar dados": "Leave and delete data",
   "Prog": "Prog",
-  "Livre": "Free",
+  "Sem estilo fixo": "No fixed stroke",
+  "Ver detalhes da prova": "See race details",
+  "Sem informação desta prova (reação, 15 m, subaquático, viragens…). Só o treinador pode adicioná-la.":
+    "No information for this race (reaction, 15 m, underwater, turns…). Only the coach can add it.",
+  "Carrega num tempo para ver os detalhes da prova, se o treinador já os tiver adicionado. SR = tempo vindo do SwimRankings.":
+    "Tap a time to see the race details, if the coach has already added them. SR = time from SwimRankings.",
+  "Ainda sem detalhes desta prova. Só o treinador pode adicioná-los.": "No details for this race yet. Only the coach can add them.",
   "parte": "part",
   "dividido": "split",
   "Aquecimento e soltar não têm tempos registados.": "Warm-up and cool-down never have logged times.",

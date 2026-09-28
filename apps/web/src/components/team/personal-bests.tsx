@@ -57,13 +57,17 @@ export function PersonalBests({ athlete, role }: { athlete: Athlete; role: "coac
         gender={athlete.gender}
         isFromProfile={(record) => !record.competitionId && seedOf(record)?.source === "swimrankings"}
         canOpen={(record) => role === "coach" || !record.competitionId}
-        titleFor={(record) => (record.competitionId ? t("Ver detalhes") : t("Adicionar detalhes da prova"))}
+        titleFor={(record) => (record.competitionId ? t("Ver detalhes") : role === "coach" ? t("Adicionar detalhes da prova") : t("Ver detalhes da prova"))}
         onOpen={open}
       />
       {detailFor ? (
-        <RecordDetails key={detailFor.id} athlete={athlete} record={detailFor} onClose={() => setDetailFor(null)} />
+        <RecordDetails key={detailFor.id} athlete={athlete} record={detailFor} role={role} onClose={() => setDetailFor(null)} />
       ) : null}
-      <p className="px-4 py-2 text-[11px] text-mute">{t("Carrega num tempo para ver ou juntar os detalhes da prova (reação, 15 m, subaquático, parciais…). SR = tempo vindo do SwimRankings.")}</p>
+      <p className="px-4 py-2 text-[11px] text-mute">
+        {role === "coach"
+          ? t("Carrega num tempo para ver ou juntar os detalhes da prova (reação, 15 m, subaquático, parciais…). SR = tempo vindo do SwimRankings.")
+          : t("Carrega num tempo para ver os detalhes da prova, se o treinador já os tiver adicionado. SR = tempo vindo do SwimRankings.")}
+      </p>
     </div>
   );
 }
@@ -188,8 +192,19 @@ function FragmentCells({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** The meet race sheet for a best time that has no competition in Aquastats (e.g. from SwimRankings). */
-export function RecordDetails({ athlete, record, onClose }: { athlete: Athlete; record: RaceRecord; onClose: () => void }) {
+/** The meet race sheet for a best time that has no competition in Aquastats (e.g. from SwimRankings).
+ * Only the coach can add or change these details; an athlete can only view what's already there. */
+export function RecordDetails({
+  athlete,
+  record,
+  role,
+  onClose,
+}: {
+  athlete: Athlete;
+  record: RaceRecord;
+  role: "coach" | "swimmer";
+  onClose: () => void;
+}) {
   const t = useT();
   const { raceSessions } = useAppState();
   const seed = (athlete.seedRecords ?? []).find((item) => item.course === record.course && item.stroke === record.stroke && item.distanceM === record.distanceM);
@@ -224,6 +239,18 @@ export function RecordDetails({ athlete, record, onClose }: { athlete: Athlete; 
       item.course === record.course &&
       item.date === date,
   );
+  if (role !== "coach" && !existing) {
+    return (
+      <div className="space-y-2 border-t border-line bg-panel-2 p-3">
+        <div className="flex justify-end">
+          <button type="button" className="btn-ghost h-9" onClick={onClose}>
+            {t("Fechar")}
+          </button>
+        </div>
+        <p className="text-sm text-mute">{t("Ainda sem detalhes desta prova. Só o treinador pode adicioná-los.")}</p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-2 border-t border-line bg-panel-2 p-3">
       <div className="flex justify-end">
@@ -231,7 +258,7 @@ export function RecordDetails({ athlete, record, onClose }: { athlete: Athlete; 
           {t("Fechar")}
         </button>
       </div>
-      <RaceResultSheet meet={meet} entry={entry} athleteName={athlete.name} existing={existing} result={result} mode="edit" />
+      <RaceResultSheet meet={meet} entry={entry} athleteName={athlete.name} existing={existing} result={result} mode={role === "coach" ? "edit" : "view"} />
     </div>
   );
 }

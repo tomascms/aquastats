@@ -4,6 +4,7 @@ import { useState } from "react";
 import { COURSE_LABEL, STROKE_LABEL, STROKES, formatEvent } from "@/lib/labels";
 import { eventKey, eventsForCourse, isOfficialEvent, seedSplitMarks } from "@/lib/meets";
 import { ClockField } from "@/components/ui/clock-field";
+import { DateField } from "@/components/ui/date-field";
 import { useT } from "@/i18n/provider";
 import { EMPTY_PARTS, isEmptyParts, normalizeParts, partsFromNumbers } from "@/lib/swim-time";
 import type { PoolCourse, SeedRecord, SplitTime, Stroke, TimeParts } from "@/lib/types";
@@ -209,12 +210,7 @@ export function SeedRecordsEditor({
                     </div>
                     <label className="mt-3 block text-sm text-mute">
                       {t("Data")}
-                      <input
-                        type="date"
-                        className="field mt-1.5"
-                        value={dates[key] ?? ""}
-                        onChange={(event) => setDate(key, event.target.value)}
-                      />
+                      <DateField value={dates[key] ?? ""} onChange={(iso) => setDate(key, iso)} className="mt-1.5" />
                     </label>
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <p className="text-sm text-mute">{t("Final")}</p>

@@ -2,7 +2,7 @@ import { getLocale, tx } from "@/i18n";
 import { BLOCK_LABEL, SHIFT_LABEL, displayTitle, formatDatePt } from "./labels";
 import { formatSendOff } from "./send-off";
 import { formatDistance, formatReps } from "./distances";
-import { INTENSITY_LABEL, formatGear, makeDetail, readySegments } from "./set";
+import { INTENSITY_LABEL, WORKOUT_STROKE_LABEL, formatGear, formatParts, makeDetail, readySegments } from "./set";
 import type { RepDetail, SetSegment, Workout, WorkoutBlock } from "./types";
 
 function sameDetail(a: RepDetail, b: RepDetail): boolean {
@@ -10,15 +10,18 @@ function sameDetail(a: RepDetail, b: RepDetail): boolean {
     a.intensity === b.intensity &&
     a.sendOffSeconds === b.sendOffSeconds &&
     a.fromBlock === b.fromBlock &&
+    (a.stroke || "") === (b.stroke || "") &&
     formatGear(a.gear) === formatGear(b.gear)
   );
 }
 
 function formatDetail(detail: RepDetail, noSendOff: boolean, showStart: boolean): string {
   const gear = formatGear(detail.gear);
+  // "Livres" is the default assumption and never spelled out; any other stroke is.
+  const stroke = detail.stroke && detail.stroke !== "free" ? WORKOUT_STROKE_LABEL[detail.stroke] : "";
   const start = showStart ? (detail.fromBlock ? tx("bloco") : tx("de baixo")) : "";
   const send = noSendOff ? "" : ` ${tx("a {time}", { time: formatSendOff(detail.sendOffSeconds) })}`;
-  return `${INTENSITY_LABEL[detail.intensity] || detail.intensity} ${gear ? `${gear} ` : ""}${start}${send}`.replace(/\s+/g, " ").trim();
+  return `${INTENSITY_LABEL[detail.intensity] || detail.intensity}${stroke ? ` ${stroke}` : ""} ${gear ? `${gear} ` : ""}${start}${send}`.replace(/\s+/g, " ").trim();
 }
 
 /** 1-based ordinal: "1ª" in Portuguese, "1st" in English. */
@@ -54,8 +57,11 @@ function bandLine(segment: SetSegment, noSendOff: boolean): WrittenLine[] {
 }
 
 export function writtenSegmentLines(segment: SetSegment, noSendOff: boolean, showStart = true): WrittenLine[] {
-  const details = segment.details.length ? segment.details : [makeDetail(segment)];
   const head = formatReps(segment.reps, segment.distanceM);
+  if (segment.parts?.length) {
+    return [{ text: `${head} (${formatParts(segment.parts)})`, indent: 0 }];
+  }
+  const details = segment.details.length ? segment.details : [makeDetail(segment)];
   if (details.every((detail) => sameDetail(detail, details[0]))) {
     return [{ text: `${head} ${formatDetail(details[0], noSendOff, showStart)}`.trim(), indent: 0 }, ...bandLine(segment, noSendOff)];
   }

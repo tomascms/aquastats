@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useT } from "@/i18n/provider";
+import { DateField } from "@/components/ui/date-field";
 import { formatApiError, type ApiError } from "@/lib/api";
 import { METRIC_LABEL, METRIC_UNIT, goalProgress, isGoalReached, type OfficialReaction } from "@/lib/goals";
 import { COURSE_LABEL, STROKES, STROKE_LABEL, formatDatePt, formatEvent } from "@/lib/labels";
@@ -370,7 +371,7 @@ function GoalForm({
         ) : null}
         <label className="text-xs font-semibold text-mute">
           {t("Até")}
-          <input type="date" className="field mt-1" value={draft.targetDate} onChange={(event) => set({ targetDate: event.target.value })} />
+          <DateField value={draft.targetDate} onChange={(iso) => set({ targetDate: iso })} className="mt-1" />
         </label>
         <label className="text-xs font-semibold text-mute">
           {t("Competição")}

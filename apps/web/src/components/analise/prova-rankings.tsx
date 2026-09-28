@@ -2,7 +2,7 @@
 
 import { PbGrid, RecordDetails } from "@/components/team/personal-bests";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnaliseTabs } from "@/components/analise/analise-tabs";
 import { AthleteChips, NoAthletes } from "@/components/analise/athlete-chips";
@@ -92,6 +92,7 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
       ) : recordId ? (
         <RecordDetail
           athlete={athlete}
+          role={role}
           gender={athlete.gender}
           records={records}
           recordId={recordId}
@@ -243,7 +244,13 @@ function EventBoard({
   const all = eventRecords(records, stroke, distanceM);
   const scm = sliceRecords(eventRecords(all, stroke, distanceM, "scm"), mode);
   const lcm = sliceRecords(eventRecords(all, stroke, distanceM, "lcm"), mode);
-  const chart = mode === "best" ? sliceRecords(all, "best") : sliceRecords(all, "last");
+  // 25 m and 50 m times aren't comparable (turns differ), so the chart is always just one pool.
+  const [chartCourse, setChartCourse] = useState<PoolCourse>(lcm.length >= scm.length ? "lcm" : "scm");
+  useEffect(() => {
+    setChartCourse(lcm.length >= scm.length ? "lcm" : "scm");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stroke, distanceM]);
+  const chartRows = chartCourse === "lcm" ? lcm : scm;
   return (
     <div className="space-y-4">
       <button type="button" onClick={onBack} className="text-sm font-semibold text-pool hover:underline">
@@ -273,8 +280,22 @@ function EventBoard({
       </div>
 
       <section className="rounded-2xl border border-line bg-panel p-4">
-        <h3 className="mb-2 px-1 font-display text-xl font-bold">{t("Evolução")}</h3>
-        <EvolutionChart records={chart} onSelect={onOpen} />
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
+          <h3 className="font-display text-xl font-bold">{t("Evolução")}</h3>
+          <div className="grid grid-cols-2 gap-1 rounded-lg border border-line bg-panel-2 p-0.5">
+            {(["lcm", "scm"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setChartCourse(item)}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold ${chartCourse === item ? "bg-aqua text-white" : "text-mute hover:text-mist"}`}
+              >
+                {item === "lcm" ? "50 m" : "25 m"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <EvolutionChart records={chartRows} onSelect={onOpen} />
         <p className="mt-2 px-1 text-[11px] text-mute">{t("Clica num ponto ou numa linha para abrir o detalhe.")}</p>
       </section>
 
@@ -334,6 +355,7 @@ function CourseList({
 
 function RecordDetail({
   athlete,
+  role,
   gender,
   records,
   recordId,
@@ -346,6 +368,7 @@ function RecordDetail({
   onCompare,
 }: {
   athlete: Athlete;
+  role: "coach" | "swimmer";
   gender?: Gender | "";
   records: ReturnType<typeof raceRecords>;
   recordId: string;
@@ -464,15 +487,17 @@ function RecordDetail({
           return (
             <div className="rounded-2xl border border-dashed border-line bg-panel px-5 py-4">
               <p className="text-sm text-mute">
-                {t("Adiciona informação a esta prova (reação, 15 m, subaquático, viragens, frequências…) para a cruzar com a preparação.")}
+                {role === "coach"
+                  ? t("Adiciona informação a esta prova (reação, 15 m, subaquático, viragens, frequências…) para a cruzar com a preparação.")
+                  : t("Sem informação desta prova (reação, 15 m, subaquático, viragens…). Só o treinador pode adicioná-la.")}
               </p>
-              {record.competitionId ? (
+              {role !== "coach" ? null : record.competitionId ? (
                 <a href={`/coach/competicoes/${record.competitionId}/resultados/${record.entryId}`} className="btn-primary mt-3 inline-flex h-10">
                   {t("Adicionar detalhes da prova")}
                 </a>
               ) : addingDetails ? (
                 <div className="mt-3">
-                  <RecordDetails athlete={athlete} record={record} onClose={() => setAddingDetails(false)} />
+                  <RecordDetails athlete={athlete} record={record} role={role} onClose={() => setAddingDetails(false)} />
                 </div>
               ) : (
                 <button type="button" className="btn-primary mt-3 h-10" onClick={() => setAddingDetails(true)}>

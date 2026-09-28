@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { useT, useTDynamic } from "@/i18n/provider";
+import { DateField } from "@/components/ui/date-field";
 import { formatApiError, type ApiError } from "@/lib/api";
 import { COURSE_LABEL, formatDateRange } from "@/lib/labels";
 import { actions, type MeetFileOptions, type MeetFileSummary } from "@/lib/store";
@@ -315,11 +316,11 @@ function RulesPreview({
           </div>
           <label className="text-xs font-semibold text-mute">
             {t("De")}
-            <input type="date" className="field mt-1" value={start} onChange={(event) => setStart(event.target.value)} />
+            <DateField value={start} onChange={setStart} className="mt-1" />
           </label>
           <label className="text-xs font-semibold text-mute">
             {t("Até")}
-            <input type="date" className="field mt-1" value={end} min={start} onChange={(event) => setEnd(event.target.value)} />
+            <DateField value={end} min={start} onChange={setEnd} className="mt-1" />
           </label>
         </div>
       ) : null}

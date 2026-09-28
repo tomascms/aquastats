@@ -26,7 +26,9 @@ export function raceBlocks(distanceM: number): number {
 }
 
 export function lengthOffsets(course: PoolCourse): readonly number[] {
-  return course === "lcm" ? DETAIL_OFFSETS : ([15, 25] as const);
+  // A 25 m pool has no room for 35/45; 20 (5 m before the wall) takes 45's slot instead, so the
+  // last 5 m of every length is always captured, in a 25 m pool just as in a 50 m one.
+  return course === "lcm" ? DETAIL_OFFSETS : ([15, 20, 25] as const);
 }
 
 export function raceMarks(distanceM: number, course: PoolCourse): number[] {
@@ -51,7 +53,9 @@ export function markMeta(atM: number, course: PoolCourse, distanceM: number): { 
   const pool = poolLength(course);
   const lapIndex = Math.max(0, Math.floor((Math.max(1, atM) - 1) / pool));
   const raw = atM - lapIndex * pool;
-  const offset = (DETAIL_OFFSETS.includes(raw as MarkOffset) ? raw : pool) as MarkOffset;
+  // 20 (a 25 m pool's "5 m before the wall") has no literal slot of its own: it reuses 45's, the
+  // same slot a 50 m pool's own "5 m before the wall" mark already uses.
+  const offset = (raw === 20 ? 45 : DETAIL_OFFSETS.includes(raw as MarkOffset) ? raw : pool) as MarkOffset;
   return { lapIndex, offset };
 }
 
@@ -136,7 +140,13 @@ export function officialFromLaps(laps: RaceLap[], distanceM: number, course: Poo
 }
 
 export function applyCalculatedLap(lap: RaceLap): RaceLap {
-  const last5 = lap.sec50 > 0 && lap.sec45 > 0 ? roundHundredths(lap.sec50 - lap.sec45) : lap.last5 || 0;
+  // A 50 m pool's wall is sec50; a 25 m pool's is sec25 (sec50 stays unused there).
+  const last5 =
+    lap.sec50 > 0 && lap.sec45 > 0
+      ? roundHundredths(lap.sec50 - lap.sec45)
+      : lap.sec50 <= 0 && lap.sec25 > 0 && lap.sec45 > 0
+        ? roundHundredths(lap.sec25 - lap.sec45)
+        : lap.last5 || 0;
   return { ...lap, last5 };
 }
 
