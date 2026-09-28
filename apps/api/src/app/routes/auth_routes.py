@@ -460,7 +460,8 @@ def accept_join(code: str, request: Request, response: Response, user: User = De
 
 @router.post("/leave-team")
 def leave_team_route(request: Request, response: Response, user: User = Depends(require_user), session: Session = Depends(get_auth_session)):
-    leave_team(session, user, request)
+    purge = request.query_params.get("purge") == "1"
+    leave_team(session, user, request, purge=purge)
     session.flush()
     next_path = issue_session(session, user, request, response)
     return {"ok": True, "next": safe_app_path(next_path)}

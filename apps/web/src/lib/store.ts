@@ -1033,8 +1033,9 @@ export const actions = {
     }));
     return athlete;
   },
-  async leaveTeam() {
-    const result = await api<{ next: string }>("/api/v1/auth/leave-team", { method: "POST" });
+  /** `purge`: delete the swimmer's own data in the team instead of leaving it behind. */
+  async leaveTeam(purge = false) {
+    const result = await api<{ next: string }>(`/api/v1/auth/leave-team${purge ? "?purge=1" : ""}`, { method: "POST" });
     await hydrate();
     return result.next;
   },

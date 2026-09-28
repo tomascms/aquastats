@@ -271,7 +271,9 @@ def join_team(session: Session, user: User, code: str, request: Request) -> str:
     return "/swimmer/definicoes"
 
 
-def leave_team(session: Session, user: User, request: Request) -> None:
+def leave_team(session: Session, user: User, request: Request, purge: bool = False) -> None:
+    """`purge`: the swimmer's own choice to delete their data in this team for good, instead of the
+    default of leaving it behind (which a coach can also let follow them to their next team)."""
     if user.role != "swimmer":
         raise HTTPException(status_code=409, detail="Só atletas podem sair da equipa.")
     member = session.scalar(select(TeamMember).where(TeamMember.user_id == user.id))
@@ -281,15 +283,20 @@ def leave_team(session: Session, user: User, request: Request) -> None:
     athlete = session.scalar(
         select(Athlete).where(Athlete.user_id == user.id, Athlete.team_id == member.team_id, Athlete.deleted_at.is_(None))
     )
-    if athlete:
-        extra = dict(athlete.extra or {})
-        extra["formerUserId"] = str(user.id)
-        athlete.extra = extra
-        flag_modified(athlete, "extra")
-        athlete.user_id = None
-        athlete.deleted_at = stamp
-        athlete.updated_at = stamp
-    session.delete(member)
+    if athlete and purge:
+        from .commands import _purge_athlete
+
+        _purge_athlete(session, member.team_id, athlete)  # also removes this membership row
+    else:
+        if athlete:
+            extra = dict(athlete.extra or {})
+            extra["formerUserId"] = str(user.id)
+            athlete.extra = extra
+            flag_modified(athlete, "extra")
+            athlete.user_id = None
+            athlete.deleted_at = stamp
+            athlete.updated_at = stamp
+        session.delete(member)
     session.add(
         AuditLog(
             id=uuid4(),

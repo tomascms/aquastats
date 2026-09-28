@@ -11,21 +11,26 @@ import {
   GEAR_LABEL,
   INTENSITIES,
   INTENSITY_LABEL,
+  WORKOUT_STROKES,
+  WORKOUT_STROKE_LABEL,
   applySegmentDefaults,
   emptyBlock,
+  emptyPart,
   emptySegment,
+  formatParts,
   isReadySegment,
   normalizeDraft,
   orderDraftBlocks,
   persistDraft,
   resizeSegment,
+  setSegmentParts,
   toggleGear,
   toggleRepGear,
   updateRepDetail,
 } from "@/lib/set";
 import { writtenBlockLines } from "@/lib/workout-text";
 import { GROUPS, GROUP_LABEL, type TrainingGroup } from "@/lib/groups";
-import type { BlockType, DraftBlock, Gear, Intensity, PoolCourse, SetSegment, Shift, WorkoutInput } from "@/lib/types";
+import type { BlockType, DraftBlock, Gear, Intensity, PoolCourse, SegmentPart, SetSegment, Shift, WorkoutInput } from "@/lib/types";
 import { useT } from "@/i18n/provider";
 
 const SHIFTS: Shift[] = ["morning", "afternoon"];
@@ -318,7 +323,10 @@ function SetLine({
   const [more, setMore] = useState(false);
   const [perRep, setPerRep] = useState(false);
   const ready = isReadySegment(segment);
+  const split = Boolean(segment.parts?.length);
   const extras = [
+    split ? t("dividido") : "",
+    !split && segment.stroke ? WORKOUT_STROKE_LABEL[segment.stroke] : "",
     segment.gear.length ? segment.gear.map((item) => GEAR_LABEL[item]).join(", ") : "",
     showStart && segment.fromBlock ? t("bloco") : "",
   ].filter(Boolean);
@@ -331,7 +339,11 @@ function SetLine({
         <DistanceSelect value={segment.distanceM} onChange={(distanceM) => onChange({ distanceM })} />
         {ready ? (
           <>
-            <IntensitySelect value={segment.intensity} onChange={(intensity) => onChange((current) => applySegmentDefaults(current, { intensity }))} />
+            {split ? (
+              <span className="rounded-lg border border-line bg-panel-2 px-2.5 py-1.5 font-mono text-xs font-semibold text-sand">{formatParts(segment.parts!)}</span>
+            ) : (
+              <IntensitySelect value={segment.intensity} onChange={(intensity) => onChange((current) => applySegmentDefaults(current, { intensity }))} />
+            )}
             {!hideSendOff ? (
               <span className="flex items-center gap-1 text-xs text-mute">
                 {t("a")}
@@ -361,6 +373,19 @@ function SetLine({
 
       {ready && more ? (
         <div className="mt-2 space-y-2 rounded-lg bg-panel-2 px-3 py-2.5">
+          {!split ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="w-16 text-[11px] font-semibold text-mute">{t("Estilo")}</span>
+              <Chip small active={!segment.stroke} onClick={() => onChange((current) => applySegmentDefaults(current, { stroke: "" }))}>
+                {t("Livre")}
+              </Chip>
+              {WORKOUT_STROKES.map((item) => (
+                <Chip key={item} small active={segment.stroke === item} onClick={() => onChange((current) => applySegmentDefaults(current, { stroke: item }))}>
+                  {WORKOUT_STROKE_LABEL[item]}
+                </Chip>
+              ))}
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="w-16 text-[11px] font-semibold text-mute">{t("Material")}</span>
             {GEARS.map((item) => (
@@ -368,6 +393,26 @@ function SetLine({
                 {GEAR_LABEL[item]}
               </Chip>
             ))}
+          </div>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-mute">
+              <input
+                type="checkbox"
+                checked={split}
+                onChange={(event) =>
+                  onChange((current) =>
+                    setSegmentParts(
+                      current,
+                      event.target.checked
+                        ? [emptyPart(Math.floor(current.distanceM / 2) || current.distanceM), emptyPart(current.distanceM - Math.floor(current.distanceM / 2))]
+                        : undefined,
+                    ),
+                  )
+                }
+              />
+              {t("Dividir esta rep em partes (ex.: 25 prog + 25 A1)")}
+            </label>
+            {split ? <PartsEditor segment={segment} onChange={onChange} /> : null}
           </div>
           {showStart ? (
             <div className="flex flex-wrap items-center gap-1.5">
@@ -380,12 +425,12 @@ function SetLine({
               </Chip>
             </div>
           ) : null}
-          {segment.reps > 1 ? (
+          {segment.reps > 1 && !split ? (
             <button type="button" className="text-[11px] font-semibold text-pool hover:underline" onClick={() => setPerRep((open) => !open)}>
-              {perRep ? t("Fechar repetições") : t("Mudar repetições individuais (ritmo, saída, material)")}
+              {perRep ? t("Fechar repetições") : t("Mudar repetições individuais (ritmo, saída, material, estilo)")}
             </button>
           ) : null}
-          {perRep
+          {perRep && !split
             ? segment.details.map((detail, index) => (
                 <div key={index} className="flex flex-wrap items-center gap-1.5 border-t border-line pt-1.5">
                   <span className="w-6 font-mono text-[11px] text-mute">{index + 1}.</span>
@@ -402,6 +447,16 @@ function SetLine({
                       {t("Bloco")}
                     </Chip>
                   ) : null}
+                  {WORKOUT_STROKES.map((item) => (
+                    <Chip
+                      key={item}
+                      small
+                      active={detail.stroke === item}
+                      onClick={() => onChange((current) => updateRepDetail(current, index, { stroke: detail.stroke === item ? "" : item }))}
+                    >
+                      {WORKOUT_STROKE_LABEL[item]}
+                    </Chip>
+                  ))}
                   {GEARS.map((item) => (
                     <Chip key={item} small active={detail.gear.includes(item)} onClick={() => onChange((current) => toggleRepGear(current, index, item))}>
                       {GEAR_LABEL[item]}
@@ -412,6 +467,65 @@ function SetLine({
             : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Editor for a segment split into ordered chunks ("4×50: 25 prog + 25 A1"). */
+function PartsEditor({
+  segment,
+  onChange,
+}: {
+  segment: SetSegment;
+  onChange: (patch: Partial<SetSegment> | ((current: SetSegment) => SetSegment)) => void;
+}) {
+  const t = useT();
+  const parts = segment.parts ?? [];
+  const total = parts.reduce((sum, part) => sum + part.distanceM, 0);
+
+  function set(index: number, patch: Partial<SegmentPart>) {
+    onChange((current) => setSegmentParts(current, (current.parts ?? []).map((part, i) => (i === index ? { ...part, ...patch } : part))));
+  }
+
+  return (
+    <div className="space-y-1.5 border-t border-line pt-1.5">
+      {parts.map((part, index) => (
+        <div key={index} className="flex flex-wrap items-center gap-1.5">
+          <span className="w-6 font-mono text-[11px] text-mute">{index + 1}.</span>
+          <DistanceSelect compact value={part.distanceM} onChange={(distanceM) => set(index, { distanceM })} />
+          <IntensitySelect compact value={part.intensity} onChange={(intensity) => set(index, { intensity })} />
+          <Chip small active={!part.stroke} onClick={() => set(index, { stroke: "" })}>
+            {t("Livre")}
+          </Chip>
+          {WORKOUT_STROKES.map((item) => (
+            <Chip key={item} small active={part.stroke === item} onClick={() => set(index, { stroke: item })}>
+              {WORKOUT_STROKE_LABEL[item]}
+            </Chip>
+          ))}
+          {parts.length > 2 ? (
+            <button
+              type="button"
+              onClick={() => onChange((current) => setSegmentParts(current, (current.parts ?? []).filter((_, i) => i !== index)))}
+              className="text-mute hover:text-coral"
+              aria-label={t("Remover")}
+            >
+              ✕
+            </button>
+          ) : null}
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onChange((current) => setSegmentParts(current, [...(current.parts ?? []), emptyPart()]))}
+          className="text-[11px] font-semibold text-pool hover:underline"
+        >
+          + {t("parte")}
+        </button>
+        <span className={`font-mono text-[11px] ${total === segment.distanceM ? "text-mute" : "text-coral"}`}>
+          {t("{total}m de {distance}m", { total, distance: segment.distanceM })}
+        </span>
+      </div>
     </div>
   );
 }
@@ -523,14 +637,14 @@ function IntensitySelect({ value, onChange, compact = false }: { value: Intensit
         className={`appearance-none rounded-lg border border-line bg-panel pl-2.5 pr-7 font-semibold text-mist outline-none focus:border-aqua ${compact ? "h-7 text-xs" : "h-9 text-sm"}`}
       >
         <optgroup label={t("Carga")}>
-          {INTENSITIES.filter((item) => !item.startsWith("P")).map((item) => (
+          {INTENSITIES.filter((item) => !/^P\d/.test(item)).map((item) => (
             <option key={item} value={item}>
               {INTENSITY_LABEL[item]}
             </option>
           ))}
         </optgroup>
         <optgroup label={t("Ritmo de prova")}>
-          {INTENSITIES.filter((item) => item.startsWith("P")).map((item) => (
+          {INTENSITIES.filter((item) => /^P\d/.test(item)).map((item) => (
             <option key={item} value={item}>
               {INTENSITY_LABEL[item]}
             </option>

@@ -189,7 +189,7 @@ function FragmentCells({ children }: { children: React.ReactNode }) {
 }
 
 /** The meet race sheet for a best time that has no competition in Aquastats (e.g. from SwimRankings). */
-function RecordDetails({ athlete, record, onClose }: { athlete: Athlete; record: RaceRecord; onClose: () => void }) {
+export function RecordDetails({ athlete, record, onClose }: { athlete: Athlete; record: RaceRecord; onClose: () => void }) {
   const t = useT();
   const { raceSessions } = useAppState();
   const seed = (athlete.seedRecords ?? []).find((item) => item.course === record.course && item.stroke === record.stroke && item.distanceM === record.distanceM);

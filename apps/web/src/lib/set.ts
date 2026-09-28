@@ -1,15 +1,16 @@
 import { localizedMap } from "@/i18n";
 import { cleanSplitMarks, formatDistance, formatReps, MIN_DISTANCE } from "./distances";
 import { DEFAULT_SEND_OFF, snapSendOff } from "./send-off";
-import type { BlockType, DraftBlock, Gear, Intensity, RepDetail, SegmentBand, SetSegment, WorkoutBlock } from "./types";
+import type { BlockType, DraftBlock, Gear, Intensity, RepDetail, SegmentBand, SegmentPart, SetSegment, WorkoutBlock, WorkoutStroke } from "./types";
 
-export const INTENSITIES: Intensity[] = ["SUAVE", "A1", "A2", "A3", "PA", "MAX", "P50", "P100", "P200", "P400"];
+export const INTENSITIES: Intensity[] = ["SUAVE", "A1", "A2", "A3", "PROG", "PA", "MAX", "P50", "P100", "P200", "P400"];
 
 export const INTENSITY_LABEL = localizedMap<Intensity>({
   SUAVE: "Suave",
   A1: "A1",
   A2: "A2",
   A3: "A3",
+  PROG: "Prog",
   PA: "PA",
   MAX: "MAX",
   P50: "Ritmo 50",
@@ -18,7 +19,9 @@ export const INTENSITY_LABEL = localizedMap<Intensity>({
   P400: "Ritmo 400",
 });
 
-export function needsClockTime(intensity: Intensity): boolean {
+/** Warmup and cool-down never take a logged time, whatever the intensity chosen inside them. */
+export function needsClockTime(intensity: Intensity, blockType?: BlockType): boolean {
+  if (blockType && blockType !== "main") return false;
   return intensity !== "SUAVE" && intensity !== "A1";
 }
 
@@ -33,6 +36,35 @@ export const GEAR_LABEL = localizedMap<Gear>({
   fins: "Barbatanas",
 });
 
+export const WORKOUT_STROKES: WorkoutStroke[] = ["free", "back", "breast", "fly", "im", "sub"];
+
+export const WORKOUT_STROKE_LABEL = localizedMap<WorkoutStroke>({
+  free: "Livres",
+  back: "Costas",
+  breast: "Bruços",
+  fly: "Mariposa",
+  im: "Estilos",
+  sub: "Subaquático",
+});
+
+function cleanStroke(stroke: WorkoutStroke | "" | undefined): WorkoutStroke | "" {
+  return stroke && WORKOUT_STROKES.includes(stroke) ? stroke : "";
+}
+
+const MAX_PARTS = 6;
+
+function cleanParts(parts: SegmentPart[] | undefined): SegmentPart[] | undefined {
+  const cleaned = (parts ?? [])
+    .map((part) => ({
+      distanceM: Math.max(0, Math.round(Number(part?.distanceM) || 0)),
+      intensity: (INTENSITIES.includes(part?.intensity) ? part.intensity : "A1") as Intensity,
+      stroke: cleanStroke(part?.stroke),
+    }))
+    .filter((part) => part.distanceM > 0)
+    .slice(0, MAX_PARTS);
+  return cleaned.length >= 2 ? cleaned : undefined;
+}
+
 export type FlatInner = {
   index: number;
   segmentIndex: number;
@@ -42,6 +74,8 @@ export type FlatInner = {
   sendOffSeconds: number | null;
   fromBlock: boolean;
   gear: Gear[];
+  stroke: WorkoutStroke | "";
+  parts?: SegmentPart[];
   splitMarks: number[];
   isLast: boolean;
 };
@@ -60,12 +94,14 @@ export function makeDetail(source: {
   sendOffSeconds: number;
   fromBlock: boolean;
   gear: Gear[];
+  stroke?: WorkoutStroke | "";
 }): RepDetail {
   return {
     intensity: source.intensity,
     sendOffSeconds: snapSendOff(source.sendOffSeconds),
     fromBlock: Boolean(source.fromBlock),
     gear: cleanGear(source.gear),
+    stroke: cleanStroke(source.stroke),
   };
 }
 
@@ -83,6 +119,7 @@ export function emptySegment(): SetSegment {
     sendOffSeconds: DEFAULT_SEND_OFF,
     fromBlock: false,
     gear: [] as Gear[],
+    stroke: "" as WorkoutStroke | "",
   };
   return {
     reps: 1,
@@ -105,9 +142,22 @@ export function totalReps(block: Pick<WorkoutBlock, "rounds" | "segments">): num
   return Math.max(1, block.rounds) * innerCount(block);
 }
 
+/** Cumulative distances at each part's boundary (the marks needed to record each chunk's time). */
+export function partSplitMarks(parts: SegmentPart[] | undefined): number[] {
+  if (!parts || parts.length < 2) return [];
+  let running = 0;
+  const marks: number[] = [];
+  for (const part of parts.slice(0, -1)) {
+    running += part.distanceM;
+    marks.push(running);
+  }
+  return marks;
+}
+
 export function flattenInner(block: Pick<WorkoutBlock, "segments" | "noSendOff">): FlatInner[] {
   const rows: FlatInner[] = [];
   readySegments(block).forEach((segment, segmentIndex) => {
+    const splitMarks = [...new Set([...(segment.splitMarks ?? []), ...partSplitMarks(segment.parts)])].sort((a, b) => a - b);
     for (let itemIndex = 0; itemIndex < segment.reps; itemIndex += 1) {
       const detail = segment.details[itemIndex] ?? makeDetail(segment);
       rows.push({
@@ -119,7 +169,9 @@ export function flattenInner(block: Pick<WorkoutBlock, "segments" | "noSendOff">
         sendOffSeconds: block.noSendOff ? null : detail.sendOffSeconds,
         fromBlock: detail.fromBlock,
         gear: detail.gear,
-        splitMarks: segment.splitMarks ?? [],
+        stroke: detail.stroke ?? "",
+        parts: segment.parts,
+        splitMarks,
         isLast: false,
       });
     }
@@ -132,14 +184,27 @@ export function formatGear(gear: Gear[] | undefined): string {
   return (gear ?? []).map((item) => GEAR_LABEL[item]).join(" ");
 }
 
+/** "25 Prog + 25 A1", or with strokes "25 Prog Mariposa + 25 A1 Livres". */
+export function formatParts(parts: SegmentPart[]): string {
+  return parts
+    .map((part) => `${formatDistance(part.distanceM)} ${INTENSITY_LABEL[part.intensity] || part.intensity}${part.stroke ? ` ${WORKOUT_STROKE_LABEL[part.stroke]}` : ""}`)
+    .join(" + ");
+}
+
 export function formatSegment(segment: SetSegment): string {
+  if (segment.parts?.length) {
+    return `${formatReps(segment.reps, segment.distanceM)} (${formatParts(segment.parts)})`;
+  }
   const details = segment.details.length ? segment.details : [makeDetail(segment)];
   const intensities = [...new Set(details.map((detail) => INTENSITY_LABEL[detail.intensity] || detail.intensity))];
   const vel = intensities.join("/");
   const gears = details.map((detail) => formatGear(detail.gear));
   const sameGear = gears.every((item) => item === gears[0]);
   const gear = sameGear ? gears[0] : "";
-  return `${formatReps(segment.reps, segment.distanceM)} ${vel}${gear ? ` ${gear}` : ""}`;
+  const strokes = details.map((detail) => detail.stroke || "");
+  const sameStroke = strokes.every((item) => item === strokes[0]);
+  const stroke = sameStroke && strokes[0] ? WORKOUT_STROKE_LABEL[strokes[0] as WorkoutStroke] : "";
+  return `${formatReps(segment.reps, segment.distanceM)} ${vel}${stroke ? ` ${stroke}` : ""}${gear ? ` ${gear}` : ""}`;
 }
 
 export function formatSet(block: Pick<WorkoutBlock, "rounds" | "segments">): string {
@@ -173,12 +238,15 @@ export function normalizeSegment(segment: Partial<SetSegment> | undefined): SetS
     sendOffSeconds: snapSendOff(segment?.sendOffSeconds ?? base.sendOffSeconds),
     fromBlock: Boolean(segment?.fromBlock),
     gear: cleanGear(segment?.gear),
+    stroke: cleanStroke(segment?.stroke),
     splitMarks: cleanSplitMarks(segment?.splitMarks, Math.max(0, segment?.distanceM || 0)),
     details: [],
   };
   next.details = resizeDetails(segment?.details, reps, makeDetail(next));
   const bands = cleanBands(segment?.bands);
   if (bands.length) next.bands = bands;
+  const parts = cleanParts(segment?.parts);
+  if (parts) next.parts = parts;
   return next;
 }
 
@@ -197,7 +265,7 @@ export function sendOffFor(segment: SetSegment | undefined, detailSendOff: numbe
 
 export function applySegmentDefaults(
   segment: SetSegment,
-  patch: Partial<Pick<SetSegment, "intensity" | "sendOffSeconds" | "fromBlock" | "gear">>,
+  patch: Partial<Pick<SetSegment, "intensity" | "sendOffSeconds" | "fromBlock" | "gear" | "stroke">>,
 ): SetSegment {
   const next = normalizeSegment({ ...segment, ...patch });
   return {
@@ -208,6 +276,7 @@ export function applySegmentDefaults(
         sendOffSeconds: patch.sendOffSeconds ?? detail.sendOffSeconds,
         fromBlock: patch.fromBlock ?? detail.fromBlock,
         gear: patch.gear ?? detail.gear,
+        stroke: "stroke" in patch ? patch.stroke : detail.stroke,
       }),
     ),
   };
@@ -238,6 +307,22 @@ export function toggleGear(segment: SetSegment, gear: Gear): SetSegment {
   return applySegmentDefaults(segment, {
     gear: has ? segment.gear.filter((item) => item !== gear) : [...segment.gear, gear],
   });
+}
+
+/** Sets, or clears with "", the stroke swum in the whole segment (every rep, unless split into parts). */
+export function setSegmentStroke(segment: SetSegment, stroke: WorkoutStroke | ""): SetSegment {
+  return applySegmentDefaults(segment, { stroke });
+}
+
+/** Splits every rep of the segment into ordered chunks, each with its own pace and, optionally, stroke. */
+export function setSegmentParts(segment: SetSegment, parts: SegmentPart[] | undefined): SetSegment {
+  const next = normalizeSegment({ ...segment, parts: parts ?? [] });
+  if (!parts?.length) next.parts = undefined;
+  return next;
+}
+
+export function emptyPart(distanceM = MIN_DISTANCE): SegmentPart {
+  return { distanceM, intensity: "A1", stroke: "" };
 }
 
 export function normalizeDraft(block: DraftBlock): DraftBlock {

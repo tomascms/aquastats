@@ -4,7 +4,7 @@ import Link from "next/link";
 import { GoalsPanel } from "@/components/goals/goals-panel";
 import { WellnessCalendar } from "@/components/wellness/wellness-calendar";
 import { BLOCK_LABEL, COURSE_LABEL, SHIFT_LABEL, displayTitle, formatDatePt, strokeLabel } from "@/lib/labels";
-import { formatSet } from "@/lib/set";
+import { flattenInner, formatSet, needsClockTime, splitRepNumber } from "@/lib/set";
 import { todayIso } from "@/lib/dates";
 import { athleteVolumeM, formatMeters } from "@/lib/rankings";
 import { TeamJoinCode } from "@/components/team/team-join-code";
@@ -33,6 +33,16 @@ export default function SwimmerHomePage() {
   }
   const today = workouts.find((workout) => workout.date === todayIso()) ?? workouts[0];
   const mine = timeLogs.filter((log) => log.athleteId === me?.id && log.workoutId === today?.id);
+  // Only reps that actually needed a time count towards the stats (warm-up/cool-down/easy never do).
+  const timedBlockOf = (blockId: string) => today?.blocks.find((block) => block.id === blockId);
+  const isTimedLog = (log: (typeof mine)[number]) => {
+    const block = timedBlockOf(log.blockId);
+    if (!block) return false;
+    const inners = flattenInner(block);
+    const inner = inners[splitRepNumber(log.repNumber, inners.length || 1).innerRep - 1];
+    return inner ? needsClockTime(inner.intensity, block.type) : false;
+  };
+  const mineTimed = mine.filter(isTimedLog);
 
   return (
     <div className="space-y-5">
@@ -54,7 +64,7 @@ export default function SwimmerHomePage() {
           </div>
           <div className="rounded-2xl bg-ink-2 px-3 py-3">
             <p className="text-xs tracking-[0.16em] text-mute">{t("Tempos hoje")}</p>
-            <p className="text-xl font-semibold tracking-tight">{mine.length}</p>
+            <p className="text-xl font-semibold tracking-tight">{mineTimed.length}</p>
           </div>
         </div>
         {today ? (
@@ -80,12 +90,13 @@ export default function SwimmerHomePage() {
         <h2 className="mb-3 text-lg font-semibold">{t("Blocos de hoje")}</h2>
         <div className="space-y-2">
           {today?.blocks.map((block) => {
-            const count = mine.filter((log) => log.blockId === block.id).length;
+            const count = mineTimed.filter((log) => log.blockId === block.id).length;
             return (
               <div key={block.id} className="rounded-2xl border border-line bg-panel px-4 py-3">
                 <p className="text-sm font-semibold">{BLOCK_LABEL[block.type]}</p>
                 <p className="text-xs text-mute">
-                  {formatSet(block)} · {t("{count} tempos teus", { count })}
+                  {formatSet(block)}
+                  {block.type === "main" ? ` · ${t("{count} tempos teus", { count })}` : ""}
                 </p>
               </div>
             );

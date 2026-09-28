@@ -14,7 +14,7 @@ import { actions, useAppState } from "@/lib/store";
 import { todayIso } from "@/lib/dates";
 import type { MessageKey } from "@/i18n";
 import type { Gender, GymType, SeedRecord, Stroke, WellnessEntry } from "@/lib/types";
-import { confirmDialog } from "@/lib/confirm";
+import { Modal } from "@/components/ui/modal";
 
 const STROKES: Stroke[] = ["free", "back", "breast", "fly", "im"];
 const GENDERS: Gender[] = ["M", "F"];
@@ -43,6 +43,7 @@ export default function SwimmerDefinicoesPage() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [hasPassword, setHasPassword] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
     void api<{ email?: string | null; hasPassword?: boolean }>("/api/v1/auth/me")
@@ -101,20 +102,11 @@ export default function SwimmerDefinicoesPage() {
     }
   }
 
-  async function leaveTeam() {
-    if (
-      !(await confirmDialog({
-        title: t("Queres sair da equipa?"),
-        message: t("Os teus tempos e dados ficam na equipa e não passam para outra."),
-        confirmLabel: t("Sair da equipa"),
-        destructive: true,
-      }))
-    )
-      return;
+  async function leaveTeam(purge: boolean) {
     setBusy(true);
     setError("");
     try {
-      await actions.leaveTeam();
+      await actions.leaveTeam(purge);
       window.location.assign("/swimmer");
     } catch (err) {
       setError(td((err as { detail?: string }).detail || "Não foi possível sair da equipa."));
@@ -208,18 +200,90 @@ export default function SwimmerDefinicoesPage() {
         <section className="card space-y-3 p-4">
           <div>
             <h2 className="text-lg font-semibold">{t("Sair da equipa")}</h2>
-            <p className="mt-1 text-sm text-mute">
-              {t("Os tempos e dados que registaste nesta equipa ficam com o clube. Não os levas para outra equipa.")}
-            </p>
+            <p className="mt-1 text-sm text-mute">{t("Podes manter o histórico com a equipa ou apagar já os teus dados.")}</p>
           </div>
-          <button type="button" disabled={busy} onClick={() => void leaveTeam()} className="h-10 w-full rounded-md border border-coral/40 text-sm text-coral hover:bg-coral/10">
+          <button type="button" disabled={busy} onClick={() => setLeaving(true)} className="h-10 w-full rounded-md border border-coral/40 text-sm text-coral hover:bg-coral/10">
             {t("Sair da equipa")}
           </button>
         </section>
       ) : null}
 
+      <LeaveTeamDialog open={leaving} onClose={() => setLeaving(false)} onConfirm={leaveTeam} />
+
       <ChangePasswordSection hasPassword={hasPassword} onPasswordSet={() => setHasPassword(true)} />
       <DeleteAccountSection hasPassword={hasPassword} />
     </div>
+  );
+}
+
+/** The athlete decides: leave and let the club keep the history, or leave and delete it all. */
+function LeaveTeamDialog({
+  open,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (purge: boolean) => Promise<void>;
+}) {
+  const t = useT();
+  const [purge, setPurge] = useState(false);
+  const [sure, setSure] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const option = (value: boolean, title: string, text: string) => (
+    <label
+      className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${
+        purge === value ? (value ? "border-coral bg-[#fdecea]" : "border-pool bg-pool-soft") : "border-line"
+      }`}
+    >
+      <input
+        type="radio"
+        name="leave-mode"
+        className="mt-1"
+        checked={purge === value}
+        onChange={() => {
+          setPurge(value);
+          setSure(false);
+        }}
+      />
+      <span>
+        <span className="block text-sm font-semibold text-mist">{title}</span>
+        <span className="block text-xs text-mute">{text}</span>
+      </span>
+    </label>
+  );
+  return (
+    <Modal open={open} title={t("Queres sair da equipa?")} onClose={() => !busy && onClose()}>
+      <div className="space-y-2">
+        {option(false, t("Sair e manter o histórico"), t("Os teus tempos e provas ficam com a equipa. Se um dia o treinador te deixar sair com eles, seguem-te para a próxima equipa."))}
+        {option(true, t("Sair e apagar todos os dados"), t("Apaga já os teus tempos de treino, provas, recordes, objetivos e frequência cardíaca nesta equipa. Não pode ser desfeito."))}
+        {purge ? (
+          <label className="flex items-start gap-2 pt-1 text-xs font-semibold text-coral">
+            <input type="checkbox" className="mt-0.5" checked={sure} onChange={(event) => setSure(event.target.checked)} />
+            {t("Percebo que os meus dados são apagados para sempre.")}
+          </label>
+        ) : null}
+      </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" className="btn-ghost" onClick={onClose} disabled={busy}>
+          {t("Cancelar")}
+        </button>
+        <button
+          type="button"
+          className={purge ? "btn-primary !bg-coral" : "btn-primary"}
+          disabled={busy || (purge && !sure)}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await onConfirm(purge);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {purge ? t("Sair e apagar dados") : t("Sair da equipa")}
+        </button>
+      </div>
+    </Modal>
   );
 }

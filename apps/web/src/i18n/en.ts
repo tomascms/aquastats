@@ -1246,5 +1246,23 @@ export const en = {
   "Os batimentos já importados ficam.": "Heart rate already imported stays.",
   "Queres sair da equipa?": "Leave the team?",
   "Os teus tempos e dados ficam na equipa e não passam para outra.": "Your times and data stay with the team and don't move to another one.",
+  "Podes manter o histórico com a equipa ou apagar já os teus dados.": "You can keep the history with the team or delete your data now.",
+  "Sair e manter o histórico": "Leave and keep the history",
+  "Os teus tempos e provas ficam com a equipa. Se um dia o treinador te deixar sair com eles, seguem-te para a próxima equipa.":
+    "Your times and races stay with the team. If a coach ever lets you take them, they'll follow you to your next team.",
+  "Sair e apagar todos os dados": "Leave and delete all data",
+  "Apaga já os teus tempos de treino, provas, recordes, objetivos e frequência cardíaca nesta equipa. Não pode ser desfeito.":
+    "Deletes your training times, races, records, goals and heart rate in this team right now. This can't be undone.",
+  "Percebo que os meus dados são apagados para sempre.": "I understand my data is deleted for good.",
+  "Sair e apagar dados": "Leave and delete data",
+  "Prog": "Prog",
+  "Livre": "Free",
+  "parte": "part",
+  "dividido": "split",
+  "Aquecimento e soltar não têm tempos registados.": "Warm-up and cool-down never have logged times.",
+  "Dividir esta rep em partes (ex.: 25 prog + 25 A1)": "Split this rep into parts (e.g. 25 prog + 25 A1)",
+  "Mudar repetições individuais (ritmo, saída, material, estilo)": "Change individual reps (pace, send-off, gear, stroke)",
+  "{total}m de {distance}m": "{total}m of {distance}m",
+  "Sem tempos registados nesta série.": "No times logged in this set.",
   // @@APPEND@@
 } as const;

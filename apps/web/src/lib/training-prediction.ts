@@ -312,7 +312,7 @@ export type RaceForm = {
   weeks: FormPoint[];
 };
 
-const HARD: ReadonlySet<string> = new Set(["A3", "PA", "MAX", "P50", "P100", "P200", "P400"]);
+const HARD: ReadonlySet<string> = new Set(["A3", "PROG", "PA", "MAX", "P50", "P100", "P200", "P400"]);
 const FORM_WINDOW_DAYS = 28;
 const FORM_BASELINE_DAYS = 180;
 

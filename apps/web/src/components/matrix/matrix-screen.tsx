@@ -8,9 +8,11 @@ import { BLOCK_LABEL, COURSE_LABEL, SHIFT_LABEL, displayTitle, strokeLabel } fro
 import { formatSendOff } from "@/lib/send-off";
 import {
   INTENSITY_LABEL,
+  WORKOUT_STROKE_LABEL,
   flattenInner,
   flatRepNumber,
   formatGear,
+  formatParts,
   formatSet,
   innerCount,
   needsClockTime,
@@ -114,9 +116,15 @@ export function MatrixScreen() {
   const inners = block ? flattenInner(block) : [];
   const innerReps = inners.length;
   const rounds = block?.rounds ?? 1;
+  // Aquecimento and soltar are never timed, whatever the intensity set inside them.
+  const timesAllowed = block?.type === "main";
 
   useEffect(() => {
     if (!workout || !block || bootstrapped.current || presentIds.length === 0 || innerCount(block) === 0) return;
+    if (block.type !== "main") {
+      bootstrapped.current = true;
+      return;
+    }
     const first = firstEmptyCell(presentIds, block, timeLogs, workout.id);
     const split = splitRepNumber(first.repNumber, innerCount(block));
     const startField = clockStartField(flattenInner(block)[split.innerRep - 1]?.distanceM);
@@ -146,13 +154,15 @@ export function MatrixScreen() {
     }
   }
 
-  const requiredReps = inners.filter((item) => needsClockTime(item.intensity)).length * Math.max(1, rounds);
-  const filled = [...logsByCell.values()].filter((log) => {
-    if (!presentIds.includes(log.athleteId) || !logHasTime(log)) return false;
-    const split = splitRepNumber(log.repNumber, innerReps || 1);
-    const inner = inners[split.innerRep - 1];
-    return inner ? needsClockTime(inner.intensity) : true;
-  }).length;
+  const requiredReps = timesAllowed ? inners.filter((item) => needsClockTime(item.intensity, block?.type)).length * Math.max(1, rounds) : 0;
+  const filled = timesAllowed
+    ? [...logsByCell.values()].filter((log) => {
+        if (!presentIds.includes(log.athleteId) || !logHasTime(log)) return false;
+        const split = splitRepNumber(log.repNumber, innerReps || 1);
+        const inner = inners[split.innerRep - 1];
+        return inner ? needsClockTime(inner.intensity, block?.type) : true;
+      }).length
+    : 0;
 
   function queueSave(
     workoutId: string,
@@ -554,6 +564,10 @@ export function MatrixScreen() {
         </p>
       )}
 
+      {!timesAllowed && (
+        <p className="px-3 pb-2 text-[11px] text-mute">{t("Aquecimento e soltar não têm tempos registados.")}</p>
+      )}
+
       <div className="matrix-scroll min-h-0 flex-1 overflow-auto px-2 pb-2">
         <div
           className="grid min-w-max"
@@ -572,13 +586,20 @@ export function MatrixScreen() {
                 {item.index + 1}
                 <span className="text-mute/70"> · {formatDistance(item.distanceM)}m</span>
               </p>
-              <p className="text-[10px] font-semibold text-sand">{INTENSITY_LABEL[item.intensity]}</p>
-              {!needsClockTime(item.intensity) ? <p className="text-[9px] text-mute">{t("sem tempo")}</p> : null}
+              {item.parts?.length ? (
+                <p className="text-[9px] font-semibold leading-tight text-sand">{formatParts(item.parts)}</p>
+              ) : (
+                <p className="text-[10px] font-semibold text-sand">{INTENSITY_LABEL[item.intensity]}</p>
+              )}
+              {!timesAllowed || !needsClockTime(item.intensity, block.type) ? <p className="text-[9px] text-mute">{t("sem tempo")}</p> : null}
               <p className="font-mono text-[10px] text-aqua">
                 {block.noSendOff ? "—" : formatSendOff(item.sendOffSeconds)}
               </p>
               {item.fromBlock && (
                 <p className="mt-0.5 text-xs font-semibold text-sand">{t("bloco")}</p>
+              )}
+              {item.stroke && (
+                <p className="mt-0.5 text-[9px] font-semibold leading-tight text-aqua">{WORKOUT_STROKE_LABEL[item.stroke]}</p>
               )}
               {item.gear.length > 0 && (
                 <p className="mt-0.5 text-[9px] leading-tight text-mute">{formatGear(item.gear)}</p>
@@ -602,8 +623,10 @@ export function MatrixScreen() {
               }
               getLog={(innerRep) => logsByCell.get(cellKey(row.id, flatRepNumber(round, innerRep, innerReps)))}
               hr={sessionFor(hrSessions, workout.id, row.id)}
-              onSelect={(innerRep) =>
-                applyCell({ athleteId: row.id, blockId: block.id, repNumber: flatRepNumber(round, innerRep, innerReps) }, true)
+              onSelect={
+                timesAllowed
+                  ? (innerRep) => applyCell({ athleteId: row.id, blockId: block.id, repNumber: flatRepNumber(round, innerRep, innerReps) }, true)
+                  : undefined
               }
               onRemove={() => removeAthleteFromMatrix(row.id)}
             />
@@ -743,7 +766,8 @@ function Row({
   reps: number;
   selectedInner: number;
   getLog: (innerRep: number) => TimeLog | undefined;
-  onSelect: (innerRep: number) => void;
+  /** Undefined when this block isn't timed (warmup/recovery): cells render read-only. */
+  onSelect?: (innerRep: number) => void;
   onRemove?: () => void;
 }) {
   const t = useT();
@@ -776,6 +800,13 @@ function Row({
         const selected = selectedInner === innerRep;
         const splits = (log?.splits ?? []).filter((item) => hasClockTime(item.mm, item.ss, item.cc)).length;
         const hasFinal = Boolean(log && hasClockTime(log.mm, log.ss, log.cc));
+        if (!onSelect) {
+          return (
+            <div key={innerRep} className="border-t border-l border-line bg-panel/20 px-1 py-2 text-center font-mono text-[12px] leading-none text-mute/40">
+              —
+            </div>
+          );
+        }
         return (
           <button
             key={innerRep}
@@ -818,7 +849,7 @@ function firstEmptyCell(
     for (let rep = 1; rep <= total; rep += 1) {
       const split = splitRepNumber(rep, inners.length || 1);
       const inner = inners[split.innerRep - 1];
-      if (inner && !needsClockTime(inner.intensity)) continue;
+      if (inner && !needsClockTime(inner.intensity, block.type)) continue;
       const existing = logs.find(
         (log) =>
           log.workoutId === workoutId &&

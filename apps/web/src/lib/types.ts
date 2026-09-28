@@ -6,9 +6,12 @@ export type BlockType = "warmup" | "main" | "recovery";
 
 export type Stroke = "free" | "back" | "breast" | "fly" | "im";
 
-export type Intensity = "SUAVE" | "A1" | "A2" | "A3" | "PA" | "MAX" | "P50" | "P100" | "P200" | "P400";
+export type Intensity = "SUAVE" | "A1" | "A2" | "A3" | "PROG" | "PA" | "MAX" | "P50" | "P100" | "P200" | "P400";
 
 export type Gear = "legs" | "arms" | "paddles" | "pullbuoy" | "parachute" | "fins";
+
+/** What's being swum in a set: the five race strokes, plus "sub" (underwater) for training-only sets. */
+export type WorkoutStroke = Stroke | "sub";
 
 export type TimeParts = {
   mm: string;
@@ -72,6 +75,19 @@ export type RepDetail = {
   sendOffSeconds: number;
   fromBlock: boolean;
   gear: Gear[];
+  /** Stroke swum for this rep, when the coach wants to fix it (e.g. "pernas mariposa"). */
+  stroke?: WorkoutStroke | "";
+};
+
+/**
+ * A rep broken into ordered chunks with their own pace/stroke ("4×50: 25 prog + 25 A1", or a single
+ * 100 as "25/50/25" of different strokes). The chunks' distances should add up to the segment's
+ * distanceM, but this isn't enforced — a coach's plan doesn't have to be exact.
+ */
+export type SegmentPart = {
+  distanceM: number;
+  intensity: Intensity;
+  stroke?: WorkoutStroke | "";
 };
 
 export type SetSegment = {
@@ -83,6 +99,10 @@ export type SetSegment = {
   gear: Gear[];
   details: RepDetail[];
   splitMarks: number[];
+  /** Stroke swum in this segment (same field as RepDetail.stroke, as the segment's default). */
+  stroke?: WorkoutStroke | "";
+  /** When set, every rep of this segment is swum as these chunks instead of one uniform pace. */
+  parts?: SegmentPart[];
   /**
    * Optional per-group send-offs for the same set ("A a 1'10, B a 1'20"). Swimmers whose
    * group isn't listed keep the segment's own send-off.

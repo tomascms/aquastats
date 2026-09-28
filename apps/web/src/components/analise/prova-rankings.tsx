@@ -1,8 +1,8 @@
 "use client";
 
-import { PbGrid } from "@/components/team/personal-bests";
+import { PbGrid, RecordDetails } from "@/components/team/personal-bests";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnaliseTabs } from "@/components/analise/analise-tabs";
 import { AthleteChips, NoAthletes } from "@/components/analise/athlete-chips";
@@ -25,7 +25,7 @@ import { formatRaceClock } from "@/lib/race";
 import { annotateTrainingReps } from "@/lib/training-context";
 import { formBefore, type RaceForm } from "@/lib/training-prediction";
 import { useAppState } from "@/lib/store";
-import type { Gender, PoolCourse, RaceSession, Stroke, WellnessEntry } from "@/lib/types";
+import type { Athlete, Gender, PoolCourse, RaceSession, Stroke, WellnessEntry } from "@/lib/types";
 import { useT } from "@/i18n/provider";
 
 function signed(seconds: number, pct: number) {
@@ -91,15 +91,11 @@ export function ProvaRankings({ role = "coach" }: { role?: "coach" | "swimmer" }
         <NoAthletes />
       ) : recordId ? (
         <RecordDetail
-          athleteName={athlete.name}
+          athlete={athlete}
           gender={athlete.gender}
           records={records}
           recordId={recordId}
           compareId={compareId}
-
-
-
-
           workouts={workouts}
           timeLogs={timeLogs}
           raceSessions={raceSessions.filter((item) => item.athleteId === athleteId)}
@@ -337,7 +333,7 @@ function CourseList({
 }
 
 function RecordDetail({
-  athleteName,
+  athlete,
   gender,
   records,
   recordId,
@@ -349,7 +345,7 @@ function RecordDetail({
   onBack,
   onCompare,
 }: {
-  athleteName: string;
+  athlete: Athlete;
   gender?: Gender | "";
   records: ReturnType<typeof raceRecords>;
   recordId: string;
@@ -362,7 +358,9 @@ function RecordDetail({
   onCompare: (id: string) => void;
 }) {
   const t = useT();
+  const athleteName = athlete.name;
   const record = findRecord(records, recordId);
+  const [addingDetails, setAddingDetails] = useState(false);
   const other = compareId ? findRecord(records, compareId) : undefined;
   const athleteIdForContext = record?.athleteId ?? "";
   // Every rep the athlete swam (any distance); form is read per group, never converted between them.
@@ -461,10 +459,27 @@ function RecordDetail({
       {(() => {
         const session = raceSessions.find((item) => item.id === (record.sessionId ?? record.id));
         if (!session) {
+          // A seed record (e.g. from SwimRankings) has no meet entry, so its details are added right
+          // here; a real meet result without details yet is edited from the competition's results page.
           return (
-            <p className="rounded-2xl border border-dashed border-line bg-panel px-5 py-4 text-sm text-mute">
-              {t("Adiciona informação a esta prova (reação, 15 m, subaquático, viragens, frequências…) para a cruzar com a preparação.")}
-            </p>
+            <div className="rounded-2xl border border-dashed border-line bg-panel px-5 py-4">
+              <p className="text-sm text-mute">
+                {t("Adiciona informação a esta prova (reação, 15 m, subaquático, viragens, frequências…) para a cruzar com a preparação.")}
+              </p>
+              {record.competitionId ? (
+                <a href={`/coach/competicoes/${record.competitionId}/resultados/${record.entryId}`} className="btn-primary mt-3 inline-flex h-10">
+                  {t("Adicionar detalhes da prova")}
+                </a>
+              ) : addingDetails ? (
+                <div className="mt-3">
+                  <RecordDetails athlete={athlete} record={record} onClose={() => setAddingDetails(false)} />
+                </div>
+              ) : (
+                <button type="button" className="btn-primary mt-3 h-10" onClick={() => setAddingDetails(true)}>
+                  {t("Adicionar detalhes da prova")}
+                </button>
+              )}
+            </div>
           );
         }
         return (
