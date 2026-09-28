@@ -388,7 +388,9 @@ def process_rules(session: Session, payload: dict, data: bytes, body: dict, requ
     # Gemini reads any association / country / language; the local parser is the fallback.
     ai = read_regulations(text)
     if ai:
-        facts = ai["facts"] or facts
+        # Gemini's facts first; anything only the local parser found (e.g. qualifying times) is kept too.
+        known = {fact["label"] for fact in ai["facts"]}
+        facts = ai["facts"] + [fact for fact in facts if fact["label"] not in known] if ai["facts"] else facts
         title = ai["name"] or title
         dates = ai["dates"] or dates
         detected = ai["course"] or detected

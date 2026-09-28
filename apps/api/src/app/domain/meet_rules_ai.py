@@ -105,19 +105,20 @@ def _ask(text: str, settings) -> dict | None:
         "contents": [{"role": "user", "parts": [{"text": text[:MAX_CHARS]}]}],
         "generationConfig": {"temperature": 0, "responseMimeType": "application/json", "responseSchema": SCHEMA},
     }
-    try:
-        response = httpx.post(
-            URL.format(model=settings.gemini_model),
-            json=body,
-            headers={"x-goog-api-key": settings.gemini_api_key},
-            timeout=40.0,
-        )
-        response.raise_for_status()
-        raw = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-        data = json.loads(raw)
-    except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError) as exc:
-        log.warning("gemini regulations read failed: %s", type(exc).__name__)
-        return None
+    # The free tier is often busy (429/503): try the configured model, then the lighter one.
+    data = None
+    for model in dict.fromkeys([settings.gemini_model, "gemini-flash-lite-latest"]):
+        try:
+            response = httpx.post(URL.format(model=model), json=body, headers={"x-goog-api-key": settings.gemini_api_key}, timeout=40.0)
+            response.raise_for_status()
+            data = json.loads(response.json()["candidates"][0]["content"]["parts"][0]["text"])
+            break
+        except httpx.HTTPStatusError as exc:
+            log.warning("gemini %s failed: %s", model, exc.response.status_code)
+            if exc.response.status_code not in (429, 500, 503, 504):
+                return None
+        except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError) as exc:
+            log.warning("gemini %s failed: %s", model, type(exc).__name__)
     if not isinstance(data, dict):
         return None
     return _to_facts(data)
