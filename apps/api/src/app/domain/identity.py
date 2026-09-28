@@ -378,9 +378,16 @@ def create_pending_user(session: Session, *, email: str | None, name: str, verif
 
 
 def delete_user_account(session: Session, user: User, request: Request) -> None:
-    stamp = now()
-    member = session.scalar(select(TeamMember).where(TeamMember.user_id == user.id))
+    """Deleting an account deletes everything that is theirs, for good (no anonymised leftovers).
 
+    - A swimmer: every athlete record of theirs, in any team (also history kept by a past team).
+    - The coach who owns a team without swimmers: the whole team and its organisation.
+    - What they created in someone else's team (e.g. as assistant coach) is handed to that team's owner,
+      so other people's work isn't lost.
+    """
+    from .commands import _purge_athlete
+
+    member = session.scalar(select(TeamMember).where(TeamMember.user_id == user.id))
     if user.role == "coach" and member and member.status in {"owner", "coach"}:
         swimmers = session.scalars(
             select(TeamMember).where(TeamMember.team_id == member.team_id, TeamMember.status == "swimmer")
@@ -390,51 +397,82 @@ def delete_user_account(session: Session, user: User, request: Request) -> None:
                 status_code=409,
                 detail="Tens atletas na equipa. Remove-os ou transfere a equipa antes de eliminar a conta.",
             )
-        _purge_team_operational_data(session, member.team_id, stamp)
-        team = session.get(Team, member.team_id)
-        if team:
-            team.deleted_at = stamp
-            team.updated_at = stamp
-            org = session.get(Organization, team.organization_id)
-            if org:
-                org.deleted_at = stamp
-                org.updated_at = stamp
-        session.delete(member)
+        if member.status == "owner":
+            _delete_team(session, member.team_id)
 
-    for athlete in session.scalars(select(Athlete).where(Athlete.user_id == user.id, Athlete.deleted_at.is_(None))).all():
-        _soft_delete_athlete(session, athlete, stamp)
+    for athlete in session.scalars(select(Athlete).where(Athlete.user_id == user.id)).all():
+        _purge_athlete(session, athlete.team_id, athlete)
+    for athlete in session.scalars(select(Athlete).where(Athlete.deleted_at.is_not(None))).all():
+        if (athlete.extra or {}).get("formerUserId") == str(user.id):
+            _purge_athlete(session, athlete.team_id, athlete)
 
-    if user.role == "swimmer" and member:
-        session.delete(member)
+    _hand_over(session, user.id)
+    for model in (TeamMember, RefreshToken, PasswordResetToken, EmailVerificationToken, IdempotencyKey, OAuthAccount, AuditLog):
+        session.execute(delete(model).where(model.user_id == user.id))
+    session.execute(delete(Profile).where(Profile.user_id == user.id))
+    session.flush()
+    session.delete(user)
+    session.flush()
 
-    session.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
-    session.execute(delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id))
-    session.execute(delete(EmailVerificationToken).where(EmailVerificationToken.user_id == user.id))
-    session.execute(delete(IdempotencyKey).where(IdempotencyKey.user_id == user.id))
-    for account in session.scalars(select(OAuthAccount).where(OAuthAccount.user_id == user.id)).all():
-        session.delete(account)
-    profile = session.get(Profile, user.id)
-    if profile:
-        session.delete(profile)
 
-    user.is_active = False
-    user.deleted_at = stamp
-    user.email = None
-    user.password_hash = None
-    user.updated_at = stamp
-    session.add(
-        AuditLog(
-            id=uuid4(),
-            user_id=user.id,
-            action="auth.delete_account",
-            resource_type="user",
-            resource_id=user.id,
-            ip_address=request.client.host if request.client else None,
-            request_id=getattr(request.state, "request_id", None),
-            created_at=stamp,
-        )
+def _delete_team(session: Session, team_id: UUID) -> None:
+    """A team and everything in it, then its organisation if it has no other team."""
+    from .commands import _purge_athlete
+    from .models import Goal, HrSession, PolarLink, TeamInvite
+
+    for athlete in session.scalars(select(Athlete).where(Athlete.team_id == team_id)).all():
+        _purge_athlete(session, team_id, athlete)
+    workouts = select(Workout.id).where(Workout.team_id == team_id)
+    competitions = select(Competition.id).where(Competition.team_id == team_id)
+    entries = select(MeetEntry.id).where(MeetEntry.competition_id.in_(competitions))
+    session.execute(delete(TimeLog).where(TimeLog.workout_id.in_(workouts)))
+    session.execute(delete(MeetResult).where(MeetResult.entry_id.in_(entries)))
+    session.execute(delete(PersonalRecord).where(PersonalRecord.competition_id.in_(competitions)))
+    session.execute(delete(MeetEntry).where(MeetEntry.competition_id.in_(competitions)))
+    for model in (Goal, HrSession, PolarLink, RaceSession, AttendanceSession, SeasonPlan, TeamInvite, TeamMember, Workout, Competition):
+        session.execute(delete(model).where(model.team_id == team_id))
+    team = session.get(Team, team_id)
+    if team is not None:
+        organization_id = team.organization_id
+        session.delete(team)
+        session.flush()
+        if organization_id and not session.scalar(select(Team.id).where(Team.organization_id == organization_id).limit(1)):
+            org = session.get(Organization, organization_id)
+            if org is not None:
+                session.delete(org)
+    session.flush()
+
+
+def _hand_over(session: Session, user_id: UUID) -> None:
+    """Rows they created in teams that stay (another owner's team) go to that team's owner."""
+    from sqlalchemy import text
+
+    owner = "(select m.user_id from team_members m where m.team_id = {team} and m.status = 'owner' and m.user_id <> :u limit 1)"
+    for table, column in (
+        ("workouts", "created_by"),
+        ("competitions", "created_by"),
+        ("season_plans", "created_by"),
+        ("attendance_sessions", "created_by"),
+        ("race_sessions", "created_by"),
+        ("goals", "author_user_id"),
+    ):
+        new_owner = owner.format(team="t.team_id")
+        session.execute(text(f"update {table} t set {column} = {new_owner} where t.{column} = :u and {new_owner} is not null"), {"u": user_id})
+        session.execute(text(f"delete from {table} where {column} = :u"), {"u": user_id})  # no owner to take it
+    by_workout = owner.format(team="w.team_id")
+    session.execute(
+        text(f"update time_logs l set recorded_by = {by_workout} from workouts w where w.id = l.workout_id and l.recorded_by = :u and {by_workout} is not null"),
+        {"u": user_id},
     )
-
+    session.execute(
+        text(
+            f"update meet_results r set recorded_by = {owner.format(team='c.team_id')} from meet_entries e join competitions c on c.id = e.competition_id "
+            f"where e.id = r.entry_id and r.recorded_by = :u and {owner.format(team='c.team_id')} is not null"
+        ),
+        {"u": user_id},
+    )
+    session.execute(text("delete from time_logs where recorded_by = :u"), {"u": user_id})
+    session.execute(text("delete from meet_results where recorded_by = :u"), {"u": user_id})
 
 def assert_role_signup_allowed(role: str) -> None:
     if role == "coach" and not get_settings().coach_signup_enabled:
