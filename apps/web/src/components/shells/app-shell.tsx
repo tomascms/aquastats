@@ -114,7 +114,7 @@ export function AppShell({
           <div className="lane-rope" aria-hidden="true" />
         </header>
 
-        <main id="conteudo" className={`mx-auto w-full ${narrow ? "max-w-3xl" : "max-w-[1400px]"} flex-1 px-4 pb-28 pt-5 lg:px-10 lg:pb-12 lg:pt-10`}>
+        <main id="conteudo" className={`mx-auto w-full min-w-0 overflow-x-clip ${narrow ? "max-w-3xl" : "max-w-[1400px]"} flex-1 px-4 pb-28 pt-5 lg:px-10 lg:pb-12 lg:pt-10`}>
           {children}
         </main>
 

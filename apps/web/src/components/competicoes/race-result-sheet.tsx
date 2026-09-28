@@ -340,8 +340,9 @@ export function RaceResultSheet({
     () => ({
       id: sessionId,
       athleteId: entry.athleteId,
-      competitionId: meet.id,
-      entryId: entry.id,
+      // A personal best outside any competition (e.g. from SwimRankings) has no meet or entry.
+      competitionId: meet.id || null,
+      entryId: entry.id || null,
       date: raceDate,
       tournament: meet.title,
       course: meet.course,
@@ -398,7 +399,8 @@ export function RaceResultSheet({
       return;
     }
     setError("");
-    await actions.saveCompetitionAnalysis(entry.id, draft);
+    if (entry.id) await actions.saveCompetitionAnalysis(entry.id, draft);
+    else await actions.saveRaceSession(draft);
     setSaved(t("Guardado"));
     window.setTimeout(() => setSaved(""), 1800);
   }

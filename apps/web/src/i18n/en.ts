@@ -1234,5 +1234,7 @@ export const en = {
   "Tipo de conta": "Account type",
   "Aprovar treinador": "Approve coach",
   "Ainda sem atletas da equipa nos resultados": "No team swimmers in the results yet",
+  "Adicionar detalhes da prova": "Add race details",
+  "Carrega num tempo para ver ou juntar os detalhes da prova (reação, 15 m, subaquático, parciais…). SR = tempo vindo do SwimRankings.": "Tap a time to see or add the race details (reaction, 15 m, underwater, splits…). SR = time from SwimRankings.",
   // @@APPEND@@
 } as const;

@@ -152,18 +152,23 @@ export default function AthletePage() {
         <section className="rounded-2xl border border-line bg-panel p-5">
           <h2 className="font-display text-2xl font-bold">{t("Volume semanal")}</h2>
           <p className="text-sm text-mute">{t("Últimas 10 semanas.")}</p>
-          <div className="mt-5 flex h-44 items-end gap-2">
+          <div className="mt-5 flex h-44 items-end gap-1 sm:gap-2">
             {weeks.map((week, index) => {
               const current = index === weeks.length - 1;
               return (
-                <div key={week.start} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
-                  <span className="text-[11px] tabular text-mute">{week.meters ? (week.meters / 1000).toFixed(1) : ""}</span>
+                <div key={week.start} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5">
+                  <span className="text-[10px] tabular text-mute sm:text-[11px]">{week.meters ? (week.meters / 1000).toFixed(1) : ""}</span>
                   <div
                     className={`w-full rounded-t-md ${current ? "bg-pool" : week.meters ? "bg-aqua" : "bg-line"}`}
                     style={{ height: `${Math.max(3, (week.meters / maxWeek) * 100)}%` }}
                     title={`${formatDatePt(week.start)} · ${formatMeters(week.meters)}`}
                   />
-                  <span className={`text-[11px] tabular ${current ? "font-semibold text-pool" : "text-mute"}`}>
+                  {/* On phones every other date is shown, so the ten weeks fit the width. */}
+                  <span
+                    className={`whitespace-nowrap text-[10px] tabular sm:text-[11px] ${current ? "font-semibold text-pool" : "text-mute"} ${
+                      (weeks.length - 1 - index) % 2 ? "invisible sm:visible" : ""
+                    }`}
+                  >
                     {formatDatePt(week.start).slice(0, 5)}
                   </span>
                 </div>

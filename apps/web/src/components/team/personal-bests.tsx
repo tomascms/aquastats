@@ -1,16 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { RaceResultSheet } from "@/components/competicoes/race-result-sheet";
 import { useMemo, useState } from "react";
 import { useT } from "@/i18n/provider";
-import { formatApiError, type ApiError } from "@/lib/api";
 import { STROKE_LABEL, formatDatePt } from "@/lib/labels";
 import { formatRaceClock } from "@/lib/race";
 import { finaPoints, personalBests, raceRecords, type RaceRecord } from "@/lib/rankings";
-import { actions, useAppState } from "@/lib/store";
-import { toast } from "@/lib/toast";
-import { parseTime } from "@/lib/race-analysis";
-import type { Athlete, PoolCourse, Stroke } from "@/lib/types";
+import { useAppState } from "@/lib/store";
+import type { Athlete, Competition, MeetEntry, MeetResult, PoolCourse, Stroke } from "@/lib/types";
 
 /** SwimRankings order: stroke by stroke, each distance with the 25 m and the 50 m pool side by side. */
 const LAYOUT: { stroke: Stroke; distances: number[] }[] = [
@@ -34,7 +32,7 @@ export function PersonalBests({ athlete, role }: { athlete: Athlete; role: "coac
     () => personalBests(raceRecords(competitions, meetEntries, meetResults, raceSessions, athlete.id, athlete.seedRecords)),
     [athlete.id, athlete.seedRecords, competitions, meetEntries, meetResults, raceSessions],
   );
-  const [splitsFor, setSplitsFor] = useState<RaceRecord | null>(null);
+  const [detailFor, setDetailFor] = useState<RaceRecord | null>(null);
   const seedOf = (record: RaceRecord) =>
     (athlete.seedRecords ?? []).find((seed) => seed.course === record.course && seed.stroke === record.stroke && seed.distanceM === record.distanceM);
 
@@ -43,8 +41,9 @@ export function PersonalBests({ athlete, role }: { athlete: Athlete; role: "coac
       if (role === "coach") router.push(`/coach/competicoes/${record.competitionId}/resultados/${record.entryId}`);
       return;
     }
-    // A best time from SwimRankings: add what it can't give (the splits), right here. No competition is created.
-    setSplitsFor(record);
+    // A best time from SwimRankings: the same race sheet as a meet (reaction, 15 m, underwater, splits…),
+    // right here. No competition is created.
+    setDetailFor(record);
   }
 
   if (!best.length) {
@@ -58,13 +57,13 @@ export function PersonalBests({ athlete, role }: { athlete: Athlete; role: "coac
         gender={athlete.gender}
         isFromProfile={(record) => !record.competitionId && seedOf(record)?.source === "swimrankings"}
         canOpen={(record) => role === "coach" || !record.competitionId}
-        titleFor={(record) => (record.competitionId ? t("Ver detalhes") : t("Adicionar parciais"))}
+        titleFor={(record) => (record.competitionId ? t("Ver detalhes") : t("Adicionar detalhes da prova"))}
         onOpen={open}
       />
-      {splitsFor ? (
-        <SplitsEditor key={splitsFor.id} athlete={athlete} record={splitsFor} onDone={() => setSplitsFor(null)} />
+      {detailFor ? (
+        <RecordDetails key={detailFor.id} athlete={athlete} record={detailFor} onClose={() => setDetailFor(null)} />
       ) : null}
-      <p className="px-4 py-2 text-[11px] text-mute">{t("SR = tempo vindo do SwimRankings: carrega nele para juntar os parciais. Os outros tempos abrem os detalhes da prova.")}</p>
+      <p className="px-4 py-2 text-[11px] text-mute">{t("Carrega num tempo para ver ou juntar os detalhes da prova (reação, 15 m, subaquático, parciais…). SR = tempo vindo do SwimRankings.")}</p>
     </div>
   );
 }
@@ -189,65 +188,50 @@ function FragmentCells({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function SplitsEditor({ athlete, record, onDone }: { athlete: Athlete; record: RaceRecord; onDone: () => void }) {
+/** The meet race sheet for a best time that has no competition in Aquastats (e.g. from SwimRankings). */
+function RecordDetails({ athlete, record, onClose }: { athlete: Athlete; record: RaceRecord; onClose: () => void }) {
   const t = useT();
+  const { raceSessions } = useAppState();
   const seed = (athlete.seedRecords ?? []).find((item) => item.course === record.course && item.stroke === record.stroke && item.distanceM === record.distanceM);
-  const marks = Array.from({ length: Math.max(0, record.distanceM / 50 - 1) }, (_, index) => (index + 1) * 50);
-  const [values, setValues] = useState<Record<number, string>>(() =>
-    Object.fromEntries(
-      (seed?.splits ?? []).map((split) => [split.atM, formatRaceClock(split.mm * 60 + split.ss + split.cc / 100).replace("'", ":").replace('"', ".")]),
-    ),
+  const date = record.date || new Date().toISOString().slice(0, 10);
+  const meet: Competition = {
+    id: "",
+    title: record.meetTitle || seed?.meet || t("Recorde pessoal"),
+    date,
+    endDate: date,
+    course: record.course,
+    venue: record.venue || "",
+    athleteIds: [athlete.id],
+  };
+  const entry: MeetEntry = { id: "", competitionId: "", athleteId: athlete.id, stroke: record.stroke, distanceM: record.distanceM };
+  const hundredths = Math.round(record.timeS * 100);
+  const result: MeetResult = {
+    id: "",
+    entryId: "",
+    mm: Math.floor(hundredths / 6000),
+    ss: Math.floor((hundredths % 6000) / 100),
+    cc: hundredths % 100,
+    splits: seed?.splits ?? [],
+    recordedAt: "",
+  };
+  // Details already added for this best time (same event, pool and day, outside any competition).
+  const existing = raceSessions.find(
+    (item) =>
+      item.athleteId === athlete.id &&
+      !item.competitionId &&
+      item.stroke === record.stroke &&
+      item.distanceM === record.distanceM &&
+      item.course === record.course &&
+      item.date === date,
   );
-  const [busy, setBusy] = useState(false);
-
-  async function save() {
-    if (!seed) return;
-    setBusy(true);
-    try {
-      const splits = marks
-        .map((atM) => ({ atM, seconds: values[atM] ? parseTime(values[atM]) : 0 }))
-        .filter((item) => item.seconds > 0 && item.seconds < record.timeS)
-        .map(({ atM, seconds }) => {
-          const hundredths = Math.round(seconds * 100);
-          return { atM, mm: Math.floor(hundredths / 6000), ss: Math.floor((hundredths % 6000) / 100), cc: hundredths % 100 };
-        });
-      await actions.saveRecordSplits(athlete.id, { course: record.course, stroke: record.stroke, distanceM: record.distanceM, splits });
-      toast.success(t("Parciais guardados."));
-      onDone();
-    } catch (error) {
-      toast.error(formatApiError(error as ApiError));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!marks.length) {
-    return <p className="border-t border-line bg-panel-2 px-4 py-3 text-sm text-mute">{t("Os 50 m não têm parciais.")}</p>;
-  }
   return (
-    <div className="flex flex-wrap items-end gap-2 border-t border-line bg-panel-2 px-4 py-3">
-      <p className="w-full text-sm font-semibold text-mist">
-        {t("Parciais de {event}", { event: `${record.distanceM} m ${STROKE_LABEL[record.stroke]}` })} · {formatRaceClock(record.timeS)}
-      </p>
-      {marks.map((atM) => (
-        <label key={atM} className="text-[11px] font-semibold text-mute">
-          {atM} m
-          <input
-            className="field mt-1 h-9 w-24 py-1 font-mono text-sm"
-            placeholder="0:00.00"
-            value={values[atM] ?? ""}
-            onChange={(event) => setValues((current) => ({ ...current, [atM]: event.target.value }))}
-          />
-        </label>
-      ))}
-      <span className="ml-auto flex gap-2">
-        <button type="button" className="btn-ghost h-9" onClick={onDone} disabled={busy}>
-          {t("Cancelar")}
+    <div className="space-y-2 border-t border-line bg-panel-2 p-3">
+      <div className="flex justify-end">
+        <button type="button" className="btn-ghost h-9" onClick={onClose}>
+          {t("Fechar")}
         </button>
-        <button type="button" className="btn-primary h-9" onClick={() => void save()} disabled={busy}>
-          {t("Guardar")}
-        </button>
-      </span>
+      </div>
+      <RaceResultSheet meet={meet} entry={entry} athleteName={athlete.name} existing={existing} result={result} mode="edit" />
     </div>
   );
 }
