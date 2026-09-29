@@ -24,9 +24,11 @@ import {
   orderDraftBlocks,
   persistDraft,
   resizeSegment,
+  roundGearFor,
   setSegmentParts,
   toggleGear,
   toggleRepGear,
+  toggleRoundGear,
   updateRepDetail,
 } from "@/lib/set";
 import { writtenBlockLines } from "@/lib/workout-text";
@@ -286,6 +288,7 @@ function BlockEditor({
             segment={segment}
             hideSendOff={block.noSendOff}
             showStart={main}
+            rounds={block.rounds}
             canRemove={block.segments.length > 1}
             onChange={(patch) => updateSegment(segmentIndex, patch)}
             onRemove={() => onChange((current) => ({ ...current, segments: current.segments.filter((_, index) => index !== segmentIndex) }))}
@@ -308,6 +311,7 @@ function SetLine({
   segment,
   hideSendOff,
   showStart,
+  rounds,
   canRemove,
   onChange,
   onRemove,
@@ -315,6 +319,7 @@ function SetLine({
   segment: SetSegment;
   hideSendOff: boolean;
   showStart: boolean;
+  rounds: number;
   canRemove: boolean;
   onChange: (patch: Partial<SetSegment> | ((current: SetSegment) => SetSegment)) => void;
   onRemove: () => void;
@@ -322,6 +327,7 @@ function SetLine({
   const t = useT();
   const [more, setMore] = useState(false);
   const [perRep, setPerRep] = useState(false);
+  const [byRound, setByRound] = useState(Boolean(segment.roundGear?.length));
   const ready = isReadySegment(segment);
   const split = Boolean(segment.parts?.length);
   const extras = [
@@ -329,6 +335,7 @@ function SetLine({
     !split && segment.stroke && segment.stroke !== "free" ? WORKOUT_STROKE_LABEL[segment.stroke] : "",
     segment.gear.length ? segment.gear.map((item) => GEAR_LABEL[item]).join(", ") : "",
     showStart && segment.fromBlock ? t("bloco") : "",
+    segment.roundGear?.length ? t("material por repetição") : "",
   ].filter(Boolean);
 
   return (
@@ -396,6 +403,36 @@ function SetLine({
               </Chip>
             ))}
           </div>
+          {rounds > 1 && !split ? (
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-mute">
+                <input
+                  type="checkbox"
+                  checked={byRound}
+                  onChange={(event) => {
+                    setByRound(event.target.checked);
+                    if (!event.target.checked) onChange((current) => ({ ...current, roundGear: undefined }));
+                  }}
+                />
+                {t("O material muda de repetição para repetição (ex.: 1ª com pernas, 2ª sem)")}
+              </label>
+              {byRound
+                ? Array.from({ length: rounds }, (_, index) => index + 1).map((round) => {
+                    const active = roundGearFor(segment, round, segment.gear);
+                    return (
+                      <div key={round} className="flex flex-wrap items-center gap-1.5">
+                        <span className="w-16 text-[11px] font-semibold text-mute">{t("Repetição {n}", { n: round })}</span>
+                        {GEARS.map((item) => (
+                          <Chip key={item} small active={active.includes(item)} onClick={() => onChange((current) => toggleRoundGear(current, round, item))}>
+                            {GEAR_LABEL[item]}
+                          </Chip>
+                        ))}
+                      </div>
+                    );
+                  })
+                : null}
+            </div>
+          ) : null}
           <div className="space-y-1.5">
             <label className="flex items-center gap-1.5 text-[11px] font-semibold text-mute">
               <input

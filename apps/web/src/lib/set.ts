@@ -25,7 +25,7 @@ export function needsClockTime(intensity: Intensity, blockType?: BlockType): boo
   return intensity !== "SUAVE" && intensity !== "A1";
 }
 
-export const GEARS: Gear[] = ["legs", "arms", "paddles", "pullbuoy", "parachute", "fins"];
+export const GEARS: Gear[] = ["legs", "arms", "paddles", "pullbuoy", "parachute", "fins", "suit"];
 
 export const GEAR_LABEL = localizedMap<Gear>({
   legs: "Pernas",
@@ -34,6 +34,7 @@ export const GEAR_LABEL = localizedMap<Gear>({
   pullbuoy: "Pullbuoy",
   parachute: "Paraquedas",
   fins: "Barbatanas",
+  suit: "Fato",
 });
 
 export const WORKOUT_STROKES: WorkoutStroke[] = ["free", "back", "breast", "fly", "im", "sub"];
@@ -154,7 +155,12 @@ export function partSplitMarks(parts: SegmentPart[] | undefined): number[] {
   return marks;
 }
 
-export function flattenInner(block: Pick<WorkoutBlock, "segments" | "noSendOff">): FlatInner[] {
+/** The gear actually worn for `round` (1-based): the round's own override, or the rep's own gear. */
+export function roundGearFor(segment: SetSegment, round: number, fallback: Gear[]): Gear[] {
+  return segment.roundGear?.[round - 1] ?? fallback;
+}
+
+export function flattenInner(block: Pick<WorkoutBlock, "segments" | "noSendOff">, round = 1): FlatInner[] {
   const rows: FlatInner[] = [];
   readySegments(block).forEach((segment, segmentIndex) => {
     const splitMarks = [...new Set([...(segment.splitMarks ?? []), ...partSplitMarks(segment.parts)])].sort((a, b) => a - b);
@@ -168,7 +174,7 @@ export function flattenInner(block: Pick<WorkoutBlock, "segments" | "noSendOff">
         intensity: detail.intensity,
         sendOffSeconds: block.noSendOff ? null : detail.sendOffSeconds,
         fromBlock: detail.fromBlock,
-        gear: detail.gear,
+        gear: roundGearFor(segment, round, detail.gear),
         stroke: detail.stroke ?? "",
         parts: segment.parts,
         splitMarks,
@@ -255,7 +261,28 @@ export function normalizeSegment(segment: Partial<SetSegment> | undefined): SetS
   if (bands.length) next.bands = bands;
   const parts = cleanParts(segment?.parts);
   if (parts) next.parts = parts;
+  const roundGear = cleanRoundGear(segment?.roundGear);
+  if (roundGear) next.roundGear = roundGear;
   return next;
+}
+
+function cleanRoundGear(roundGear: (Gear[] | null | undefined)[] | undefined): (Gear[] | null)[] | undefined {
+  const cleaned = (roundGear ?? []).map((gear) => (gear && gear.length ? cleanGear(gear) : null));
+  while (cleaned.length && !cleaned[cleaned.length - 1]) cleaned.pop();
+  return cleaned.length ? cleaned : undefined;
+}
+
+/** Sets, or clears with null, the gear override for one round of a repeated block. */
+export function setRoundGear(segment: SetSegment, round: number, gear: Gear[] | null): SetSegment {
+  const current = [...(segment.roundGear ?? [])];
+  current[round - 1] = gear;
+  return normalizeSegment({ ...segment, roundGear: current });
+}
+
+export function toggleRoundGear(segment: SetSegment, round: number, gear: Gear): SetSegment {
+  const active = roundGearFor(segment, round, segment.gear);
+  const has = active.includes(gear);
+  return setRoundGear(segment, round, has ? active.filter((item) => item !== gear) : [...active, gear]);
 }
 
 function cleanBands(bands: SegmentBand[] | undefined): SegmentBand[] {

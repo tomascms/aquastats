@@ -2,7 +2,7 @@ import { getLocale, tx } from "@/i18n";
 import { BLOCK_LABEL, SHIFT_LABEL, displayTitle, formatDatePt } from "./labels";
 import { formatSendOff } from "./send-off";
 import { formatDistance, formatReps } from "./distances";
-import { INTENSITY_LABEL, WORKOUT_STROKE_LABEL, formatGear, formatParts, makeDetail, readySegments } from "./set";
+import { INTENSITY_LABEL, WORKOUT_STROKE_LABEL, formatGear, formatParts, makeDetail, readySegments, roundGearFor } from "./set";
 import type { RepDetail, SetSegment, Workout, WorkoutBlock } from "./types";
 
 function sameDetail(a: RepDetail, b: RepDetail): boolean {
@@ -19,7 +19,8 @@ function formatDetail(detail: RepDetail, noSendOff: boolean, showStart: boolean)
   const gear = formatGear(detail.gear);
   // "Livres" is the default assumption and never spelled out; any other stroke is.
   const stroke = detail.stroke && detail.stroke !== "free" ? WORKOUT_STROKE_LABEL[detail.stroke] : "";
-  const start = showStart ? (detail.fromBlock ? tx("bloco") : tx("de baixo")) : "";
+  // Starting "de baixo" (in the water) is the default and never spelled out; only "bloco" is.
+  const start = showStart && detail.fromBlock ? tx("bloco") : "";
   const send = noSendOff ? "" : ` ${tx("a {time}", { time: formatSendOff(detail.sendOffSeconds) })}`;
   return `${INTENSITY_LABEL[detail.intensity] || detail.intensity}${stroke ? ` ${stroke}` : ""} ${gear ? `${gear} ` : ""}${start}${send}`.replace(/\s+/g, " ").trim();
 }
@@ -56,12 +57,13 @@ function bandLine(segment: SetSegment, noSendOff: boolean): WrittenLine[] {
   ];
 }
 
-export function writtenSegmentLines(segment: SetSegment, noSendOff: boolean, showStart = true): WrittenLine[] {
+export function writtenSegmentLines(segment: SetSegment, noSendOff: boolean, showStart = true, round = 1): WrittenLine[] {
   const head = formatReps(segment.reps, segment.distanceM);
   if (segment.parts?.length) {
     return [{ text: `${head} (${formatParts(segment.parts)})`, indent: 0 }];
   }
-  const details = segment.details.length ? segment.details : [makeDetail(segment)];
+  const base = segment.details.length ? segment.details : [makeDetail(segment)];
+  const details = base.map((detail) => ({ ...detail, gear: roundGearFor(segment, round, detail.gear) }));
   if (details.every((detail) => sameDetail(detail, details[0]))) {
     return [{ text: `${head} ${formatDetail(details[0], noSendOff, showStart)}`.trim(), indent: 0 }, ...bandLine(segment, noSendOff)];
   }
@@ -85,12 +87,17 @@ export function writtenBlockLines(
   const segments = readySegments(block);
   if (!segments.length) return [{ text: "—", indent: 0 }];
   const showStart = block.type !== "warmup" && block.type !== "recovery";
+  const roundsVary = block.rounds > 1 && segments.some((segment) => (segment.roundGear ?? []).slice(0, block.rounds).some(Boolean));
 
-  const inner = segments.flatMap((segment) => writtenSegmentLines(segment, block.noSendOff, showStart));
-  const lines: WrittenLine[] =
-    block.rounds > 1
-      ? [{ text: `${block.rounds}×`, indent: 0 }, ...inner.map((line) => ({ ...line, indent: line.indent + 1 }))]
-      : inner;
+  const lines: WrittenLine[] = roundsVary
+    ? Array.from({ length: block.rounds }, (_, index) => index + 1).flatMap((round) => [
+        { text: `${ordinal(round)}:`, indent: 1 },
+        ...segments.flatMap((segment) => writtenSegmentLines(segment, block.noSendOff, showStart, round)).map((line) => ({ ...line, indent: line.indent + 2 })),
+      ])
+    : (() => {
+        const inner = segments.flatMap((segment) => writtenSegmentLines(segment, block.noSendOff, showStart));
+        return block.rounds > 1 ? [{ text: `${block.rounds}×`, indent: 0 }, ...inner.map((line) => ({ ...line, indent: line.indent + 1 }))] : inner;
+      })();
   if (block.noSendOff) lines.push({ text: tx("Sem saídas"), indent: 0 });
   if (block.betweenRounds && block.rounds > 1) {
     lines.push({ text: tx("Suave entre séries: {distance}m", { distance: formatDistance(block.betweenRounds.distanceM) }), indent: 0 });

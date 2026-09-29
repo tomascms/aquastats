@@ -113,7 +113,7 @@ export function MatrixScreen() {
 
   const present = workout ? athletes.filter((athlete) => workout.athleteIds.includes(athlete.id)) : [];
   const presentIds = present.map((athlete) => athlete.id);
-  const inners = block ? flattenInner(block) : [];
+  const inners = block ? flattenInner(block, round) : [];
   const innerReps = inners.length;
   const rounds = block?.rounds ?? 1;
   // Aquecimento and soltar are never timed, whatever the intensity set inside them.

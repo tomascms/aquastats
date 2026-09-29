@@ -8,7 +8,7 @@ export type Stroke = "free" | "back" | "breast" | "fly" | "im";
 
 export type Intensity = "SUAVE" | "A1" | "A2" | "A3" | "PROG" | "PA" | "MAX" | "P50" | "P100" | "P200" | "P400";
 
-export type Gear = "legs" | "arms" | "paddles" | "pullbuoy" | "parachute" | "fins";
+export type Gear = "legs" | "arms" | "paddles" | "pullbuoy" | "parachute" | "fins" | "suit";
 
 /** What's being swum in a set: the five race strokes, plus "sub" (underwater) for training-only sets. */
 export type WorkoutStroke = Stroke | "sub";
@@ -108,6 +108,12 @@ export type SetSegment = {
    * group isn't listed keep the segment's own send-off.
    */
   bands?: SegmentBand[];
+  /**
+   * Gear for a specific round of a repeated block ("3×", index 0 = round 1), overriding the
+   * segment's own gear for every rep of that round — e.g. round 1 with fins, round 2 without.
+   * A missing or null entry falls back to the segment's (or rep's) own gear.
+   */
+  roundGear?: (Gear[] | null)[];
 };
 
 export type SegmentBand = { group: string; sendOffSeconds: number };
