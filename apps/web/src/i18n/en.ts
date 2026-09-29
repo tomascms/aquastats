@@ -162,8 +162,8 @@ export const en = {
   "De baixo": "Push start",
   "Fato": "Race suit",
   "material por repetição": "gear per rep",
-  "O material muda de repetição para repetição (ex.: 1ª com pernas, 2ª sem)": "Gear changes from rep to rep (e.g. 1st with legs, 2nd without)",
-  "Repetição {n}": "Rep {n}",
+  "O material muda por repetição": "Gear changes per rep",
+  "repetição": "rep",
   "Já treinou hoje": "Already trained today",
   "1.º treino do dia": "First session of the day",
   "Sem estilo": "No stroke",
@@ -285,6 +285,7 @@ export const en = {
   "Checklist": "Checklist",
   "Código inválido.": "Invalid code.",
   "Não foi possível entrar na equipa.": "Couldn't join the team.",
+  "A sessão não ficou guardada. Fecha e abre o link do convite outra vez, ou usa o código da equipa em vez do link.": "The session didn't stick. Close and reopen the invite link, or use the team code instead of the link.",
   "Pede ao treinador o código de 8 caracteres (ex.: ABCD1234). Também podes usar o link de convite.":
     "Ask your coach for the 8-character code (e.g. ABCD1234). You can also use the invite link.",
   "Código": "Code",

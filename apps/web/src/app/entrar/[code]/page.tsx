@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AuthFrame } from "@/components/auth/auth-frame";
@@ -39,7 +39,16 @@ export default function JoinTeamPage() {
     } catch (err) {
       const status = (err as { status?: number }).status;
       if (status === 401) {
-        window.location.assign(`/?invite=${encodeURIComponent(token)}`);
+        // Only bounce to login once per visit — a second 401 right after logging in means the
+        // session genuinely isn't sticking, and re-bouncing would just loop the two pages forever.
+        const bounceKey = `sa_invite_bounce_${token}`;
+        if (!sessionStorage.getItem(bounceKey)) {
+          sessionStorage.setItem(bounceKey, "1");
+          window.location.assign(`/?invite=${encodeURIComponent(token)}`);
+          return;
+        }
+        setError(t("A sessão não ficou guardada. Fecha e abre o link do convite outra vez, ou usa o código da equipa em vez do link."));
+        setBusy(false);
         return;
       }
       setError(td((err as { detail?: string }).detail || "Não foi possível entrar na equipa."));
@@ -49,6 +58,7 @@ export default function JoinTeamPage() {
 
   const loggedIn = bootstrapped && Boolean(role);
   const banner = error || td(bootError || "");
+  const autoJoined = useRef(false);
 
   useEffect(() => {
     if (!token || !loggedIn) return;
@@ -56,6 +66,14 @@ export default function JoinTeamPage() {
       .then((data) => setTeamName(data.teamName))
       .catch(() => undefined);
   }, [token, loggedIn]);
+
+  // Finish joining automatically once logged in — the coach or swimmer already told us they want
+  // to join by opening this link, so a login shouldn't need a second, separate tap to complete it.
+  useEffect(() => {
+    if (!loggedIn || autoJoined.current || busy || error) return;
+    autoJoined.current = true;
+    void join();
+  }, [loggedIn, busy, error]);
 
   return (
     <AuthFrame>
