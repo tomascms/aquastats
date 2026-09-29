@@ -28,7 +28,7 @@ Return only what the document states; use null (or an empty list) for anything i
 - name: the competition's name as printed (title case, keep the edition number, e.g. "XII Meeting Internacional do Algarve").
 - venue: pool / complex name; city: the city. Keep place names exactly as printed (never translate them).
 - startDate / endDate: days the competition itself is swum (not deadlines, not training days), YYYY-MM-DD.
-- course: "lcm" for a 50 m competition pool, "scm" for 25 m. Ignore warm-up pools and pools where entry times were swum.
+- course: "lcm" for a 50 m competition pool, "scm" for 25 m. Ignore warm-up pools and pools where entry times were swum. Base this only on what the document itself states (e.g. "50 m", "25 m", "piscina longa/curta", course records labelled LCM/SCM) — never on what you know or assume about the venue from outside the document, even if you recognise the pool's name. If the document never states the pool length, return null: a venue can be renovated or have more than one pool, so a remembered length can be wrong.
 - lanes: number of lanes of the competition pool.
 - sessions: each competition session with date (YYYY-MM-DD), start time of the races (HH:MM, not warm-up) and a short label in Portuguese (e.g. "Eliminatórias", "Finais", "Sessão A"). Copy every time exactly as printed in the document; never compute, shift or estimate a time. In schedule tables the race start is the "Início"/"Start" column, not the warm-up one. If a session's start time is not printed, leave that session out.
 Write every free-text value in European Portuguese."""
