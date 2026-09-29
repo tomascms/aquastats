@@ -26,8 +26,14 @@ export function raceBlocks(distanceM: number): number {
 }
 
 export function lengthOffsets(course: PoolCourse): readonly number[] {
-  // A 25 m pool has no room for 35/45; 20 (5 m before the wall) takes 45's slot instead, so the
-  // last 5 m of every length is always captured, in a 25 m pool just as in a 50 m one.
+  // A 25 m pool only needs 15 and the wall per length — a 50 m pool's 35/45 turn detail doesn't fit
+  // in half the space, and isn't asked for there.
+  return course === "lcm" ? DETAIL_OFFSETS : ([15, 25] as const);
+}
+
+// The race's very last length always keeps its own final 5 m as a split (reusing 45's slot in a
+// 25 m pool, same as a 50 m pool's own last-5m mark), whatever the other lengths show.
+function finalLengthOffsets(course: PoolCourse): readonly number[] {
   return course === "lcm" ? DETAIL_OFFSETS : ([15, 20, 25] as const);
 }
 
@@ -35,8 +41,10 @@ export function raceMarks(distanceM: number, course: PoolCourse): number[] {
   if (isDetailedRace(distanceM)) {
     const pool = poolLength(course);
     const marks: number[] = [];
+    const lastBase = pool * Math.floor((distanceM - 1) / pool);
     for (let base = 0; base < distanceM; base += pool) {
-      for (const offset of lengthOffsets(course)) {
+      const offsets = base === lastBase ? finalLengthOffsets(course) : lengthOffsets(course);
+      for (const offset of offsets) {
         const at = base + offset;
         if (offset <= pool && at <= distanceM) marks.push(at);
       }
