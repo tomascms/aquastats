@@ -16,13 +16,16 @@ function sameDetail(a: RepDetail, b: RepDetail): boolean {
 }
 
 function formatDetail(detail: RepDetail, noSendOff: boolean, showStart: boolean): string {
-  const gear = formatGear(detail.gear);
+  // "Pernas"/"Braços" read as what's being trained and come right after the pace, before the
+  // stroke ("Pernas Mariposa"); the rest of the material (barbatanas, palas…) trails the stroke.
+  const power = formatGear(detail.gear.filter((item) => item === "legs" || item === "arms"));
+  const gear = formatGear(detail.gear.filter((item) => item !== "legs" && item !== "arms"));
   // "Livres" is the default assumption and never spelled out; any other stroke is.
   const stroke = detail.stroke && detail.stroke !== "free" ? WORKOUT_STROKE_LABEL[detail.stroke] : "";
   // Starting "de baixo" (in the water) is the default and never spelled out; only "bloco" is.
   const start = showStart && detail.fromBlock ? tx("bloco") : "";
   const send = noSendOff ? "" : ` ${tx("a {time}", { time: formatSendOff(detail.sendOffSeconds) })}`;
-  return `${INTENSITY_LABEL[detail.intensity] || detail.intensity}${stroke ? ` ${stroke}` : ""} ${gear ? `${gear} ` : ""}${start}${send}`.replace(/\s+/g, " ").trim();
+  return `${INTENSITY_LABEL[detail.intensity] || detail.intensity}${power ? ` ${power}` : ""}${stroke ? ` ${stroke}` : ""} ${gear ? `${gear} ` : ""}${start}${send}`.replace(/\s+/g, " ").trim();
 }
 
 /** 1-based ordinal: "1ª" in Portuguese, "1st" in English. */
@@ -98,7 +101,6 @@ export function writtenBlockLines(
         const inner = segments.flatMap((segment) => writtenSegmentLines(segment, block.noSendOff, showStart));
         return block.rounds > 1 ? [{ text: `${block.rounds}×`, indent: 0 }, ...inner.map((line) => ({ ...line, indent: line.indent + 1 }))] : inner;
       })();
-  if (block.noSendOff) lines.push({ text: tx("Sem saídas"), indent: 0 });
   if (block.betweenRounds && block.rounds > 1) {
     lines.push({ text: tx("Suave entre séries: {distance}m", { distance: formatDistance(block.betweenRounds.distanceM) }), indent: 0 });
   }
