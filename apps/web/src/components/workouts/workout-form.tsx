@@ -328,7 +328,6 @@ function SetLine({
   const [more, setMore] = useState(false);
   const [perRep, setPerRep] = useState(false);
   const [byRound, setByRound] = useState(Boolean(segment.roundGear?.length));
-  const [gearRound, setGearRound] = useState(1);
   const ready = isReadySegment(segment);
   const split = Boolean(segment.parts?.length);
   const extras = [
@@ -403,53 +402,37 @@ function SetLine({
                 {GEAR_LABEL[item]}
               </Chip>
             ))}
+            {rounds > 1 && !split ? (
+              <Chip
+                small
+                active={byRound}
+                onClick={() => {
+                  const next = !byRound;
+                  setByRound(next);
+                  if (!next) onChange((current) => ({ ...current, roundGear: undefined }));
+                }}
+              >
+                {t("Por repetição")}
+              </Chip>
+            ) : null}
           </div>
-          {rounds > 1 && !split ? (
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-mute">
-                <input
-                  type="checkbox"
-                  checked={byRound}
-                  onChange={(event) => {
-                    setByRound(event.target.checked);
-                    if (!event.target.checked) onChange((current) => ({ ...current, roundGear: undefined }));
-                  }}
-                />
-                {t("O material muda por repetição")}
-              </label>
-              {byRound ? (
-                <div className="space-y-1.5 rounded-lg border border-line bg-panel p-2">
-                  <div className="flex flex-wrap items-center gap-1">
-                    {Array.from({ length: rounds }, (_, index) => index + 1).map((round) => (
-                      <button
-                        key={round}
-                        type="button"
-                        onClick={() => setGearRound(round)}
-                        className={`h-6 min-w-6 rounded-full px-1.5 text-[11px] font-semibold ${
-                          gearRound === round ? "bg-aqua text-white" : "border border-line text-mute"
-                        }`}
-                      >
-                        {round}
-                      </button>
-                    ))}
-                    <span className="text-[11px] text-mute">{t("repetição")}</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {GEARS.map((item) => (
-                      <Chip
-                        key={item}
-                        small
-                        active={roundGearFor(segment, gearRound, segment.gear).includes(item)}
-                        onClick={() => onChange((current) => toggleRoundGear(current, gearRound, item))}
-                      >
-                        {GEAR_LABEL[item]}
-                      </Chip>
-                    ))}
-                  </div>
+          {rounds > 1 && !split && byRound
+            ? Array.from({ length: rounds }, (_, index) => index + 1).map((round) => (
+                <div key={round} className="flex flex-wrap items-center gap-1.5">
+                  <span className="w-16 text-[11px] font-semibold text-mute">{t("Repetição {n}", { n: round })}</span>
+                  {GEARS.map((item) => (
+                    <Chip
+                      key={item}
+                      small
+                      active={roundGearFor(segment, round, segment.gear).includes(item)}
+                      onClick={() => onChange((current) => toggleRoundGear(current, round, item))}
+                    >
+                      {GEAR_LABEL[item]}
+                    </Chip>
+                  ))}
                 </div>
-              ) : null}
-            </div>
-          ) : null}
+              ))
+            : null}
           <div className="space-y-1.5">
             <label className="flex items-center gap-1.5 text-[11px] font-semibold text-mute">
               <input
@@ -479,6 +462,9 @@ function SetLine({
               <Chip small active={segment.fromBlock} onClick={() => onChange((current) => applySegmentDefaults(current, { fromBlock: true }))}>
                 {t("Bloco")}
               </Chip>
+              <Chip small active={segment.gear.includes("suit")} onClick={() => onChange((current) => toggleGear(current, "suit"))}>
+                {t("Fato")}
+              </Chip>
             </div>
           ) : null}
           {segment.reps > 1 && !split ? (
@@ -503,6 +489,13 @@ function SetLine({
                       {t("Bloco")}
                     </Chip>
                   ) : null}
+                  <Chip
+                    small
+                    active={detail.gear.includes("suit")}
+                    onClick={() => onChange((current) => toggleRepGear(current, index, "suit"))}
+                  >
+                    {t("Fato")}
+                  </Chip>
                   {WORKOUT_STROKES.map((item) => (
                     <Chip
                       key={item}

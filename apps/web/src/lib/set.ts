@@ -25,7 +25,10 @@ export function needsClockTime(intensity: Intensity, blockType?: BlockType): boo
   return intensity !== "SUAVE" && intensity !== "A1";
 }
 
-export const GEARS: Gear[] = ["legs", "arms", "paddles", "pullbuoy", "parachute", "fins", "suit"];
+// "suit" isn't listed here: it's shown next to the start type (De baixo/Bloco), not with the rest
+// of the material, since it's worn regardless of gear and doesn't vary the same way.
+export const GEARS: Gear[] = ["legs", "arms", "paddles", "pullbuoy", "parachute", "fins"];
+const ALL_GEARS: Gear[] = [...GEARS, "suit"];
 
 export const GEAR_LABEL = localizedMap<Gear>({
   legs: "Pernas",
@@ -86,8 +89,8 @@ export function isReadySegment(segment: SetSegment): boolean {
 }
 
 function cleanGear(gear: Gear[] | undefined): Gear[] {
-  const unique = new Set((gear ?? []).filter((item) => GEARS.includes(item)));
-  return GEARS.filter((item) => unique.has(item));
+  const unique = new Set((gear ?? []).filter((item) => ALL_GEARS.includes(item)));
+  return ALL_GEARS.filter((item) => unique.has(item));
 }
 
 export function makeDetail(source: {
