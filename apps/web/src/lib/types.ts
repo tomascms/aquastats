@@ -124,7 +124,8 @@ export type WorkoutBlock = {
   rounds: number;
   noSendOff: boolean;
   segments: SetSegment[];
-  betweenRounds: { distanceM: number } | null;
+  /** afterEach: also swum after the very last round, not just between rounds (e.g. before the next block). */
+  betweenRounds: { distanceM: number; afterEach?: boolean } | null;
 };
 
 export type Workout = {

@@ -291,7 +291,7 @@ function walkWorkout(workout: Workout, group = ""): SessionSlot[] {
         meters += inner.distanceM;
         weighted += inner.distanceM * (INTENSITY_LOAD[inner.intensity] ?? 1);
       }
-      if (block.betweenRounds && round < rounds) {
+      if (block.betweenRounds && (round < rounds || block.betweenRounds.afterEach)) {
         const extra = block.betweenRounds.distanceM || 0;
         meters += extra;
         weighted += extra * 0.4;

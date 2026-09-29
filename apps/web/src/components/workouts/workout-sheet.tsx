@@ -4,6 +4,7 @@ import { Fragment, useState } from "react";
 import { useT } from "@/i18n/provider";
 import { BLOCK_LABEL } from "@/lib/labels";
 import { formatMeters, workoutMeters } from "@/lib/rankings";
+import { betweenRoundsCount } from "@/lib/set";
 import { workoutPlainText, writtenBlockLines } from "@/lib/workout-text";
 import type { Workout } from "@/lib/types";
 
@@ -66,11 +67,15 @@ export function WorkoutSheet({ workout }: { workout: Workout }) {
       <ol>
         {workout.blocks.map((block) => {
           const meters = workoutMeters({ ...workout, blocks: [block] });
+          const easyMeters = betweenRoundsCount(block.rounds, block.betweenRounds) * (block.betweenRounds?.distanceM || 0);
           return (
             <li key={block.id} className="grid gap-3 border-t border-line px-5 py-4 first:border-t-0 sm:grid-cols-[140px_minmax(0,1fr)]">
               <div>
                 <p className="font-display text-xl font-bold leading-tight">{BLOCK_LABEL[block.type]}</p>
-                <p className="font-display text-lg font-semibold text-pool tabular">{formatMeters(meters)}</p>
+                <p className="font-display text-lg font-semibold text-pool tabular">
+                  {formatMeters(meters)}
+                  {easyMeters ? <span className="text-sm font-medium text-mute"> ({t("{n} suave", { n: Math.round(easyMeters) })})</span> : null}
+                </p>
               </div>
               <div className="space-y-1.5">
                 {writtenBlockLines(block).map((line, index) => {

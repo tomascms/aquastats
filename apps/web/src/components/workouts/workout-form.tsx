@@ -15,6 +15,7 @@ import {
   WORKOUT_STROKES,
   WORKOUT_STROKE_LABEL,
   applySegmentDefaults,
+  betweenRoundsCount,
   emptyBlock,
   emptyPart,
   emptySegment,
@@ -42,7 +43,7 @@ const SECTIONS: BlockType[] = ["warmup", "main", "recovery"];
 function blockMeters(block: DraftBlock): number {
   const rounds = Math.max(1, block.rounds || 1);
   const perRound = block.segments.filter(isReadySegment).reduce((sum, segment) => sum + segment.reps * segment.distanceM, 0);
-  const between = block.betweenRounds && rounds > 1 ? (rounds - 1) * (block.betweenRounds.distanceM || 0) : 0;
+  const between = betweenRoundsCount(rounds, block.betweenRounds) * (block.betweenRounds?.distanceM || 0);
   return perRound * rounds + between;
 }
 
@@ -264,17 +265,30 @@ function BlockEditor({
           </label>
         ) : null}
         {block.rounds > 1 ? (
-          <label className="flex items-center gap-1.5 text-mute">
-            <input
-              type="checkbox"
-              checked={Boolean(block.betweenRounds)}
-              onChange={(event) => onChange({ betweenRounds: event.target.checked ? { distanceM: 100 } : null })}
-            />
-            {t("Suave entre repetições")}
+          <span className="flex flex-wrap items-center gap-1.5 text-mute">
+            <Chip
+              small
+              active={Boolean(block.betweenRounds)}
+              onClick={() => onChange({ betweenRounds: block.betweenRounds ? null : { distanceM: 100 } })}
+            >
+              {t("Suave entre repetições")}
+            </Chip>
             {block.betweenRounds ? (
-              <DistanceSelect compact value={block.betweenRounds.distanceM} onChange={(distanceM) => onChange({ betweenRounds: { distanceM } })} />
+              <>
+                <DistanceSelect
+                  compact
+                  value={block.betweenRounds.distanceM}
+                  onChange={(distanceM) => onChange((current) => ({ ...current, betweenRounds: { ...current.betweenRounds!, distanceM } }))}
+                />
+                <Chip small active={!block.betweenRounds.afterEach} onClick={() => onChange((current) => ({ ...current, betweenRounds: { ...current.betweenRounds!, afterEach: false } }))}>
+                  {t("entre séries")}
+                </Chip>
+                <Chip small active={Boolean(block.betweenRounds.afterEach)} onClick={() => onChange((current) => ({ ...current, betweenRounds: { ...current.betweenRounds!, afterEach: true } }))}>
+                  {t("no fim de cada série")}
+                </Chip>
+              </>
             ) : null}
-          </label>
+          </span>
         ) : null}
         <button type="button" onClick={onRemove} className="ml-auto text-mute hover:text-coral" aria-label={t("Remover")}>
           ✕

@@ -1,7 +1,7 @@
 import type { MessageKey } from "@/i18n";
 import { addDays, weekStartMonday } from "./dates";
 import { workoutMeters } from "./rankings";
-import { flattenInner } from "./set";
+import { betweenRoundsCount, flattenInner } from "./set";
 import type { Competition, Intensity, SeasonCycle, SeasonPlan, Workout } from "./types";
 
 /*
@@ -73,8 +73,8 @@ export function workoutBands(workout: Workout): { bands: Record<Band, number>; l
       bands[BAND_OF[inner.intensity] ?? "easy"] += meters;
       load += meters * (EFFORT[inner.intensity] ?? 1);
     }
-    if (block.betweenRounds && rounds > 1) {
-      const easy = (rounds - 1) * (block.betweenRounds.distanceM || 0);
+    const easy = betweenRoundsCount(rounds, block.betweenRounds) * (block.betweenRounds?.distanceM || 0);
+    if (easy) {
       bands.easy += easy;
       load += easy;
     }

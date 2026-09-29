@@ -560,7 +560,9 @@ export function MatrixScreen() {
 
       {block.betweenRounds && rounds > 1 && (
         <p className="px-3 pb-2 text-[11px] text-mute">
-          {t("Suave entre séries: {distance}m", { distance: formatDistance(block.betweenRounds.distanceM) })}
+          {block.betweenRounds.afterEach
+            ? t("Suave no fim de cada série: {distance}m", { distance: formatDistance(block.betweenRounds.distanceM) })
+            : t("Suave entre séries: {distance}m", { distance: formatDistance(block.betweenRounds.distanceM) })}
         </p>
       )}
 

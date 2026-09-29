@@ -1,6 +1,7 @@
 import { tx } from "@/i18n";
 import { addDays, weekStartMonday } from "./dates";
 import { analyzeRace, sessionForEntry } from "./race";
+import { betweenRoundsCount } from "./set";
 import { toCentiseconds } from "./swim-time";
 import type {
   Competition,
@@ -262,8 +263,7 @@ export function workoutMeters(workout: Workout): number {
       (inner, segment) => inner + rounds * (segment.reps || 0) * (segment.distanceM || 0),
       0,
     );
-    const between =
-      block.betweenRounds && rounds > 1 ? (rounds - 1) * (block.betweenRounds.distanceM || 0) : 0;
+    const between = betweenRoundsCount(rounds, block.betweenRounds) * (block.betweenRounds?.distanceM || 0);
     return sum + setMeters + between;
   }, 0);
 }

@@ -63,7 +63,9 @@ function bandLine(segment: SetSegment, noSendOff: boolean): WrittenLine[] {
 export function writtenSegmentLines(segment: SetSegment, noSendOff: boolean, showStart = true, round = 1): WrittenLine[] {
   const head = formatReps(segment.reps, segment.distanceM);
   if (segment.parts?.length) {
-    return [{ text: `${head} (${formatParts(segment.parts)})`, indent: 0 }];
+    const start = showStart && segment.fromBlock ? ` ${tx("bloco")}` : "";
+    const send = noSendOff ? "" : ` ${tx("a {time}", { time: formatSendOff(segment.sendOffSeconds) })}`;
+    return [{ text: `${head} (${formatParts(segment.parts)})${start}${send}`.replace(/\s+/g, " ").trim(), indent: 0 }, ...bandLine(segment, noSendOff)];
   }
   const base = segment.details.length ? segment.details : [makeDetail(segment)];
   const details = base.map((detail) => ({ ...detail, gear: roundGearFor(segment, round, detail.gear) }));
@@ -102,7 +104,10 @@ export function writtenBlockLines(
         return block.rounds > 1 ? [{ text: `${block.rounds}×`, indent: 0 }, ...inner.map((line) => ({ ...line, indent: line.indent + 1 }))] : inner;
       })();
   if (block.betweenRounds && block.rounds > 1) {
-    lines.push({ text: tx("Suave entre séries: {distance}m", { distance: formatDistance(block.betweenRounds.distanceM) }), indent: 0 });
+    const text = block.betweenRounds.afterEach
+      ? tx("Suave no fim de cada série: {distance}m", { distance: formatDistance(block.betweenRounds.distanceM) })
+      : tx("Suave entre séries: {distance}m", { distance: formatDistance(block.betweenRounds.distanceM) });
+    lines.push({ text, indent: 0 });
   }
   return lines;
 }

@@ -146,6 +146,12 @@ export function totalReps(block: Pick<WorkoutBlock, "rounds" | "segments">): num
   return Math.max(1, block.rounds) * innerCount(block);
 }
 
+/** How many times the "suave" swim between rounds happens: after every round but the last, or after every round including the last. */
+export function betweenRoundsCount(rounds: number, betweenRounds: { distanceM: number; afterEach?: boolean } | null | undefined): number {
+  if (!betweenRounds || rounds <= 1) return 0;
+  return betweenRounds.afterEach ? rounds : rounds - 1;
+}
+
 /** Cumulative distances at each part's boundary (the marks needed to record each chunk's time). */
 export function partSplitMarks(parts: SegmentPart[] | undefined): number[] {
   if (!parts || parts.length < 2) return [];

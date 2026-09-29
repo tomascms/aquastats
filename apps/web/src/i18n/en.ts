@@ -114,6 +114,10 @@ export const en = {
   "última": "last",
   "Sem saídas": "No send-offs",
   "Suave entre séries: {distance}m": "Easy between rounds: {distance}m",
+  "Suave no fim de cada série: {distance}m": "Easy after every round: {distance}m",
+  "{n} suave": "{n} easy",
+  "entre séries": "between rounds",
+  "no fim de cada série": "after every round",
 
   // ── Race analysis & zones ─────────────────────────────────────────────────
   "Aeróbio baixo": "Low aerobic",
