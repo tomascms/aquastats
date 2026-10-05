@@ -261,6 +261,46 @@ export function trackRecord(outcomes: Outcome[]): TrackRecord {
   };
 }
 
+/* ---------- Health of the model the coach sees (monitoring; docs/ml/monitorizacao.md) ---------- */
+
+export type HealthAlert =
+  | { kind: "coverage"; coverage: number; nominal: number; n: number }
+  | { kind: "bias"; biasPct: number; n: number }
+  | { kind: "drift"; recentPct: number; beforePct: number };
+
+/** Thresholds fixed before any real data (monitoring plan). */
+export const HEALTH = { minReps: 50, recentWeeks: 4, baselineWeeks: 8, coverageGap: 0.12, biasPct: 1, biasZ: 3, driftPp: 0.5 } as const;
+
+/**
+ * What would justify reverting the shown model: over the last weeks with data, the interval misses
+ * far more (or less) often than it says, the errors lean to one side, or the error grew against the
+ * weeks before. Nothing is said with fewer than HEALTH.minReps checked reps.
+ */
+export function healthAlerts(outcomes: Outcome[], nominal: number): HealthAlert[] {
+  const weeks = [...new Set(outcomes.map((item) => weekStartMonday(item.date)))].sort();
+  const recentWeeks = new Set(weeks.slice(-HEALTH.recentWeeks));
+  const baselineWeeks = new Set(weeks.slice(-HEALTH.recentWeeks - HEALTH.baselineWeeks, -HEALTH.recentWeeks));
+  const recent = outcomes.filter((item) => recentWeeks.has(weekStartMonday(item.date)));
+  if (recent.length < HEALTH.minReps) return [];
+  const alerts: HealthAlert[] = [];
+  const intervals = recent.filter((item) => item.inside != null);
+  if (intervals.length >= HEALTH.minReps) {
+    const coverage = intervals.filter((item) => item.inside).length / intervals.length;
+    if (Math.abs(coverage - nominal) > HEALTH.coverageGap) alerts.push({ kind: "coverage", coverage, nominal, n: intervals.length });
+  }
+  const errors = recent.map((item) => item.errorPct);
+  const bias = mean(errors);
+  const sd = Math.sqrt(errors.reduce((sum, value) => sum + (value - bias) ** 2, 0) / Math.max(1, errors.length - 1));
+  if (Math.abs(bias) > HEALTH.biasPct && Math.abs(bias) / (sd / Math.sqrt(errors.length)) > HEALTH.biasZ) alerts.push({ kind: "bias", biasPct: bias, n: errors.length });
+  const before = outcomes.filter((item) => baselineWeeks.has(weekStartMonday(item.date)));
+  if (before.length >= HEALTH.minReps) {
+    const recentPct = mean(recent.map((item) => Math.abs(item.errorPct)));
+    const beforePct = mean(before.map((item) => Math.abs(item.errorPct)));
+    if (recentPct - beforePct > HEALTH.driftPp) alerts.push({ kind: "drift", recentPct, beforePct });
+  }
+  return alerts;
+}
+
 /* ---------- Champion / challenger on real data ---------- */
 
 export type Promotion = {

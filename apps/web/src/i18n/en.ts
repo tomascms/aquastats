@@ -1366,5 +1366,10 @@ export const en = {
   "Nunca cronometrada: estimativa ±{pct}%": "Never timed: estimate ±{pct}%",
   "Estimativa ±{pct}%": "Estimate ±{pct}%",
   "O que o modelo de estado (em sombra) aprendeu na semana de {date}": "What the state model (in shadow) learned in the week of {date}",
+  "Alerta: nas últimas semanas {coverage} dos tempos caíram dentro do intervalo (objetivo {target}).": "Alert: in recent weeks {coverage} of times fell inside the interval (target {target}).",
+  "Alerta: nas últimas semanas as estimativas estão sistematicamente mais lentas do que os tempos reais ({pct}%).": "Alert: in recent weeks the estimates are consistently slower than the real times ({pct}%).",
+  "Alerta: nas últimas semanas as estimativas estão sistematicamente mais rápidas do que os tempos reais ({pct}%).": "Alert: in recent weeks the estimates are consistently faster than the real times ({pct}%).",
+  "Alerta: o erro das últimas semanas ({recent}%) subiu face às semanas anteriores ({before}%).": "Alert: the error of recent weeks ({recent}%) rose against the weeks before ({before}%).",
+  "Se persistir, o modelo mostrado pode voltar de imediato ao anterior (interruptor no servidor, sem nova versão do site).": "If it persists, the shown model can be switched back at once (a server switch, no new site release).",
   // @@APPEND@@
 } as const;

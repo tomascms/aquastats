@@ -1,15 +1,17 @@
 import { tx } from "@/i18n";
 import { annotateTrainingReps, isPlausibleRep, type TrainingRep } from "../training-context";
-import { predictTrainingTargets, type TrainingTarget } from "../training-prediction";
+import { groupKey, predictTrainingTargets, type TrainingTarget } from "../training-prediction";
+import { raceRecords } from "../rankings";
 import { flattenInner, needsClockTime } from "../set";
 import { hasClockTime } from "../swim-time";
-import type { Athlete, Stroke, TimeLog, Workout } from "../types";
-import { dayNumber, entryLoad, HORIZONS, isPlanned, plannedSets, Z80, type AthleteInfo, type Prediction, type TeamData } from "./backtest";
-import { calibrated } from "./calibration";
-import { runStateModel, type TeamForecast } from "./forecaster";
+import type { Athlete, Competition, MeetEntry, MeetResult, RaceSession, Stroke, TimeLog, Workout } from "../types";
+import { dayNumber, entryLoad, isPlanned, plannedSets, type AthleteInfo, type Prediction, type RaceResult, type TeamData } from "./backtest";
+import type { TeamForecast } from "./forecaster";
+import { runV1Pipeline } from "./pipeline";
 import type { AthleteFilter } from "./state-model";
-import { teamSuspects, type Suspect } from "./quality";
+import { type Suspect } from "./quality";
 import { DEFAULT_OPTIONS, type ForecastTerms } from "./state-model";
+import { V1_OPTIONS, V1_VERSION } from "./v1";
 
 /*
  * What the app runs. Two models side by side:
@@ -25,7 +27,8 @@ import { DEFAULT_OPTIONS, type ForecastTerms } from "./state-model";
 export const MODELS = {
   /** Band = ±1 residual SD: about 68 % nominal. */
   atual: { id: "atual", version: "1", label: "Modelo atual", nominal: 0.6826894921370859 },
-  estado: { id: "estado", version: "2.0", label: "Modelo de estado", nominal: 0.8 },
+  /** The frozen v1.0 (v1.ts): a new version is a new series in the ledger. */
+  estado: { id: "estado", version: V1_VERSION, label: "Modelo de estado", nominal: 0.8 },
 } as const;
 export type ModelId = keyof typeof MODELS;
 
@@ -34,8 +37,12 @@ export const CHALLENGER: ModelId = CHAMPION === "atual" ? "estado" : "atual";
 
 export type Factor = { key: "new" | "form" | "return" | "day" | "set"; pct: number };
 
+/** Where an estimate came from: the model, or a simpler fallback when the model has nothing finite for that rep. */
+export type EstimateSource = "estado" | "mediana" | "último valor";
+
 export type AppPrediction = Prediction & {
   model: ModelId;
+  source?: EstimateSource;
   /** The 2–3 things that move this estimate most, largest first. */
   factors: Factor[];
   /** A kind of rep the athlete has never swum (timed): the estimate comes from teammates and physiology. */
@@ -92,7 +99,16 @@ export type AppTeam = { team: TeamData; planned: TrainingRep[] };
  * The team as the models see it: every athlete's annotated reps (the models learn from the whole
  * team) plus, for `plan`, the reps still to be swum, as planned rows (time NaN).
  */
-export function appTeam(athletes: Athlete[], workouts: Workout[], timeLogs: TimeLog[], plan: Workout[] = []): AppTeam {
+/** Races the site knows (competition results and personal bests), in the model's shape. */
+export function siteRaces(athletes: Athlete[], data: { competitions?: Competition[]; meetEntries?: MeetEntry[]; meetResults?: MeetResult[]; raceSessions?: RaceSession[] }): RaceResult[] {
+  return athletes.flatMap((athlete) =>
+    raceRecords(data.competitions ?? [], data.meetEntries ?? [], data.meetResults ?? [], data.raceSessions ?? [], athlete.id, athlete.seedRecords ?? [])
+      .filter((record) => record.timeS > 0 && record.date)
+      .map((record) => ({ athleteId: athlete.id, date: record.date, distanceM: record.distanceM, stroke: record.stroke, course: record.course, timeS: record.timeS })),
+  );
+}
+
+export function appTeam(athletes: Athlete[], workouts: Workout[], timeLogs: TimeLog[], plan: Workout[] = [], races: RaceResult[] = []): AppTeam {
   const rows = new Map<string, TrainingRep[]>();
   const infos = new Map<string, AthleteInfo>();
   const load = new Map<string, ReturnType<typeof entryLoad>>();
@@ -112,7 +128,15 @@ export function appTeam(athletes: Athlete[], workouts: Workout[], timeLogs: Time
     const firstObserved = list.find((row) => !isPlanned(row));
     if (firstObserved) first = Math.min(first, dayNumber(firstObserved.date));
   }
-  return { team: { rows, athletes: infos, load, anchorDay: Number.isFinite(first) ? first - 1 : 0, planned: plannedSets(workouts) }, planned };
+  // Races only from the athlete's first timed rep on: the model was validated with races inside the training data (E3);
+  // older personal bests would start the athlete's state from a race long before any training (not validated).
+  const byAthlete = new Map<string, RaceResult[]>();
+  for (const race of [...races].sort((a, b) => a.date.localeCompare(b.date))) {
+    const firstTimed = rows.get(race.athleteId)?.find((row) => !isPlanned(row));
+    if (!firstTimed || race.date < firstTimed.date) continue;
+    byAthlete.set(race.athleteId, [...(byAthlete.get(race.athleteId) ?? []), race]);
+  }
+  return { team: { rows, athletes: infos, load, anchorDay: Number.isFinite(first) ? first - 1 : 0, planned: plannedSets(workouts), races: byAthlete }, planned };
 }
 
 /* ---------- The two models ---------- */
@@ -134,28 +158,53 @@ function factorsOf(forecast: TeamForecast): Factor[] {
   return out.slice(0, 3);
 }
 
-/** Champion-quality state model: suspect times are not learned from, intervals are calibrated on real past errors. */
-export function statePredictions(team: TeamData): Map<string, AppPrediction> {
-  const suspects = teamSuspects(team.rows);
-  const raw = runStateModel(team, HORIZONS.day, DEFAULT_OPTIONS, new Set(suspects.keys()));
-  const base = {
-    name: "estado",
-    description: "",
-    predict: () => {
-      const out = new Map<string, Prediction>();
-      for (const [id, forecast] of raw) {
-        out.set(id, { mean: forecast.meanS, sd: forecast.meanS * forecast.logSd, lo: Math.exp(forecast.logMean - Z80 * forecast.logSd), hi: Math.exp(forecast.logMean + Z80 * forecast.logSd), nominal: 0.8 });
-      }
-      return out;
-    },
-  };
-  const calibratedOut = calibrated(base, "estado", { scale: "model" }).predict(team, HORIZONS.day);
+const finite = (prediction: Prediction | undefined) =>
+  prediction != null && [prediction.mean, prediction.lo ?? prediction.mean, prediction.hi ?? prediction.mean].every((value) => Number.isFinite(value) && value > 0);
+
+/**
+ * Never NaN, never an exception reaching the screen: state model → the group's median → the last
+ * time of the same kind of rep → no estimate. Each estimate says where it came from.
+ */
+export function withFallbacks(team: TeamData, primary: Map<string, AppPrediction>): Map<string, AppPrediction> {
   const out = new Map<string, AppPrediction>();
-  for (const [id, prediction] of calibratedOut) {
-    const forecast = raw.get(id)!;
-    out.set(id, { ...prediction, model: "estado", factors: factorsOf(forecast), newKind: forecast.newFactors > 0 });
+  for (const rows of team.rows.values()) {
+    const missing = rows.filter((row) => (isPlausibleRep(row) || isPlanned(row)) && !finite(primary.get(row.log.id)));
+    for (const row of rows) if (finite(primary.get(row.log.id))) out.set(row.log.id, { ...primary.get(row.log.id)!, source: "estado" });
+    if (!missing.length) continue;
+    let medians = new Map<string, TrainingTarget>();
+    try {
+      medians = predictTrainingTargets(rows.map((row) => (isPlanned(row) ? { ...row, timeS: row.distanceM } : row)));
+    } catch {
+      // The median is a fallback too: if it fails, the last value still answers.
+    }
+    for (const row of missing) {
+      const median = medians.get(row.log.id);
+      if (median && Number.isFinite(median.levelS) && median.levelS > 0) {
+        out.set(row.log.id, { mean: median.levelS, model: "estado", source: "mediana", factors: [], newKind: false, confidence: "baixa" });
+        continue;
+      }
+      const last = rows.filter((other) => other.date < row.date && !isPlanned(other) && isPlausibleRep(other) && groupKey(other) === groupKey(row)).at(-1);
+      if (last) out.set(row.log.id, { mean: last.timeS, model: "estado", source: "último valor", factors: [], newKind: false, confidence: "baixa" });
+    }
   }
   return out;
+}
+
+/** The state model (v1.0) as the app runs it: incremental, suspect times not learned from, intervals calibrated on real past errors. */
+export function statePredictions(team: TeamData): Map<string, AppPrediction> {
+  const primary = new Map<string, AppPrediction>();
+  try {
+    const { raw, calibrated } = runV1Pipeline(team);
+    for (const [id, prediction] of calibrated) {
+      const forecast = raw.get(id);
+      if (!forecast) continue;
+      primary.set(id, { ...prediction, model: "estado", factors: factorsOf(forecast), newKind: forecast.newFactors > 0 });
+    }
+  } catch (error) {
+    // Degrade, never break the page: the fallbacks below answer for every rep.
+    console.warn("Modelo de estado indisponível; a usar alternativas simples.", error);
+  }
+  return withFallbacks(team, primary);
 }
 
 /** The production model, per athlete and pool as the dashboard runs it; planned reps get a placeholder time it never uses. */
@@ -206,13 +255,19 @@ export function asTrainingTargets(predictions: Map<string, AppPrediction>): Map<
 }
 
 export function predictionsFor(model: ModelId, team: TeamData): Map<string, AppPrediction> {
-  return model === "estado" ? statePredictions(team) : legacyPredictions(team);
+  if (model === "estado") return statePredictions(team);
+  try {
+    return legacyPredictions(team);
+  } catch (error) {
+    console.warn("Modelo atual indisponível; sem estimativas.", error);
+    return new Map();
+  }
 }
 
 /* ---------- Data quality and honesty about what the model knows ---------- */
 
 export function suspectTimes(team: TeamData): Map<string, Suspect> {
-  return teamSuspects(team.rows);
+  return runV1Pipeline(team).suspects;
 }
 
 export type LearningStatus = {
@@ -257,10 +312,10 @@ export const setOf = (row: TrainingRep) => `${row.log.athleteId}|${row.workoutId
 
 /** Ranks the planned sets of a session by how much timing them would teach the model. */
 export function timingSuggestions(team: TeamData, planned: TrainingRep[]): TimingSuggestion[] {
-  const raw = runStateModel(team, HORIZONS.day, DEFAULT_OPTIONS, new Set(teamSuspects(team.rows).keys()));
+  const { raw } = runV1Pipeline(team);
   const sets = new Map<string, TrainingRep[]>();
   for (const row of planned) sets.set(setOf(row), [...(sets.get(setOf(row)) ?? []), row]);
-  const noise = DEFAULT_OPTIONS.repSdRel;
+  const noise = V1_OPTIONS.repSdRel;
   const out: TimingSuggestion[] = [];
   for (const rows of sets.values()) {
     const forecasts = rows.map((row) => raw.get(row.log.id)).filter((item): item is TeamForecast => Boolean(item));

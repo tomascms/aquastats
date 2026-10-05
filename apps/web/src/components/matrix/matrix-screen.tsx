@@ -22,6 +22,7 @@ import {
 } from "@/lib/set";
 import { actions, emptyParts, useAppState } from "@/lib/store";
 import { useRecordPredictions } from "@/lib/ml/use-record-predictions";
+import { siteRaces } from "@/lib/ml/production";
 import { sessionFor } from "@/lib/heart-rate";
 import { isTimeComplete } from "@/lib/time-save";
 import {
@@ -74,7 +75,8 @@ export function MatrixScreen() {
   const t = useT();
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { athletes, workouts, timeLogs, hrSessions } = useAppState();
+  const { athletes, workouts, timeLogs, hrSessions, competitions, meetEntries, meetResults, raceSessions } = useAppState();
+  const races = useMemo(() => siteRaces(athletes, { competitions, meetEntries, meetResults, raceSessions }), [athletes, competitions, meetEntries, meetResults, raceSessions]);
   const seedWorkout = workouts.find((item) => item.id === params.id);
   const dayWorkouts = useMemo(
     () =>
@@ -112,7 +114,7 @@ export function MatrixScreen() {
   const saveErrors = useRef(0);
   workoutIdRef.current = workout?.id;
   // Before any time of this session exists, store what the models predict for it (prediction ledger).
-  useRecordPredictions(workout, { athletes, workouts, timeLogs });
+  useRecordPredictions(workout, { athletes, workouts, timeLogs, races });
 
   const present = workout ? athletes.filter((athlete) => workout.athleteIds.includes(athlete.id)) : [];
   const presentIds = present.map((athlete) => athlete.id);

@@ -62,6 +62,25 @@ export type RunHooks = {
   onFatigue?: (athleteId: string, day: number, profile: FatigueProfile) => void;
   /** E13: also forecast every race this many days ahead (from the state at the end of the origin day; training up to the race as entered). */
   raceLeadDays?: number;
+  /** Incremental runs: take a checkpoint of everything learned up to the end of this day… */
+  checkpointAt?: number;
+  onCheckpoint?: (checkpoint: StateCheckpoint) => void;
+  /** …and resume from one instead of replaying the history (exact for the rep and day horizons). */
+  resume?: StateCheckpoint;
+};
+
+/**
+ * Everything a run has learned by the end of `day`. Resuming from it on the same data, or on the same
+ * data plus later days, gives exactly the forecasts a full run gives (rep and day horizons; tested).
+ */
+export type StateCheckpoint = {
+  day: number;
+  out: Map<string, TeamForecast>;
+  pool: TeamPool;
+  filters: Map<string, AthleteFilter>;
+  engineRef: Map<string, number>;
+  fatigue: Map<string, FatigueProfile>;
+  metersBefore: Map<string, number[]>;
 };
 
 /**
@@ -104,10 +123,13 @@ export function runStateModel(
   excluded: Set<string> = new Set(),
   hooks: RunHooks = {},
 ): Map<string, TeamForecast> {
-  const out = new Map<string, TeamForecast>();
-  const pool = new TeamPool();
-  const filters = new Map<string, AthleteFilter>();
+  // A checkpoint is copied in, never used in place: it can be resumed from again.
+  const resume = hooks.resume;
+  const out = new Map<string, TeamForecast>(resume?.out ?? []);
+  const pool = resume ? resume.pool.copy() : new TeamPool();
+  const filters = new Map<string, AthleteFilter>([...(resume?.filters ?? [])].map(([id, filter]) => [id, filter.fullCopy()]));
   const engineRef = new Map<AthleteFilter, number>();
+  for (const [id, value] of resume?.engineRef ?? []) if (filters.has(id)) engineRef.set(filters.get(id)!, value);
 
   // Per athlete: plausible reps by day, and entered training by day.
   const repDays = new Map<string, Map<number, TrainingRep[]>>();
@@ -200,7 +222,7 @@ export function runStateModel(
   const fatigueGridOf = options.fatigueNoVolume ? NO_VOLUME_GRID : FULL_GRID;
 
   // Individual in-set fatigue (fatigue.ts): one posterior per athlete, started from the team's.
-  const fatigue = new Map<string, FatigueProfile>();
+  const fatigue = new Map<string, FatigueProfile>([...(resume?.fatigue ?? [])].map(([id, profile]) => [id, profile.clone()]));
   const fatigueFor = (athleteId: string) => {
     let profile = fatigue.get(athleteId);
     if (!profile) {
@@ -210,7 +232,7 @@ export function runStateModel(
     return profile;
   };
   /** Metres swum before a set, per athlete: with no plan yet, a forecast from an origin uses the athlete's median so far (protocol §3). */
-  const metersBefore = new Map<string, number[]>();
+  const metersBefore = new Map<string, number[]>([...(resume?.metersBefore ?? [])].map(([id, list]) => [id, [...list]]));
   const medianBefore = new Map<string, { n: number; value: number }>();
   const noteBefore = (athleteId: string, meters: number) => {
     const list = metersBefore.get(athleteId) ?? [];
@@ -256,7 +278,23 @@ export function runStateModel(
     out.set(row.log.id, { ...forecast, athleteId, filter: kind, formDelta: filter.recentFormDelta(), pBreakBy });
   };
 
+  const checkpoint = (day: number): StateCheckpoint => ({
+    day,
+    out: new Map(out),
+    pool: pool.copy(),
+    filters: new Map([...filters].map(([id, filter]) => [id, filter.fullCopy()])),
+    engineRef: new Map([...filters].filter(([, filter]) => engineRef.has(filter)).map(([id, filter]) => [id, engineRef.get(filter)!])),
+    fatigue: new Map([...fatigue].map(([id, profile]) => [id, profile.clone()])),
+    metersBefore: new Map([...metersBefore].map(([id, list]) => [id, [...list]])),
+  });
+  let checkpointTaken = hooks.checkpointAt == null;
+
   for (const day of [...days].sort((a, b) => a - b)) {
+    if (resume && day <= resume.day) continue;
+    if (!checkpointTaken && day > hooks.checkpointAt!) {
+      hooks.onCheckpoint?.(checkpoint(hooks.checkpointAt!));
+      checkpointTaken = true;
+    }
     for (const [athleteId, byDay] of repDays) {
       const today = byDay.get(day) ?? [];
       const racesToday = racesByDay.get(athleteId)?.get(day) ?? [];
@@ -417,5 +455,6 @@ export function runStateModel(
       }
     }
   }
+  if (!checkpointTaken) hooks.onCheckpoint?.(checkpoint(hooks.checkpointAt!));
   return out;
 }

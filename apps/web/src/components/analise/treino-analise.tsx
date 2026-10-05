@@ -14,7 +14,8 @@ import { formatRaceClock } from "@/lib/race";
 import { useAppState } from "@/lib/store";
 import { annotateTrainingReps } from "@/lib/training-context";
 import { predictTrainingTargets } from "@/lib/training-prediction";
-import { appTeam, CHAMPION, statePredictions } from "@/lib/ml/production";
+import { appTeam, siteRaces, statePredictions } from "@/lib/ml/production";
+import { useMlRoles } from "@/lib/ml/ml-config";
 import { toCentiseconds } from "@/lib/swim-time";
 import type { TimeLog, WorkoutBlock } from "@/lib/types";
 import { useT } from "@/i18n/provider";
@@ -50,7 +51,9 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
-  const { athletes, workouts, timeLogs, swimmerId } = useAppState();
+  const { athletes, workouts, timeLogs, swimmerId, competitions, meetEntries, meetResults, raceSessions } = useAppState();
+  const races = useMemo(() => siteRaces(athletes, { competitions, meetEntries, meetResults, raceSessions }), [athletes, competitions, meetEntries, meetResults, raceSessions]);
+  const { champion } = useMlRoles();
   const locked = role === "swimmer" ? swimmerId : "";
   const athleteId = locked || search.get("atleta") || athletes[0]?.id || "";
   const athlete = athletes.find((item) => item.id === athleteId);
@@ -74,14 +77,14 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
   const logs = useMemo(() => timeLogs.filter((log) => log.athleteId === athleteId), [athleteId, timeLogs]);
   const estimates = useMemo(() => {
     const byLog = new Map<string, number>();
-    if (CHAMPION === "estado") {
-      for (const [logId, prediction] of statePredictions(appTeam(athletes, workouts, timeLogs).team)) byLog.set(logId, prediction.mean);
+    if (champion === "estado") {
+      for (const [logId, prediction] of statePredictions(appTeam(athletes, workouts, timeLogs, [], races).team)) byLog.set(logId, prediction.mean);
       return byLog;
     }
     const own = athleteId ? annotateTrainingReps(workouts, timeLogs, athleteId, athlete?.wellness, athlete?.groupName) : [];
     for (const [logId, target] of predictTrainingTargets(own)) byLog.set(logId, target.targetS);
     return byLog;
-  }, [athlete?.wellness, athleteId, athletes, timeLogs, workouts]);
+  }, [athlete?.wellness, athleteId, athletes, champion, races, timeLogs, workouts]);
   const dayWorkouts = useMemo(() => mine.filter((workout) => workout.date === selected), [mine, selected]);
   const workoutCountByDate = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -203,6 +206,7 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
               canReadLedger={role === "coach"}
               workouts={workouts}
               timeLogs={timeLogs}
+              races={races}
               wellness={athlete.wellness}
               groupName={athlete.groupName}
             />

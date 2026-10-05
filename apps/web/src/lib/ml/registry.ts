@@ -3,6 +3,7 @@ import { calibrated, type CalibrationOptions } from "./calibration";
 import { ensemble } from "./ensemble";
 import { baselinePredictor, frontierPredictor, lastValuePredictor, levelOnlyPredictor, perAthleteGate, qualityBaselinePredictor, REFERENCE_PREDICTORS, stateModelPredictor } from "./predictors";
 import { DEFAULT_OPTIONS, type StateModelOptions } from "./state-model";
+import { V1_CALIBRATION, V1_OPTIONS } from "./v1";
 
 const stateModel = stateModelPredictor();
 const withContext = stateModelPredictor({ ...DEFAULT_OPTIONS, context: true }, "modelo de estado com contexto");
@@ -21,6 +22,8 @@ export const ACCEPTED: Partial<StateModelOptions> = { primaryStroke: true, races
 export const ACCEPTED_CALIBRATION: CalibrationOptions = { scale: "model", tails: 4 };
 const finalCandidate = (id: string, label: string, change: Partial<StateModelOptions>, calibration: CalibrationOptions = {}) =>
   calibrated(stateModelPredictor({ ...DEFAULT_OPTIONS, ...ACCEPTED, ...change }, `${id} · ${label}`), `${id} · ${label} + qualidade + conformal`, { ...ACCEPTED_CALIBRATION, ...calibration });
+/** The frozen v1.0 (v1.ts) — what the confirmation seeds judge, once. */
+export const V1 = calibrated(stateModelPredictor(V1_OPTIONS, "v1.0"), "v1.0 + qualidade + conformal", V1_CALIBRATION);
 export const FINAL_CHAMPION = calibrated(stateModelPredictor({ ...DEFAULT_OPTIONS, ...ACCEPTED }, "campeão da fase final"), "campeão da fase final + qualidade + conformal", ACCEPTED_CALIBRATION);
 const FINAL_CANDIDATES = [
   finalCandidate("E1", "Riegel por troços", { riegelPiecewise: true }),
@@ -57,6 +60,7 @@ export const PREDICTORS: Predictor[] = [
   calibrated(seasonal, "modelo de estado sazonal + qualidade + conformal", { scale: "model" }),
   ...anchors.map((p) => calibrated(p, `${p.name} + qualidade + conformal`, { scale: "model" })),
   FINAL_CHAMPION,
+  V1,
   ...FINAL_CANDIDATES,
   ...[1, 5, 20].map((eta) => calibrated(ensemble([stateModel, levelOnlyPredictor, lastValuePredictor], `ensemble η${eta}`, eta), `ensemble η${eta} + conformal`, { scale: "model" })),
 ];

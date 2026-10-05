@@ -74,106 +74,149 @@ export type CalibrationOptions = {
 const maturityBand = (weeks: number) => (weeks < 2 ? 0 : weeks < 8 ? 1 : 2);
 
 export function calibrated(base: Predictor, name = `${base.name} + conformal`, options: CalibrationOptions = {}): Predictor {
-  const normalised = options.scale === "model";
-  /** Relative uncertainty the model claims for a prediction (1 when errors are measured as plain %). */
-  const unit = (prediction: Prediction) => (normalised && prediction.sd ? prediction.sd / prediction.mean : 1);
   return {
     name,
     description: `${base.description} Intervalo a 80 % a partir dos erros reais anteriores (conformal adaptativo, por quantidade de dados).`,
-    predict(team: TeamData, horizon: Horizon) {
-      const point = base.predict(team, horizon);
-      const suspects = teamSuspects(team.rows, { withinDayCausal: horizon.kind === "rep" });
-      const events: Event[] = [];
-      const history = new Map<string, number>();
-      const maturity = new Map<string, number>();
-      for (const [athleteId, rows] of team.rows) {
-        const counts = new Map<string, number>();
-        let firstDay: number | null = null;
-        let pending: TrainingRep[] = [];
-        let currentDate = "";
-        for (const row of rows.filter((item) => isPlausibleRep(item) || isPlanned(item))) {
-          if (row.date !== currentDate) {
-            for (const done of pending) counts.set(groupKey(done), (counts.get(groupKey(done)) ?? 0) + 1);
-            pending = [];
-            currentDate = row.date;
-          }
-          history.set(row.log.id, counts.get(groupKey(row)) ?? 0);
-          maturity.set(row.log.id, firstDay == null ? 0 : maturityBand((dayNumber(row.date) - firstDay) / 7));
-          if (firstDay == null && !isPlanned(row)) firstDay = dayNumber(row.date);
-          if (point.has(row.log.id)) events.push({ time: lastUsableDay(row, horizon, team.anchorDay) + 0.5, kind: "issue", row, athleteId });
-          if (isPlanned(row)) continue;
-          pending.push(row);
-          if (!suspects.has(row.log.id)) events.push({ time: dayNumber(row.date) + 0.9, kind: "observe", row, athleteId });
-        }
-      }
-      events.sort((a, b) => a.time - b.time || (a.kind === b.kind ? 0 : a.kind === "observe" ? -1 : 1));
-
-      const pools: Residual[][] = [[], [], [], []];
-      const bandPools: Residual[][][] = [0, 1, 2, 3].map(() => [[], [], []]);
-      const multiplier = new Map<string, number>();
-      const issued = new Map<string, number>();
-      const quantileCache = new Map<string, number>();
-      const out = new Map<string, Prediction>();
-      for (const event of events) {
-        const id = event.row.log.id;
-        const stratum = stratumOf(history.get(id) ?? 0);
-        if (event.kind === "observe") {
-          const prediction = point.get(id);
-          if (!prediction) continue;
-          const abs = Math.abs(event.row.timeS / prediction.mean - 1) / unit(prediction);
-          const pool = pools[stratum];
-          pool.push({ day: Math.floor(event.time), abs });
-          if (pool.length > POOL_LIMIT) pool.shift();
-          if (options.byMaturity) {
-            const bandPool = bandPools[stratum][maturity.get(id) ?? 0];
-            bandPool.push({ day: Math.floor(event.time), abs });
-            if (bandPool.length > POOL_LIMIT) bandPool.shift();
-          }
-          quantileCache.clear();
-          const width = issued.get(id);
-          if (width != null) {
-            const miss = abs > width ? 1 : 0;
-            const key = adaptiveKey(event.athleteId, stratum);
-            const m = multiplier.get(key) ?? 1;
-            multiplier.set(key, Math.min(3, Math.max(0.5, m * Math.exp(ACI_RATE * (miss - ALPHA)))));
-          }
-          continue;
-        }
-        const prediction = point.get(id)!;
-        const today = Math.floor(event.time);
-        let pooled = Number.NaN;
-        if (options.byMaturity) {
-          const band = maturity.get(id) ?? 0;
-          const bandPool = bandPools[stratum][band];
-          if (bandPool.length >= MIN_POOL) {
-            const key = `${stratum}|${band}#${today}`;
-            if (!quantileCache.has(key)) quantileCache.set(key, weightedQuantile(bandPool, NOMINAL, today));
-            pooled = quantileCache.get(key)!;
-          }
-        }
-        // Fall back to the next stratum with more data when this one has too few checked errors.
-        for (let s = stratum; s >= 0 && !Number.isFinite(pooled); s -= 1) {
-          if (pools[s].length < MIN_POOL) continue;
-          const key = `${s}#${today}`;
-          if (!quantileCache.has(key)) quantileCache.set(key, weightedQuantile(pools[s], NOMINAL, today));
-          pooled = quantileCache.get(key)! * (s === stratum ? 1 : 1 + 0.25 * (stratum - s));
-        }
-        const scaleUnit = unit(prediction);
-        const quantile = Number.isFinite(pooled) ? pooled * scaleUnit : normalised && prediction.sd ? Z80 * scaleUnit * 1.5 : PRIOR_HALF_WIDTH[stratum];
-        const half = Math.max(quantile, 0.004) * (multiplier.get(adaptiveKey(event.athleteId, stratum)) ?? 1);
-        issued.set(id, half / scaleUnit);
-        out.set(id, {
-          ...prediction,
-          mean: prediction.mean,
-          lo: prediction.mean * (1 - half),
-          hi: prediction.mean * (1 + half),
-          nominal: NOMINAL,
-          sd: (prediction.mean * half) / (options.tails ? studentTQuantile(0.9, options.tails) : Z80),
-          df: options.tails,
-          confidence: confidenceOf(half),
-        });
-      }
-      return out;
-    },
+    predict: (team: TeamData, horizon: Horizon) => calibrateStream(base.predict(team, horizon), team, horizon, options),
   };
+}
+
+/**
+ * Everything the calibration has learned from the outcomes before `time` (a day + 0.5): resuming
+ * from it on the same data plus later days gives exactly the full run (rep and day horizons; tested).
+ */
+export type CalibrationCheckpoint = {
+  time: number;
+  pools: Residual[][];
+  bandPools: Residual[][][];
+  multiplier: Map<string, number>;
+  issued: Map<string, number>;
+  out: Map<string, Prediction>;
+};
+
+export type CalibrationStream = {
+  /** Suspect times, when already known (otherwise detected here). */
+  suspects?: Map<string, unknown>;
+  /** Take a checkpoint of the state before the events of `checkpointAt + 0.5` and later… */
+  checkpointAt?: number;
+  onCheckpoint?: (checkpoint: CalibrationCheckpoint) => void;
+  /** …and resume from one. */
+  resume?: CalibrationCheckpoint;
+};
+
+/** The calibration itself, on a base model's point forecasts, replaying the outcomes in time order. */
+export function calibrateStream(point: Map<string, Prediction>, team: TeamData, horizon: Horizon, options: CalibrationOptions = {}, stream: CalibrationStream = {}): Map<string, Prediction> {
+  const normalised = options.scale === "model";
+  /** Relative uncertainty the model claims for a prediction (1 when errors are measured as plain %). */
+  const unit = (prediction: Prediction) => (normalised && prediction.sd ? prediction.sd / prediction.mean : 1);
+  const suspects = stream.suspects ?? teamSuspects(team.rows, { withinDayCausal: horizon.kind === "rep" });
+  const events: Event[] = [];
+  const history = new Map<string, number>();
+  const maturity = new Map<string, number>();
+  for (const [athleteId, rows] of team.rows) {
+    const counts = new Map<string, number>();
+    let firstDay: number | null = null;
+    let pending: TrainingRep[] = [];
+    let currentDate = "";
+    for (const row of rows.filter((item) => isPlausibleRep(item) || isPlanned(item))) {
+      if (row.date !== currentDate) {
+        for (const done of pending) counts.set(groupKey(done), (counts.get(groupKey(done)) ?? 0) + 1);
+        pending = [];
+        currentDate = row.date;
+      }
+      history.set(row.log.id, counts.get(groupKey(row)) ?? 0);
+      maturity.set(row.log.id, firstDay == null ? 0 : maturityBand((dayNumber(row.date) - firstDay) / 7));
+      if (firstDay == null && !isPlanned(row)) firstDay = dayNumber(row.date);
+      if (point.has(row.log.id)) events.push({ time: lastUsableDay(row, horizon, team.anchorDay) + 0.5, kind: "issue", row, athleteId });
+      if (isPlanned(row)) continue;
+      pending.push(row);
+      if (!suspects.has(row.log.id)) events.push({ time: dayNumber(row.date) + 0.9, kind: "observe", row, athleteId });
+    }
+  }
+  events.sort((a, b) => a.time - b.time || (a.kind === b.kind ? 0 : a.kind === "observe" ? -1 : 1));
+
+  // A checkpoint is copied in, never used in place: it can be resumed from again.
+  const resume = stream.resume;
+  const pools: Residual[][] = resume ? resume.pools.map((pool) => [...pool]) : [[], [], [], []];
+  const bandPools: Residual[][][] = resume ? resume.bandPools.map((bands) => bands.map((pool) => [...pool])) : [0, 1, 2, 3].map(() => [[], [], []]);
+  const multiplier = new Map<string, number>(resume?.multiplier ?? []);
+  const issued = new Map<string, number>(resume?.issued ?? []);
+  const quantileCache = new Map<string, number>();
+  const out = new Map<string, Prediction>(resume?.out ?? []);
+  const checkpointTime = stream.checkpointAt != null ? stream.checkpointAt + 0.5 : null;
+  let checkpointTaken = checkpointTime == null;
+  const takeCheckpoint = () => {
+    stream.onCheckpoint?.({
+      time: checkpointTime!,
+      pools: pools.map((pool) => [...pool]),
+      bandPools: bandPools.map((bands) => bands.map((pool) => [...pool])),
+      multiplier: new Map(multiplier),
+      issued: new Map(issued),
+      out: new Map(out),
+    });
+    checkpointTaken = true;
+  };
+  for (const event of events) {
+    if (resume && event.time < resume.time) continue;
+    if (!checkpointTaken && event.time >= checkpointTime!) takeCheckpoint();
+    const id = event.row.log.id;
+    const stratum = stratumOf(history.get(id) ?? 0);
+    if (event.kind === "observe") {
+      const prediction = point.get(id);
+      if (!prediction) continue;
+      const abs = Math.abs(event.row.timeS / prediction.mean - 1) / unit(prediction);
+      const pool = pools[stratum];
+      pool.push({ day: Math.floor(event.time), abs });
+      if (pool.length > POOL_LIMIT) pool.shift();
+      if (options.byMaturity) {
+        const bandPool = bandPools[stratum][maturity.get(id) ?? 0];
+        bandPool.push({ day: Math.floor(event.time), abs });
+        if (bandPool.length > POOL_LIMIT) bandPool.shift();
+      }
+      quantileCache.clear();
+      const width = issued.get(id);
+      if (width != null) {
+        const miss = abs > width ? 1 : 0;
+        const key = adaptiveKey(event.athleteId, stratum);
+        const m = multiplier.get(key) ?? 1;
+        multiplier.set(key, Math.min(3, Math.max(0.5, m * Math.exp(ACI_RATE * (miss - ALPHA)))));
+      }
+      continue;
+    }
+    const prediction = point.get(id)!;
+    const today = Math.floor(event.time);
+    let pooled = Number.NaN;
+    if (options.byMaturity) {
+      const band = maturity.get(id) ?? 0;
+      const bandPool = bandPools[stratum][band];
+      if (bandPool.length >= MIN_POOL) {
+        const key = `${stratum}|${band}#${today}`;
+        if (!quantileCache.has(key)) quantileCache.set(key, weightedQuantile(bandPool, NOMINAL, today));
+        pooled = quantileCache.get(key)!;
+      }
+    }
+    // Fall back to the next stratum with more data when this one has too few checked errors.
+    for (let s = stratum; s >= 0 && !Number.isFinite(pooled); s -= 1) {
+      if (pools[s].length < MIN_POOL) continue;
+      const key = `${s}#${today}`;
+      if (!quantileCache.has(key)) quantileCache.set(key, weightedQuantile(pools[s], NOMINAL, today));
+      pooled = quantileCache.get(key)! * (s === stratum ? 1 : 1 + 0.25 * (stratum - s));
+    }
+    const scaleUnit = unit(prediction);
+    const quantile = Number.isFinite(pooled) ? pooled * scaleUnit : normalised && prediction.sd ? Z80 * scaleUnit * 1.5 : PRIOR_HALF_WIDTH[stratum];
+    const half = Math.max(quantile, 0.004) * (multiplier.get(adaptiveKey(event.athleteId, stratum)) ?? 1);
+    issued.set(id, half / scaleUnit);
+    out.set(id, {
+      ...prediction,
+      mean: prediction.mean,
+      lo: prediction.mean * (1 - half),
+      hi: prediction.mean * (1 + half),
+      nominal: NOMINAL,
+      sd: (prediction.mean * half) / (options.tails ? studentTQuantile(0.9, options.tails) : Z80),
+      df: options.tails,
+      confidence: confidenceOf(half),
+    });
+  }
+  if (!checkpointTaken) takeCheckpoint();
+  return out;
 }

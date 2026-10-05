@@ -179,6 +179,17 @@ export function teamData(dataset: Dataset): TeamData {
   return { rows, athletes, load, anchorDay: Number.isFinite(first) ? first - 1 : 0, planned: plannedSets(dataset.workouts), races };
 }
 
+/** The team as it was at the end of `day`: nothing entered later exists yet. */
+export function teamUpTo(team: TeamData, day: number): TeamData {
+  const keep = (date: string) => dayNumber(date) <= day;
+  return {
+    ...team,
+    rows: new Map([...team.rows].map(([id, rows]) => [id, rows.filter((row) => keep(row.date))])),
+    load: new Map([...team.load].map(([id, days]) => [id, new Map([...days].filter(([date]) => keep(date)))])),
+    races: team.races && new Map([...team.races].map(([id, list]) => [id, list.filter((race) => keep(race.date))])),
+  };
+}
+
 /* ---------- Metrics ---------- */
 
 export type Metrics = {

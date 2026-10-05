@@ -509,6 +509,17 @@ export class AthleteFilter {
     return copy;
   }
 
+  /** Everything the filter has learned, copied (a checkpoint: resuming from it must give exactly what a full run gives). */
+  fullCopy(): AthleteFilter {
+    const copy = this.clone();
+    copy.cusumPos = this.cusumPos;
+    copy.cusumNeg = this.cusumNeg;
+    copy.dayZ = [...this.dayZ];
+    copy.regimeShifts = [...this.regimeShifts];
+    copy.formLog = this.formLog.map((item) => ({ ...item }));
+    return copy;
+  }
+
   activate(j: number, mean: number, sd: number) {
     if (this.active[j]) return;
     this.z[j] = mean;
@@ -852,6 +863,13 @@ export class TeamPool {
       const sd = Math.sqrt(residuals.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (residuals.length - 1));
       this.engineOffset = [mean, Math.max(0.03, Math.min(0.1, sd))];
     }
+  }
+
+  copy(): TeamPool {
+    const out = new TeamPool();
+    for (const [j, value] of this.estimate) out.estimate.set(j, value);
+    out.engineOffset = this.engineOffset;
+    return out;
   }
 
   prior(j: number, filter: AthleteFilter, day: number): [number, number] {

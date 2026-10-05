@@ -37,6 +37,9 @@ export type QualityOptions = {
   setThreshold?: number;
   /** Gap to the athlete's own history that is never normal from one day to the next. */
   historyThreshold?: number;
+  /** Incremental runs: only reps from this day on are checked; earlier ones keep their flags from `known`. */
+  fromDay?: number;
+  known?: Map<string, Suspect>;
 };
 
 const DEFAULTS = { setThreshold: 0.08, historyThreshold: 0.12 };
@@ -66,14 +69,20 @@ const repSlot = (row: TrainingRep) => `${row.workoutId}|${row.blockId}|${row.log
  * Suspect times for one athlete's reps (chronological). `teammates` are the other athletes' reps,
  * used only to recognise two times swapped in the same rep.
  */
-export function findSuspects(rows: TrainingRep[], teammates: TrainingRep[] = [], options: QualityOptions = {}): Map<string, Suspect> {
+export function findSuspects(rows: TrainingRep[], teammates: TrainingRep[] | Map<string, TrainingRep[]> = [], options: QualityOptions = {}): Map<string, Suspect> {
   const setThreshold = options.setThreshold ?? DEFAULTS.setThreshold;
   const historyThreshold = options.historyThreshold ?? DEFAULTS.historyThreshold;
-  const valid = rows.filter(isPlausibleRep);
+  // Only the history window before `fromDay` can matter to the reps being checked.
+  const from = options.fromDay ?? Number.NEGATIVE_INFINITY;
+  const valid = rows.filter((row) => isPlausibleRep(row) && dayNumber(row.date) >= from - HISTORY_DAYS - 1);
   const sets = new Map<string, TrainingRep[]>();
-  for (const row of valid) sets.set(setKey(row), [...(sets.get(setKey(row)) ?? []), row]);
-  const slots = new Map<string, TrainingRep[]>();
-  for (const row of teammates) if (isPlausibleRep(row)) slots.set(repSlot(row), [...(slots.get(repSlot(row)) ?? []), row]);
+  for (const row of valid) {
+    const list = sets.get(setKey(row));
+    if (list) list.push(row);
+    else sets.set(setKey(row), [row]);
+  }
+  // Teammates' times by rep slot: either given as a team-wide index (teamSuspects builds it once) or built here.
+  const slots = teammates instanceof Map ? teammates : slotIndex(teammates);
 
   const history = new Map<string, { day: number; timeS: number }[]>();
   const out = new Map<string, Suspect>();
@@ -81,10 +90,10 @@ export function findSuspects(rows: TrainingRep[], teammates: TrainingRep[] = [],
   let today: TrainingRep[] = [];
   const flushDay = () => {
     for (const row of today) {
-      if (out.has(row.log.id)) continue;
-      const list = history.get(groupKey(row)) ?? [];
-      list.push({ day: dayNumber(row.date), timeS: row.timeS });
-      history.set(groupKey(row), list);
+      if (out.has(row.log.id) || options.known?.has(row.log.id)) continue;
+      const list = history.get(groupKey(row));
+      if (list) list.push({ day: dayNumber(row.date), timeS: row.timeS });
+      else history.set(groupKey(row), [{ day: dayNumber(row.date), timeS: row.timeS }]);
     }
     today = [];
   };
@@ -95,6 +104,7 @@ export function findSuspects(rows: TrainingRep[], teammates: TrainingRep[] = [],
       currentDate = row.date;
     }
     today.push(row);
+    if (dayNumber(row.date) < from) continue;
     const set = sets.get(setKey(row))!;
     const position = set.indexOf(row);
     const siblings = (options.withinDayCausal ? set.slice(0, position) : set.filter((other) => other !== row)).map((other) => other.timeS);
@@ -107,10 +117,19 @@ export function findSuspects(rows: TrainingRep[], teammates: TrainingRep[] = [],
       spread = Math.max(0.015, 1.4826 * median(logs.map(Math.abs)));
     } else {
       const day = dayNumber(row.date);
-      const past = (history.get(groupKey(row)) ?? []).filter((item) => day - item.day <= HISTORY_DAYS);
-      if (past.length < 3) continue;
-      reference = median(past.slice(-12).map((item) => item.timeS));
-      const logs = past.slice(-12).map((item) => Math.log(item.timeS / reference!));
+      // The group's history is chronological: the last HISTORY_DAYS start at the first entry recent enough.
+      const all = history.get(groupKey(row)) ?? [];
+      let lo = 0;
+      let hi = all.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (day - all[mid].day <= HISTORY_DAYS) hi = mid;
+        else lo = mid + 1;
+      }
+      if (all.length - lo < 3) continue;
+      const recent = all.slice(Math.max(lo, all.length - 12));
+      reference = median(recent.map((item) => item.timeS));
+      const logs = recent.map((item) => Math.log(item.timeS / reference!));
       spread = Math.max(0.02, 1.4826 * median(logs.map(Math.abs)));
       threshold = historyThreshold;
     }
@@ -128,7 +147,7 @@ export function findSuspects(rows: TrainingRep[], teammates: TrainingRep[] = [],
       ["split", row.timeS * 2.04],
     ];
     // Teammates' times of the same rep: only when the whole day may be seen (they are entered at the same moment).
-    if (!options.withinDayCausal) for (const other of slots.get(repSlot(row)) ?? []) candidates.push(["swap", other.timeS]);
+    if (!options.withinDayCausal) for (const other of slots.get(repSlot(row)) ?? []) if (other.log.athleteId !== row.log.athleteId) candidates.push(["swap", other.timeS]);
     let best = Number.POSITIVE_INFINITY;
     for (const [kind, value] of candidates) {
       if (!fits(value)) continue;
@@ -144,12 +163,22 @@ export function findSuspects(rows: TrainingRep[], teammates: TrainingRep[] = [],
   return out;
 }
 
-/** Suspects for the whole team, each athlete checked against teammates for swapped times. */
+function slotIndex(rows: Iterable<TrainingRep>): Map<string, TrainingRep[]> {
+  const slots = new Map<string, TrainingRep[]>();
+  for (const row of rows) {
+    if (!isPlausibleRep(row)) continue;
+    const list = slots.get(repSlot(row));
+    if (list) list.push(row);
+    else slots.set(repSlot(row), [row]);
+  }
+  return slots;
+}
+
+/** Suspects for the whole team, each athlete checked against teammates for swapped times (one index of rep slots for everyone). */
 export function teamSuspects(team: Map<string, TrainingRep[]>, options: QualityOptions = {}): Map<string, Suspect> {
   const out = new Map<string, Suspect>();
-  for (const [athleteId, rows] of team) {
-    const teammates = [...team.entries()].filter(([id]) => id !== athleteId).flatMap(([, list]) => list);
-    for (const [id, suspect] of findSuspects(rows, teammates, options)) out.set(id, suspect);
-  }
+  const from = options.fromDay ?? Number.NEGATIVE_INFINITY;
+  const slots = slotIndex([...team.values()].flat().filter((row) => dayNumber(row.date) >= from));
+  for (const rows of team.values()) for (const [id, suspect] of findSuspects(rows, slots, options)) out.set(id, suspect);
   return out;
 }

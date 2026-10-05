@@ -32,9 +32,11 @@ import {
   type LearnedEffect,
   type TrainingTarget,
 } from "@/lib/training-prediction";
-import { appTeam, asTrainingTargets, CHAMPION, statePredictions } from "@/lib/ml/production";
+import { appTeam, asTrainingTargets, statePredictions } from "@/lib/ml/production";
+import { useMlRoles } from "@/lib/ml/ml-config";
 import { findSuspects, type Suspect } from "@/lib/ml/quality";
 import type { Athlete, TimeLog, WellnessEntry, Workout } from "@/lib/types";
+import type { RaceResult } from "@/lib/ml/backtest";
 import { TrackRecordPanel } from "@/components/analise/track-record-panel";
 import { useT } from "@/i18n/provider";
 
@@ -126,6 +128,7 @@ export function TreinoDashboard({
   athletes,
   workouts,
   timeLogs,
+  races = [],
   wellness,
   groupName,
   canReadLedger = false,
@@ -135,6 +138,8 @@ export function TreinoDashboard({
   athletes: Athlete[];
   workouts: Workout[];
   timeLogs: TimeLog[];
+  /** Competition results and personal bests (the state model learns from races too). */
+  races?: RaceResult[];
   wellness?: WellnessEntry[];
   groupName?: string;
   canReadLedger?: boolean;
@@ -163,9 +168,10 @@ export function TreinoDashboard({
   const [moreFilters, setMoreFilters] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
 
+  const { champion } = useMlRoles();
   const championEstimates = useMemo(
-    () => (CHAMPION === "estado" ? asTrainingTargets(statePredictions(appTeam(athletes, workouts, timeLogs).team)) : null),
-    [athletes, timeLogs, workouts],
+    () => (champion === "estado" ? asTrainingTargets(statePredictions(appTeam(athletes, workouts, timeLogs, [], races).team)) : null),
+    [athletes, champion, races, timeLogs, workouts],
   );
   const predictions = useMemo(() => championEstimates ?? predictTrainingTargets(rows), [championEstimates, rows]);
   // Times that look like typing errors: shown to the coach, kept out of what the state model learns.
@@ -348,7 +354,7 @@ export function TreinoDashboard({
           <RepTimeline items={visible.slice(-60)} predictions={predictions} />
         </section>
 
-        <TrackRecordPanel athleteId={athleteId} athletes={athletes} workouts={workouts} timeLogs={timeLogs} canReadLedger={canReadLedger} />
+        <TrackRecordPanel athleteId={athleteId} athletes={athletes} workouts={workouts} timeLogs={timeLogs} races={races} canReadLedger={canReadLedger} />
 
         <section className="rounded-2xl border border-line bg-panel p-5">
           <header className="mb-3 flex flex-wrap items-end justify-between gap-2">

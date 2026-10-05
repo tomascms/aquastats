@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { dayNumber, teamData, type Dataset, type TeamData } from "./backtest";
+import { dayNumber, teamData, type Dataset, type RaceResult, type TeamData } from "./backtest";
 import { predictRaces, referenceRaceTime } from "./races";
 import { ACCEPTED } from "./registry";
 import { createRng } from "./rng";
@@ -30,7 +30,7 @@ describe("race times (E13)", () => {
       const rng = createRng(11);
       // Future training times jittered, future races moved: nothing dated after the cutoff may matter.
       const rows = new Map([...team.rows].map(([id, list]) => [id, list.map((row) => (dayNumber(row.date) > cutoff ? { ...row, timeS: row.timeS * rng.uniform(0.95, 1.05) } : row))]));
-      const races = new Map([...(team.races ?? new Map())].map(([id, list]) => [id, list.map((race) => (dayNumber(race.date) > cutoff ? { ...race, timeS: race.timeS * rng.uniform(0.95, 1.05) } : race))]));
+      const races = new Map([...(team.races ?? new Map())].map(([id, list]) => [id, list.map((race: RaceResult) => (dayNumber(race.date) > cutoff ? { ...race, timeS: race.timeS * rng.uniform(0.95, 1.05) } : race))]));
       const perturbed: TeamData = { ...team, rows, races };
       let checked = 0;
       for (const p of predictRaces(perturbed, options, lead)) {

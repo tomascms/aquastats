@@ -3,8 +3,10 @@
 import { useEffect, useRef } from "react";
 import { todayIso } from "../dates";
 import type { Athlete, TimeLog, Workout } from "../types";
+import type { RaceResult } from "./backtest";
 import { flushQueuedPredictions, ledgerItems, recordOrQueue } from "./ledger";
-import { appTeam, CHALLENGER, CHAMPION, predictionsFor } from "./production";
+import { fetchMlRoles } from "./ml-config";
+import { appTeam, predictionsFor } from "./production";
 
 /** Delay so the timing screen is fully interactive before the model runs. */
 const IDLE_MS = 1500;
@@ -15,7 +17,7 @@ const IDLE_MS = 1500;
  * are sent when the connection is back; the API still refuses any that arrive after the rep's time,
  * so a prediction is never recorded after the fact.
  */
-export function useRecordPredictions(workout: Workout | undefined, data: { athletes: Athlete[]; workouts: Workout[]; timeLogs: TimeLog[] }) {
+export function useRecordPredictions(workout: Workout | undefined, data: { athletes: Athlete[]; workouts: Workout[]; timeLogs: TimeLog[]; races?: RaceResult[] }) {
   const done = useRef(new Set<string>());
   const latest = useRef(data);
   useEffect(() => {
@@ -31,18 +33,19 @@ export function useRecordPredictions(workout: Workout | undefined, data: { athle
   }, []);
   useEffect(() => {
     if (!workoutId || !eligible || done.current.has(workoutId)) return;
-    const timer = setTimeout(() => {
-      const { athletes, workouts, timeLogs } = latest.current;
+    const timer = setTimeout(async () => {
+      const { athletes, workouts, timeLogs, races } = latest.current;
       const target = workouts.find((item) => item.id === workoutId);
       if (!target) return;
       done.current.add(workoutId);
       try {
-        const { team, planned } = appTeam(athletes, workouts, timeLogs, [target]);
+        // Roles decided at run time: the kill switch reverts the champion, ML_SHADOW=off stops the shadow.
+        const roles = await fetchMlRoles();
+        const { team, planned } = appTeam(athletes, workouts, timeLogs, [target], races);
         if (!planned.length) return;
-        for (const [model, role] of [
-          [CHAMPION, "champion"],
-          [CHALLENGER, "challenger"],
-        ] as const) {
+        const recordings: [typeof roles.champion, "champion" | "challenger"][] = [[roles.champion, "champion"]];
+        if (roles.shadow) recordings.push([roles.challenger, "challenger"]);
+        for (const [model, role] of recordings) {
           void recordOrQueue(model, role, ledgerItems(predictionsFor(model, team), planned)).catch(() => undefined);
         }
       } catch {

@@ -6,10 +6,11 @@ import { useT } from "@/i18n/provider";
 import { formatDatePt } from "@/lib/labels";
 import { formatRaceClock } from "@/lib/race";
 import { attribute, type Cause } from "@/lib/ml/attribution";
-import { dayNumber } from "@/lib/ml/backtest";
-import { fetchLedger, promotionReport, reconcile, reconstructedOutcomes, trackRecord, type LedgerEntry, type Outcome } from "@/lib/ml/ledger";
+import { dayNumber, type RaceResult } from "@/lib/ml/backtest";
+import { fetchLedger, healthAlerts, promotionReport, reconcile, reconstructedOutcomes, trackRecord, type HealthAlert, type LedgerEntry, type Outcome } from "@/lib/ml/ledger";
+import { useMlRoles } from "@/lib/ml/ml-config";
 import { weeklyReport, type LearningItem } from "@/lib/ml/monitoring";
-import { appTeam, CHALLENGER, CHAMPION, learningStatus, MODELS, predictionsFor, statePredictions, suspectTimes, WEEKS_TO_SETTLE } from "@/lib/ml/production";
+import { appTeam, learningStatus, MODELS, predictionsFor, statePredictions, suspectTimes, WEEKS_TO_SETTLE } from "@/lib/ml/production";
 import type { Athlete, TimeLog, Workout } from "@/lib/types";
 
 const CAUSE_LABEL: Record<Cause, MessageKey> = {
@@ -128,15 +129,18 @@ export function TrackRecordPanel({
   athletes,
   workouts,
   timeLogs,
+  races = [],
   canReadLedger,
 }: {
   athleteId: string;
   athletes: Athlete[];
   workouts: Workout[];
   timeLogs: TimeLog[];
+  races?: RaceResult[];
   canReadLedger: boolean;
 }) {
   const t = useT();
+  const { champion: CHAMPION, challenger: CHALLENGER } = useMlRoles();
   const [ledger, setLedger] = useState<LedgerEntry[] | null>(null);
 
   useEffect(() => {
@@ -151,7 +155,7 @@ export function TrackRecordPanel({
   }, [athleteId, canReadLedger]);
 
   const view = useMemo(() => {
-    const { team } = appTeam(athletes, workouts, timeLogs);
+    const { team } = appTeam(athletes, workouts, timeLogs, [], races);
     const rows = team.rows.get(athleteId) ?? [];
     const champion = predictionsFor(CHAMPION, team);
     const suspects = suspectTimes(team);
@@ -196,8 +200,10 @@ export function TrackRecordPanel({
     const avg = (list: typeof recent) => (list.length ? list.reduce((sum, week) => sum + week.mapePct, 0) / list.length : null);
     const trend = avg(recent) != null && avg(before) != null ? avg(recent)! - avg(before)! : null;
     const promotion = ledger ? promotionReport(reconcile(ledger, timeLogs), CHAMPION, CHALLENGER) : null;
-    return { real, record, misses, causes, report, trend, status: learningStatus(rows), promotion, byLog };
-  }, [athleteId, athletes, ledger, timeLogs, workouts]);
+    // Monitoring of the shown model, on the predictions actually recorded before each session.
+    const alerts: HealthAlert[] = real ? healthAlerts(recorded, MODELS[CHAMPION].nominal) : [];
+    return { real, record, misses, causes, report, trend, status: learningStatus(rows), promotion, byLog, alerts };
+  }, [CHALLENGER, CHAMPION, athleteId, athletes, ledger, races, timeLogs, workouts]);
 
   const { record, status } = view;
   const nominal = MODELS[CHAMPION].nominal;
@@ -248,6 +254,25 @@ export function TrackRecordPanel({
           </dl>
 
           <WeeklyChart weeks={record.weekly} />
+
+          {view.alerts.length ? (
+            <div className="mt-3 rounded-xl border border-coral/40 bg-[#fde8e4] px-3 py-2 text-sm text-[#8a2c1d]" role="alert">
+              <ul className="space-y-1">
+                {view.alerts.map((alert) => (
+                  <li key={alert.kind}>
+                    {alert.kind === "coverage"
+                      ? t("Alerta: nas últimas semanas {coverage} dos tempos caíram dentro do intervalo (objetivo {target}).", { coverage: percent(alert.coverage), target: percent(alert.nominal) })
+                      : alert.kind === "bias"
+                        ? alert.biasPct > 0
+                          ? t("Alerta: nas últimas semanas as estimativas estão sistematicamente mais lentas do que os tempos reais ({pct}%).", { pct: signed(alert.biasPct) })
+                          : t("Alerta: nas últimas semanas as estimativas estão sistematicamente mais rápidas do que os tempos reais ({pct}%).", { pct: signed(alert.biasPct) })
+                        : t("Alerta: o erro das últimas semanas ({recent}%) subiu face às semanas anteriores ({before}%).", { recent: alert.recentPct.toFixed(1), before: alert.beforePct.toFixed(1) })}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-xs">{t("Se persistir, o modelo mostrado pode voltar de imediato ao anterior (interruptor no servidor, sem nova versão do site).")}</p>
+            </div>
+          ) : null}
 
           <p className={`mt-3 rounded-xl px-3 py-2 text-sm ${status.learning ? "bg-[#fff1d6] text-[#7a4d00]" : "bg-panel-2 text-mist"}`}>
             {status.learning
