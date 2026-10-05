@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { todayIso } from "../dates";
 import type { Athlete, TimeLog, Workout } from "../types";
-import { ledgerItems, recordPredictions } from "./ledger";
+import { flushQueuedPredictions, ledgerItems, recordOrQueue } from "./ledger";
 import { appTeam, CHALLENGER, CHAMPION, predictionsFor } from "./production";
 
 /** Delay so the timing screen is fully interactive before the model runs. */
@@ -11,8 +11,9 @@ const IDLE_MS = 1500;
 
 /**
  * When a session is opened for timing, record what both models predict for every rep that has no
- * time yet (champion and the shadow challenger). Best effort: offline or failed requests are simply
- * not recorded — a prediction is never stored after its time exists (the API refuses it).
+ * time yet (champion and the shadow challenger). Offline, the predictions wait on this device and
+ * are sent when the connection is back; the API still refuses any that arrive after the rep's time,
+ * so a prediction is never recorded after the fact.
  */
 export function useRecordPredictions(workout: Workout | undefined, data: { athletes: Athlete[]; workouts: Workout[]; timeLogs: TimeLog[] }) {
   const done = useRef(new Set<string>());
@@ -23,11 +24,17 @@ export function useRecordPredictions(workout: Workout | undefined, data: { athle
   const workoutId = workout?.id;
   const eligible = Boolean(workout && workout.date >= todayIso());
   useEffect(() => {
+    const flush = () => void flushQueuedPredictions().catch(() => undefined);
+    flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, []);
+  useEffect(() => {
     if (!workoutId || !eligible || done.current.has(workoutId)) return;
     const timer = setTimeout(() => {
       const { athletes, workouts, timeLogs } = latest.current;
       const target = workouts.find((item) => item.id === workoutId);
-      if (!target || (typeof navigator !== "undefined" && navigator.onLine === false)) return;
+      if (!target) return;
       done.current.add(workoutId);
       try {
         const { team, planned } = appTeam(athletes, workouts, timeLogs, [target]);
@@ -36,8 +43,7 @@ export function useRecordPredictions(workout: Workout | undefined, data: { athle
           [CHAMPION, "champion"],
           [CHALLENGER, "challenger"],
         ] as const) {
-          const items = ledgerItems(predictionsFor(model, team), planned);
-          if (items.length) void recordPredictions(model, role, items).catch(() => undefined);
+          void recordOrQueue(model, role, ledgerItems(predictionsFor(model, team), planned)).catch(() => undefined);
         }
       } catch {
         // The ledger never blocks timing.

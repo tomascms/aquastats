@@ -400,9 +400,10 @@ class PredictionLedger(Base):
 
     __tablename__ = "prediction_ledger"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid_pk)
-    team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"))
-    athlete_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("athletes.id"))
-    workout_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("workouts.id"))
+    # Cascades: deleting the workout, athlete, team or account removes its predictions (right to erasure).
+    team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"))
+    athlete_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("athletes.id", ondelete="CASCADE"))
+    workout_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("workouts.id", ondelete="CASCADE"))
     block_id: Mapped[str] = mapped_column(Text)
     rep_number: Mapped[int] = mapped_column(SmallInteger)
     target_date: Mapped[datetime] = mapped_column(Date)
@@ -417,7 +418,7 @@ class PredictionLedger(Base):
     sd_s: Mapped[float | None] = mapped_column(Float, nullable=True)
     confidence: Mapped[str | None] = mapped_column(Text, nullable=True)
     details: Mapped[dict] = mapped_column(JSONB, default=dict)
-    predicted_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    predicted_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     predicted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

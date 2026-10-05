@@ -1,16 +1,18 @@
 -- Migration 010: immutable ledger of training predictions (docs/ml/README.md, "Aprendizagem contínua").
 -- Every prediction is stored when it is made, before the time it predicts exists; the outcome is the
--- time_log entered later. Rows are never changed or removed. The guard that always holds is the
--- trigger: it refuses UPDATE/DELETE for every role unless an operator turns it off on purpose for
--- one transaction (SET LOCAL aquastats.ledger_maintenance = 'on'). The grants below are a second
--- layer; they only bite if aquastats_app does not inherit wider rights (e.g. from neon_superuser).
--- Tested on 2026-10-05 against the production database inside a transaction that was rolled back.
+-- time_log entered later. A prediction is never edited or removed on its own: the trigger refuses
+-- any direct UPDATE/DELETE for every role, unless an operator turns it off on purpose for one
+-- transaction (SET LOCAL aquastats.ledger_maintenance = 'on'). Deleting the workout, the athlete,
+-- the team or the account still works (the app hard-deletes them, and the right to erasure needs
+-- it): the foreign keys cascade, and changes coming from a cascade are let through. The grants
+-- below are a second layer; they only bite if aquastats_app does not inherit wider rights.
+-- Tested against the production database inside transactions that were rolled back.
 
 create table if not exists prediction_ledger (
   id uuid primary key default gen_random_uuid(),
-  team_id uuid not null references teams(id),
-  athlete_id uuid not null references athletes(id),
-  workout_id uuid not null references workouts(id),
+  team_id uuid not null references teams(id) on delete cascade,
+  athlete_id uuid not null references athletes(id) on delete cascade,
+  workout_id uuid not null references workouts(id) on delete cascade,
   block_id text not null,
   rep_number smallint not null,
   target_date date not null,
@@ -25,7 +27,7 @@ create table if not exists prediction_ledger (
   sd_s double precision,
   confidence text,
   details jsonb not null default '{}',
-  predicted_by uuid references users(id),
+  predicted_by uuid references users(id) on delete set null,
   predicted_at timestamptz not null default now(),
   unique (model, model_version, horizon, workout_id, block_id, athlete_id, rep_number)
 );
@@ -35,7 +37,9 @@ create index if not exists prediction_ledger_rep_idx on prediction_ledger (worko
 create or replace function prediction_ledger_immutable() returns trigger
 language plpgsql as $$
 begin
-  if coalesce(current_setting('aquastats.ledger_maintenance', true), '') = 'on' then
+  -- pg_trigger_depth() > 1: the change comes from a foreign-key cascade (workout, athlete, team or
+  -- account deleted), not from someone editing a prediction.
+  if pg_trigger_depth() > 1 or coalesce(current_setting('aquastats.ledger_maintenance', true), '') = 'on' then
     return coalesce(new, old);
   end if;
   raise exception 'prediction_ledger is append-only';

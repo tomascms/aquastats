@@ -73,6 +73,70 @@ export async function recordPredictions(model: ModelId, role: LedgerEntry["role"
   return recorded;
 }
 
+/* ---------- Offline queue ---------- */
+
+const QUEUE_KEY = "aq_ledger_queue";
+/** Older than this, a queued prediction is dropped: by then its rep has almost surely been swum. */
+const QUEUE_MAX_AGE_MS = 3 * 86_400_000;
+
+type QueuedBatch = { model: ModelId; role: LedgerEntry["role"]; items: LedgerItem[]; queuedAt: number };
+
+function readQueue(): QueuedBatch[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(QUEUE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as QueuedBatch[]) : [];
+    return Array.isArray(parsed) ? parsed.filter((batch) => Date.now() - batch.queuedAt < QUEUE_MAX_AGE_MS) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeQueue(batches: QueuedBatch[]) {
+  try {
+    if (batches.length) globalThis.localStorage?.setItem(QUEUE_KEY, JSON.stringify(batches));
+    else globalThis.localStorage?.removeItem(QUEUE_KEY);
+  } catch {
+    // Storage full or blocked: the predictions are simply not recorded.
+  }
+}
+
+const isNetworkError = (error: unknown) => (error as { status?: number })?.status === 0;
+
+/**
+ * Records predictions, or keeps them on this device until the connection is back. Safe to retry:
+ * the API keeps the first prediction per rep and refuses any that arrive after the rep's time.
+ */
+export async function recordOrQueue(model: ModelId, role: LedgerEntry["role"], items: LedgerItem[]): Promise<void> {
+  if (!items.length) return;
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  if (!offline) {
+    try {
+      await recordPredictions(model, role, items);
+      return;
+    } catch (error) {
+      if (!isNetworkError(error)) return; // the server answered: nothing to retry
+    }
+  }
+  writeQueue([...readQueue(), { model, role, items, queuedAt: Date.now() }]);
+}
+
+/** Sends what was queued while offline. Batches the server answered (even with refusals) leave the queue. */
+export async function flushQueuedPredictions(): Promise<number> {
+  const pending = readQueue();
+  if (!pending.length) return 0;
+  const left: QueuedBatch[] = [];
+  let sent = 0;
+  for (const batch of pending) {
+    try {
+      sent += await recordPredictions(batch.model, batch.role, batch.items);
+    } catch (error) {
+      if (isNetworkError(error)) left.push(batch);
+    }
+  }
+  writeQueue(left);
+  return sent;
+}
+
 export function fetchLedger(athleteId?: string): Promise<LedgerEntry[]> {
   return api<LedgerEntry[]>(`/api/v1/predictions${athleteId ? `?athleteId=${encodeURIComponent(athleteId)}` : ""}`);
 }

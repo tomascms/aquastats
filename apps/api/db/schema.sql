@@ -446,9 +446,9 @@ create index if not exists polar_links_team_idx on polar_links (team_id) where d
 -- Migration 010: append-only ledger of training predictions (RLS, grants and the immutability trigger live in the migration).
 create table if not exists prediction_ledger (
   id uuid primary key default gen_random_uuid(),
-  team_id uuid not null references teams(id),
-  athlete_id uuid not null references athletes(id),
-  workout_id uuid not null references workouts(id),
+  team_id uuid not null references teams(id) on delete cascade,
+  athlete_id uuid not null references athletes(id) on delete cascade,
+  workout_id uuid not null references workouts(id) on delete cascade,
   block_id text not null,
   rep_number smallint not null,
   target_date date not null,
@@ -463,7 +463,7 @@ create table if not exists prediction_ledger (
   sd_s double precision,
   confidence text,
   details jsonb not null default '{}',
-  predicted_by uuid references users(id),
+  predicted_by uuid references users(id) on delete set null,
   predicted_at timestamptz not null default now(),
   unique (model, model_version, horizon, workout_id, block_id, athlete_id, rep_number)
 );
