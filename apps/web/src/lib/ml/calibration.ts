@@ -137,6 +137,7 @@ export function calibrated(base: Predictor, name = `${base.name} + conformal`, o
         const half = Math.max(quantile, 0.004) * (multiplier.get(adaptiveKey(event.athleteId, stratum)) ?? 1);
         issued.set(id, half / scaleUnit);
         out.set(id, {
+          ...prediction,
           mean: prediction.mean,
           lo: prediction.mean * (1 - half),
           hi: prediction.mean * (1 + half),

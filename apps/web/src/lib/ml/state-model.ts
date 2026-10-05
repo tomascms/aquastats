@@ -53,6 +53,10 @@ export type StateModelOptions = {
   fatigueTau: number;
   /** Forecasts made before the plan exists foresee the usual summer break. */
   seasonal: boolean;
+  /** Individual in-set fatigue with a cliff (fatigue.ts). */
+  fatigueGrid: boolean;
+  /** With the grid on, keep the linear position-by-rest term for gradual fatigue (the grid then only adds the cliff). */
+  fatigueKeepLinear: boolean;
   /** Weight of "same time last year, adjusted for growth" in forecasts made before the plan exists (0 = off): a few weeks ahead / a year ahead. */
   seasonalAnchor: number;
   seasonalAnchorYear: number;
@@ -76,6 +80,8 @@ export const DEFAULT_OPTIONS: StateModelOptions = {
   fitnessTau: 42,
   fatigueTau: 7,
   seasonal: false,
+  fatigueGrid: false,
+  fatigueKeepLinear: false,
   seasonalAnchor: 0,
   seasonalAnchorYear: 0,
 };
@@ -228,7 +234,18 @@ export const extraTurnsShare = (distance: number) => {
 type Observation = { offset: number; idx: number[]; val: number[] };
 
 /** What context a forecast may use: the rep's own day (sleep, gym) only when it is known. */
-export type ContextAccess = { use: boolean; dayKnown: boolean; planKnown: boolean; impulse?: { fitness: number; fatigue: number } | null };
+export type ContextAccess = {
+  use: boolean;
+  dayKnown: boolean;
+  planKnown: boolean;
+  impulse?: { fitness: number; fatigue: number } | null;
+  /** In-set fatigue is handled outside (fatigue.ts): drop the linear position-by-rest term. */
+  noLinearFatigue?: boolean;
+};
+
+/** Extra log-time from outside the linear model (e.g. the expected in-set fatigue) and its variance. */
+export type Offset = { offset: number; variance: number };
+const NO_OFFSET: Offset = { offset: 0, variance: 0 };
 const NO_CONTEXT: ContextAccess = { use: false, dayKnown: false, planKnown: false };
 
 /** Sparse observation vector of a rep: log(time) = offset + Σ val·state[idx]. */
@@ -273,7 +290,7 @@ function observe(row: TrainingRep, approxTime: number | null, context: ContextAc
   if (row.segmentReps > 1) {
     if (HARD.has(row.intensity)) {
       const rest = row.restSeconds != null ? Math.max(0, row.restSeconds - (approxTime ?? d * 0.65)) : 30;
-      if (position > 0) {
+      if (position > 0 && !context.noLinearFatigue) {
         idx.push(IX.fatigue);
         val.push(position * Math.exp(-rest / 90));
       }
@@ -441,6 +458,13 @@ export class AthleteFilter {
     };
   }
 
+  /** Critical speed (m/s) implied by the engine and the Riegel exponent: the 1500 m pace on the athlete's curve, at today's form. */
+  criticalSpeed(): number {
+    const engine = this.active[IX.engine] ? this.z[IX.engine] : PRIOR[IX.engine][0];
+    const k = this.active[IX.k] ? this.z[IX.k] : PRIOR[IX.k][0];
+    return 1500 / Math.exp(engine + k * Math.log(15) + this.form());
+  }
+
   /** Current form: level plus return deficit (log-time, 0 = the athlete's engine). */
   form(): number {
     return this.z[IX.L] + this.z[IX.R];
@@ -578,7 +602,7 @@ export class AthleteFilter {
     return (o.repSdRel ** 2 + (o.repSdAbs / approxTime) ** 2) * this.noiseScale;
   }
 
-  forecast(row: TrainingRep, prior: (j: number) => [number, number], access: ContextAccess = NO_CONTEXT): Forecast {
+  forecast(row: TrainingRep, prior: (j: number) => [number, number], access: ContextAccess = NO_CONTEXT, extra: Offset = NO_OFFSET): Forecast {
     const context = this.options.banister ? { ...access, impulse: this.impulse() } : access;
     let newFactors = 0;
     const first = observe(row, null, context);
@@ -593,7 +617,7 @@ export class AthleteFilter {
     // Linearise the dive gain around the prediction without it.
     const approx = Math.exp(first.offset + first.idx.reduce((sum, j, i) => sum + (j === IX.block ? 0 : first.val[i] * this.z[j]), 0));
     const obs = observe(row, approx, context);
-    let mean = obs.offset;
+    let mean = obs.offset + extra.offset;
     for (let i = 0; i < obs.idx.length; i += 1) mean += obs.val[i] * this.z[obs.idx[i]];
     let variance = 0;
     for (let a = 0; a < obs.idx.length; a += 1) {
@@ -601,7 +625,7 @@ export class AthleteFilter {
       for (let b = 0; b < obs.idx.length; b += 1) variance += obs.val[a] * obs.val[b] * this.P[ra + obs.idx[b]];
     }
     const meanS = Math.exp(mean);
-    variance += this.obsNoise(meanS);
+    variance += this.obsNoise(meanS) + extra.variance;
     const terms: ForecastTerms = { form: 0, returnDeficit: 0, day: 0, session: 0, set: 0 };
     for (let i = 0; i < obs.idx.length; i += 1) {
       const j = obs.idx[i];
@@ -612,14 +636,15 @@ export class AthleteFilter {
       else if (j === IX.s) terms.session += part;
       else if (j === IX.fatigue || j === IX.drift || j === IX.first) terms.set += part;
     }
+    terms.set += extra.offset;
     return { meanS, logMean: mean, logSd: Math.sqrt(Math.max(variance, 1e-10)), newFactors, terms };
   }
 
   /** Robust Kalman update with one rep. Returns the standardised innovation. */
-  update(row: TrainingRep, prior: (j: number) => [number, number], access: ContextAccess = NO_CONTEXT): number {
+  update(row: TrainingRep, prior: (j: number) => [number, number], access: ContextAccess = NO_CONTEXT, extra: Offset = NO_OFFSET): number {
     const context = this.options.banister ? { ...access, impulse: this.impulse() } : access;
-    const f = this.forecast(row, prior, access);
-    const obs = observe(row, f.meanS, context);
+    const f = this.forecast(row, prior, access, extra);
+    const obs = observe(row, Math.exp(f.logMean - extra.offset), context);
     const y = Math.log(row.timeS);
     const ph = new Float64Array(N);
     for (let a = 0; a < obs.idx.length; a += 1) {
@@ -629,7 +654,7 @@ export class AthleteFilter {
     }
     let hph = 0;
     for (let a = 0; a < obs.idx.length; a += 1) hph += obs.val[a] * ph[obs.idx[a]];
-    const noise = this.obsNoise(f.meanS);
+    const noise = this.obsNoise(f.meanS) + extra.variance;
     let innovation = y - f.logMean;
     const s = hph + noise;
     const zScore = innovation / Math.sqrt(s);

@@ -26,6 +26,17 @@ export type AthleteInfo = {
   gender?: string;
 };
 
+export type TruthRecord = {
+  expectedS: number;
+  dayAheadS: number;
+  swumS: number;
+  error: string | null;
+  /** Generator v3: "should do" (current form, reference conditions) and "will do" without shocks. */
+  capacityS?: number;
+  systematicS?: number;
+  cliff?: boolean;
+};
+
 export type Dataset = {
   kind: "synthetic" | "real";
   label: string;
@@ -33,11 +44,20 @@ export type Dataset = {
   workouts: Workout[];
   timeLogs: TimeLog[];
   /** Synthetic only: what actually generated each logged time. */
-  truth?: Map<string, { expectedS: number; dayAheadS: number; swumS: number; error: string | null }>;
+  truth?: Map<string, TruthRecord>;
+  /** Synthetic only: which athletes depart from the group on purpose. */
+  athleteTypes?: Map<string, "típico" | "atípico">;
 };
 
+/** "Should do": what current form allows for this kind of rep in reference conditions. */
+export type CapacityPrediction = { mean: number; lo?: number; hi?: number; sd?: number };
+
 export type Prediction = {
+  /** "Will do": the time expected in the real, planned conditions. */
   mean: number;
+  capacity?: CapacityPrediction;
+  /** Probability that the set has broken (a rep fell off the curve) by this rep, inclusive. */
+  pBreakBy?: number;
   /** Central predictive interval and its nominal coverage (e.g. 0.8). Omitted = point forecast only. */
   lo?: number;
   hi?: number;
@@ -57,7 +77,24 @@ export type TeamData = {
   load: Map<string, Map<string, DayLoad>>;
   /** Day number of the day before the first rep: anchors the grid of forecast origins. */
   anchorDay: number;
+  /** Reps planned per set, by `${workoutId}|${blockId}|${segmentIndex}` (a missing tail can then be told apart). */
+  planned?: Map<string, number>;
 };
+
+export const plannedKey = (workoutId: string, blockId: string, segmentIndex: number) => `${workoutId}|${blockId}|${segmentIndex}`;
+
+/** Planned reps of every set of these workouts (the site's own set structure). */
+export function plannedSets(workouts: Workout[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const workout of workouts) {
+    for (const block of workout.blocks) {
+      block.segments
+        .filter((segment) => segment.reps >= 1 && segment.distanceM > 0)
+        .forEach((segment, index) => out.set(plannedKey(workout.id, block.id, index), segment.reps));
+    }
+  }
+  return out;
+}
 
 export type LeadHorizon = { kind: "lead"; name: string; minLead: number; maxLead: number; planKnown: boolean };
 export type Horizon = { kind: "rep"; name: string } | { kind: "day"; name: string } | LeadHorizon;
@@ -126,7 +163,7 @@ export function teamData(dataset: Dataset): TeamData {
     }
     load.set(athlete.id, entryLoad(dataset.workouts, athlete.id));
   }
-  return { rows, athletes, load, anchorDay: Number.isFinite(first) ? first - 1 : 0 };
+  return { rows, athletes, load, anchorDay: Number.isFinite(first) ? first - 1 : 0, planned: plannedSets(dataset.workouts) };
 }
 
 /* ---------- Metrics ---------- */
@@ -300,6 +337,9 @@ export type BacktestReport = {
   byAthlete: Record<string, Metrics>;
   byIntensity: Record<string, Metrics>;
   byConfidence: Record<string, Metrics>;
+  byType: Record<string, Metrics>;
+  capacity: CapacityMetrics | null;
+  breaks: BreakMetrics | null;
   runtimeMs: number;
 };
 
@@ -322,7 +362,7 @@ export function scorePredictions(predictions: Map<string, Prediction>, evalRows:
   return evalRows.map((item) => ({ item, pair: { row: item.row, prediction: predictions.get(item.row.log.id), actual: item.row.timeS } }));
 }
 
-export function reportOf(name: string, dataset: Dataset, horizon: Horizon, scored: Scored[], runtimeMs: number): BacktestReport {
+export function reportOf(name: string, dataset: Dataset, horizon: Horizon, scored: Scored[], runtimeMs: number, extras: { breaks?: BreakMetrics | null } = {}): BacktestReport {
   const clean = scored.filter(({ item }) => item.clean);
   return {
     predictor: name,
@@ -339,6 +379,9 @@ export function reportOf(name: string, dataset: Dataset, horizon: Horizon, score
       clean.filter(({ pair }) => pair.prediction?.confidence),
       ({ pair }) => pair.prediction!.confidence!,
     ),
+    byType: dataset.athleteTypes ? sliceBy(clean, ({ item }) => dataset.athleteTypes!.get(item.athleteId) ?? "típico") : {},
+    capacity: capacityMetrics(scored, dataset),
+    breaks: extras.breaks ?? null,
     runtimeMs,
   };
 }
@@ -348,7 +391,10 @@ export function runBacktest(predictor: Predictor, dataset: Dataset, horizon: Hor
   const predictions = predictor.predict(team, horizon);
   const runtimeMs = performance.now() - started;
   const scored = scorePredictions(predictions, evalRows);
-  return { report: reportOf(predictor.name, dataset, horizon, scored, runtimeMs), scored };
+  // Breaks are scored on clean sets only (a typing error is not a break).
+  const typos = new Set(dataset.truth ? [...dataset.truth.entries()].filter(([, truth]) => truth.error).map(([id]) => id) : []);
+  const breaks = breakMetrics(predictions, observedSets(team, typos));
+  return { report: reportOf(predictor.name, dataset, horizon, scored, runtimeMs, { breaks }), scored };
 }
 
 /** Synthetic only: error of the best possible day-ahead estimate and of the within-day truth, on clean reps. */
@@ -361,6 +407,161 @@ export function oracleFloor(dataset: Dataset, team: TeamData, evalRows = evaluat
       return { row: item.row, actual: item.row.timeS, prediction: truth ? { mean: truth[field] } : undefined };
     });
   return { dayAhead: metricsOf(pairs("dayAheadS")), withinDay: metricsOf(pairs("expectedS")) };
+}
+
+/* ---------- "Should do", cost of conditions and set breaks (protocol v3) ---------- */
+
+/** Operational "reference conditions": 1st or 2nd rep of the set, rest ≥ 2× the rep, < 1.5 km swum before. */
+export function isReferenceRep(row: TrainingRep): boolean {
+  if (row.repInSegment > 2 || row.restSeconds == null || !(row.loadBeforeM < 1500)) return false;
+  return row.restSeconds - row.timeS >= 2 * row.timeS;
+}
+
+export const setIdOf = (row: TrainingRep) => `${row.workoutId}|${row.log.athleteId}|${row.blockId}|${row.segmentIndex}|${row.round}`;
+
+export type ObservedSet = { id: string; date: string; athleteId: string; rows: TrainingRep[]; brokeAt: number | null };
+
+/**
+ * Operational break: the first rep (from the 3rd on) at least 4 % slower than the median of the
+ * earlier reps of the same set. Only sets with ≥ 3 logged plausible reps; positions are logged order.
+ */
+export function observedSets(team: TeamData, exclude: Set<string> = new Set()): ObservedSet[] {
+  const sets = new Map<string, TrainingRep[]>();
+  for (const rows of team.rows.values()) {
+    for (const row of rows) {
+      if (!isPlausibleRep(row) || exclude.has(row.log.id)) continue;
+      const id = setIdOf(row);
+      sets.set(id, [...(sets.get(id) ?? []), row]);
+    }
+  }
+  const out: ObservedSet[] = [];
+  for (const [id, list] of sets) {
+    if (list.length < 3) continue;
+    const ordered = [...list].sort((a, b) => a.log.repNumber - b.log.repNumber);
+    let brokeAt: number | null = null;
+    for (let i = 2; i < ordered.length && brokeAt == null; i += 1) {
+      const earlier = ordered.slice(0, i).map((row) => row.timeS).sort((a, b) => a - b);
+      const median = earlier.length % 2 ? earlier[(earlier.length - 1) / 2] : (earlier[earlier.length / 2 - 1] + earlier[earlier.length / 2]) / 2;
+      if (ordered[i].timeS >= median * 1.04) brokeAt = i + 1;
+    }
+    out.push({ id, date: ordered[0].date, athleteId: ordered[0].log.athleteId, rows: ordered, brokeAt });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export type CapacityMetrics = {
+  /** Against the synthetic truth. */
+  n: number;
+  mapePct: number;
+  biasPct: number;
+  coverage80: number | null;
+  intervalScorePct: number | null;
+  /** Against observed reps in reference conditions (the proxy that exists for real data). */
+  nRef: number;
+  mapeRefPct: number;
+  coverage80Ref: number | null;
+  /** Cost of conditions ("will do" over "should do"): mean absolute error in percentage points. */
+  costMaePp: number;
+};
+
+export function capacityMetrics(scored: Scored[], dataset: Dataset): CapacityMetrics | null {
+  const withCap = scored.filter((item) => item.item.clean && item.pair.prediction?.capacity);
+  if (!withCap.length) return null;
+  const truthOf = (item: Scored) => dataset.truth?.get(item.item.row.log.id);
+  const vsTruth = withCap.filter((item) => truthOf(item)?.capacityS != null);
+  const cover = (list: Scored[], target: (item: Scored) => number) => {
+    const intervals = list.filter((item) => item.pair.prediction!.capacity!.lo != null && item.pair.prediction!.capacity!.hi != null);
+    return intervals.length ? intervals.filter((item) => target(item) >= item.pair.prediction!.capacity!.lo! && target(item) <= item.pair.prediction!.capacity!.hi!).length / intervals.length : null;
+  };
+  const truthCap = (item: Scored) => truthOf(item)!.capacityS!;
+  const iscore = vsTruth.filter((item) => item.pair.prediction!.capacity!.lo != null);
+  const ref = withCap.filter((item) => isReferenceRep(item.item.row));
+  const costs = vsTruth.filter((item) => truthOf(item)?.systematicS != null);
+  return {
+    n: vsTruth.length,
+    mapePct: avg(vsTruth.map((item) => Math.abs(item.pair.prediction!.capacity!.mean / truthCap(item) - 1))) * 100,
+    biasPct: avg(vsTruth.map((item) => item.pair.prediction!.capacity!.mean / truthCap(item) - 1)) * 100,
+    coverage80: cover(vsTruth, truthCap),
+    intervalScorePct: iscore.length
+      ? avg(
+          iscore.map((item) => {
+            const c = item.pair.prediction!.capacity!;
+            const y = truthCap(item);
+            return (c.hi! - c.lo! + 10 * Math.max(0, c.lo! - y) + 10 * Math.max(0, y - c.hi!)) / y;
+          }),
+        ) * 100
+      : null,
+    nRef: ref.length,
+    mapeRefPct: avg(ref.map((item) => Math.abs(item.pair.prediction!.capacity!.mean / item.pair.actual - 1))) * 100,
+    coverage80Ref: cover(ref, (item) => item.pair.actual),
+    costMaePp: avg(
+      costs.map((item) => {
+        const predicted = item.pair.prediction!.mean / item.pair.prediction!.capacity!.mean - 1;
+        const real = truthOf(item)!.systematicS! / truthCap(item) - 1;
+        return Math.abs(predicted - real) * 100;
+      }),
+    ),
+  };
+}
+
+export type BreakMetrics = {
+  sets: number;
+  breakRate: number;
+  brier: number;
+  logLoss: number;
+  /** Reference: the team's break rate up to the day before. */
+  brierBase: number;
+  logLossBase: number;
+  /** Sets that broke: |predicted break rep − observed| (predicted = first rep with P ≥ 0.5, else one past the logged reps). */
+  repMae: number;
+};
+
+export function breakMetrics(predictions: Map<string, Prediction>, sets: ObservedSet[]): BreakMetrics | null {
+  const scoredSets = sets.filter((set) => set.rows.every((row) => predictions.get(row.log.id)?.pBreakBy != null));
+  if (!scoredSets.length) return null;
+  const clip = (p: number) => Math.min(1 - 1e-4, Math.max(1e-4, p));
+  let brier = 0;
+  let logLoss = 0;
+  let brierBase = 0;
+  let logLossBase = 0;
+  let seenSets = 0;
+  let seenBroken = 0;
+  const repErrors: number[] = [];
+  let currentDate = "";
+  let pendingSets = 0;
+  let pendingBroken = 0;
+  for (const set of scoredSets) {
+    if (set.date !== currentDate) {
+      seenSets += pendingSets;
+      seenBroken += pendingBroken;
+      pendingSets = 0;
+      pendingBroken = 0;
+      currentDate = set.date;
+    }
+    const y = set.brokeAt != null ? 1 : 0;
+    const p = clip(predictions.get(set.rows[set.rows.length - 1].log.id)!.pBreakBy!);
+    const base = clip((seenBroken + 1) / (seenSets + 2));
+    brier += (p - y) ** 2;
+    logLoss += -(y * Math.log(p) + (1 - y) * Math.log(1 - p));
+    brierBase += (base - y) ** 2;
+    logLossBase += -(y * Math.log(base) + (1 - y) * Math.log(1 - base));
+    if (y) {
+      const predictedAt = set.rows.findIndex((row) => predictions.get(row.log.id)!.pBreakBy! >= 0.5);
+      repErrors.push(Math.abs((predictedAt < 0 ? set.rows.length + 1 : predictedAt + 1) - set.brokeAt!));
+    }
+    pendingSets += 1;
+    pendingBroken += y;
+  }
+  const n = scoredSets.length;
+  return {
+    sets: n,
+    breakRate: scoredSets.filter((set) => set.brokeAt != null).length / n,
+    brier: brier / n,
+    logLoss: logLoss / n,
+    brierBase: brierBase / n,
+    logLossBase: logLossBase / n,
+    repMae: repErrors.length ? avg(repErrors) : Number.NaN,
+  };
 }
 
 /* ---------- Paired comparison ---------- */

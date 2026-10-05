@@ -107,3 +107,50 @@ trabalho dessa linha e é relatada como falhada.
    exigente: `multiano`, `regresso-curta`, `regresso-longa`, `regresso-tardia` (sementes 1001–1010),
    além de terem de deixar o horizonte dia exatamente igual nas 4 células de decisão. Motivo: a Fase 6
    (sazonalidade) só mexe em previsões feitas antes de o plano existir.
+
+## Adenda v3 (2026-10-05, antes de qualquer resultado com o gerador v3)
+
+Os resultados das fases 1–6 foram obtidos com o gerador 2.0 (commit `476f041`). A partir daqui
+usa-se o **gerador 3.0** (atletas heterogéneos) e esta adenda junta-se às regras R1–R5, que se
+mantêm para o tempo "vai fazer" no horizonte dia.
+
+**Gerador 3.0.** Cada atleta tem velocidade crítica e reserva anaeróbia W′ próprias (8–50 m),
+recuperação de W′ com constante de 30–240 s, perda de W′ com o volume da sessão de 5 % a 30 %
+(por 4 km), efeitos de ginásio, sono e turno com sinal individual (positivo, nulo ou negativo) e
+atraso (dia anterior / duas noites antes), precipício real quando o W′ se esgota, séries
+abandonadas depois de uma quebra (reps não registadas: censura), capacidade que evolui dimensão a
+dimensão (W′ com o treino anaeróbio, recuperação com o treino de descanso curto, cada uma à sua
+velocidade e às vezes nada), ~20 % de atletas atípicos e várias equipas como coortes separadas.
+Verdade registada por rep: tempo de capacidade ("devia"), tempo sistemático nas condições reais
+("vai" sem choques), custo das condições, quebra.
+
+**Definições operacionais** (também usadas em dados reais):
+- *Quebra*: numa série, uma rep com tempo ≥ 4 % acima da mediana das reps anteriores da mesma
+  série (pelo menos 2 anteriores). A série quebra na primeira dessas reps.
+- *Condições de referência* ("devia" observável): 1.ª ou 2.ª rep da série, descanso ≥ 2× o tempo
+  da rep, menos de 1,5 km nadados antes na sessão.
+
+**Métricas novas** (relatadas por célula, horizonte dia):
+- "devia": MAPE, viés, cobertura a 80 % e interval score contra a verdade sintética, e contra as
+  reps em condições de referência (o proxy que existe em dados reais);
+- custo das condições: erro absoluto médio (pp) entre o custo previsto e o verdadeiro;
+- quebra: Brier score e log loss da probabilidade de a série quebrar (séries com ≥ 3 reps
+  registadas), erro absoluto na rep em que quebra; referência = taxa de quebra da equipa até à véspera;
+- recuperação de parâmetros: correlação de Spearman entre o parâmetro estimado e o verdadeiro
+  (W′, recuperação, sensibilidade ao volume, efeitos de ginásio/sono) e acerto de sinal;
+- erro por tipo de atleta (típico vs atípico);
+- observações até o modelo individual bater o prior do grupo, por tipo de atleta.
+
+**Regras novas:**
+- **R6 — atípicos**: uma mudança que melhore o global mas piore o MAPE dos atletas atípicos em
+  mais de 0,10 pp (média nas células de decisão) não fica.
+- **R7 — heterogeneidade antes de rejeitar**: um componente que falhe R1–R5 é testado atleta a
+  atleta (Δ por atleta com IC por bootstrap dos dias; teste Q de Cochran). Se p < 0,05 e ≥ 20 % dos
+  atletas melhorarem com IC < 0, avalia-se uma versão *por atleta* (o componente só atua num atleta
+  quando a evidência desse atleta exclui zero a 90 %), que tem de passar R1–R6 para ficar.
+- **R8 — componentes do "devia"/quebra**: ficam se baterem a referência correspondente (fronteira
+  = quantil 20 % das reps comparáveis das últimas 8 semanas, para o "devia"; taxa de quebra da
+  equipa, para a quebra) com IC < 0 em ≥ 3 de 4 células de decisão, com cobertura do "devia" entre
+  75 % e 85 %, e sem piorar o "vai" (R2–R5).
+
+Sementes: as mesmas (ajuste 1–5; teste 1001–1015 nas células de decisão, 1001–1010 nas restantes).

@@ -1,6 +1,6 @@
 import { isPlausibleRep, type TrainingRep } from "../training-context";
 import { groupKey } from "../training-prediction";
-import { dayNumber, lastUsableDay, Z80, type Horizon, type Prediction, type Predictor, type TeamData } from "./backtest";
+import { dayNumber, HORIZONS, isPlanned, lastUsableDay, originOf, Z80, type Horizon, type LeadHorizon, type Prediction, type Predictor, type TeamData } from "./backtest";
 import { runStateModel } from "./forecaster";
 import { legacyPredict } from "./legacy-baseline";
 import { teamSuspects } from "./quality";
@@ -104,7 +104,129 @@ export function stateModelPredictor(options: StateModelOptions = DEFAULT_OPTIONS
           hi: Math.exp(forecast.logMean + Z80 * forecast.logSd),
           nominal: 0.8,
           sd: forecast.meanS * forecast.logSd,
+          pBreakBy: forecast.pBreakBy,
         });
+      }
+      return out;
+    },
+  };
+}
+
+/**
+ * Reference for "should do": the frontier of the athlete's own recent reps — the recency-weighted
+ * 20 % quantile of the same kind of rep over the last 8 weeks (protocol v3). "Will do" = the
+ * recency-weighted median of the same window.
+ */
+export const frontierPredictor: Predictor = {
+  name: "fronteira (q20)",
+  description: "Quantil 20 % (ponderado pela recência) das reps do mesmo grupo nas últimas 8 semanas.",
+  predict(team: TeamData, horizon: Horizon) {
+    const out = new Map<string, Prediction>();
+    const weightedQuantile = (items: { v: number; w: number }[], q: number) => {
+      const sorted = [...items].sort((a, b) => a.v - b.v);
+      const total = sorted.reduce((sum, item) => sum + item.w, 0);
+      let acc = 0;
+      for (const item of sorted) {
+        acc += item.w;
+        if (acc >= q * total) return item.v;
+      }
+      return sorted[sorted.length - 1].v;
+    };
+    for (const rows of team.rows.values()) {
+      const valid = rows.filter(isPlausibleRep);
+      const byGroup = new Map<string, TrainingRep[]>();
+      for (const row of valid) byGroup.set(groupKey(row), [...(byGroup.get(groupKey(row)) ?? []), row]);
+      for (const list of byGroup.values()) {
+        for (const row of list) {
+          const last = lastUsableDay(row, horizon, team.anchorDay);
+          const window = list.filter((item) => dayNumber(item.date) <= last && last - dayNumber(item.date) < 56);
+          if (window.length < 3) continue;
+          const weighted = window.map((item) => ({ v: item.timeS, w: Math.pow(0.5, (last - dayNumber(item.date)) / 28) }));
+          const q20 = weightedQuantile(weighted, 0.2);
+          const median = weightedQuantile(weighted, 0.5);
+          const logs = window.map((item) => Math.log(item.timeS / median));
+          const mad = [...logs.map(Math.abs)].sort((a, b) => a - b)[Math.floor(logs.length / 2)];
+          const rel = Math.max(0.005, 1.4826 * mad);
+          out.set(row.log.id, {
+            mean: median,
+            sd: median * rel,
+            capacity: { mean: q20, lo: q20 * (1 - Z80 * rel), hi: q20 * (1 + Z80 * rel), sd: q20 * rel },
+          });
+        }
+      }
+    }
+    return out;
+  },
+};
+
+/**
+ * Per-athlete version of a component (protocol v3, R7): `component` replaces `base` for an athlete
+ * only once that athlete's own evidence says it helps — the mean per-day difference in absolute %
+ * error (component − base, day horizon, times not suspect) has its 90 % interval below zero, over at
+ * least `minDays` days. The evidence only uses days already swum at the forecast's origin (the day
+ * before for the rep/day horizons, the origin itself for the lead horizons). The break probability
+ * always comes from the component (it is judged separately, R8).
+ */
+export function perAthleteGate(base: Predictor, component: Predictor, name: string, { z = 1.645, minDays = 5 } = {}): Predictor {
+  return {
+    name,
+    description: `${component.name}, só nos atletas em que já provou ganhar (IC 90 % do ganho < 0); nos outros, ${base.name}.`,
+    predict(team: TeamData, horizon: Horizon) {
+      const a = base.predict(team, horizon);
+      const b = component.predict(team, horizon);
+      const evidenceA = horizon.kind === "day" ? a : base.predict(team, HORIZONS.day);
+      const evidenceB = horizon.kind === "day" ? b : component.predict(team, HORIZONS.day);
+      const suspects = suspectsFor(team, HORIZONS.day);
+      const out = new Map<string, Prediction>();
+      for (const rows of team.rows.values()) {
+        // Per day: the mean difference in absolute % error, then running sums over the days in order.
+        const byDay = new Map<number, number[]>();
+        for (const row of rows) {
+          if (!isPlausibleRep(row) || isPlanned(row) || suspects.has(row.log.id)) continue;
+          const pa = evidenceA.get(row.log.id);
+          const pb = evidenceB.get(row.log.id);
+          if (!pa || !pb) continue;
+          const day = dayNumber(row.date);
+          byDay.set(day, [...(byDay.get(day) ?? []), (Math.abs(pb.mean - row.timeS) - Math.abs(pa.mean - row.timeS)) / row.timeS]);
+        }
+        const days = [...byDay.keys()].sort((x, y) => x - y);
+        const cumulative: { day: number; n: number; sum: number; sumSq: number }[] = [];
+        let n = 0;
+        let sum = 0;
+        let sumSq = 0;
+        for (const day of days) {
+          const list = byDay.get(day)!;
+          const mean = list.reduce((total, value) => total + value, 0) / list.length;
+          n += 1;
+          sum += mean;
+          sumSq += mean * mean;
+          cumulative.push({ day, n, sum, sumSq });
+        }
+        const helpsBy = (origin: number) => {
+          let lo = 0;
+          let hi = cumulative.length - 1;
+          let found = -1;
+          while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (cumulative[mid].day <= origin) {
+              found = mid;
+              lo = mid + 1;
+            } else hi = mid - 1;
+          }
+          if (found < 0 || cumulative[found].n < minDays) return false;
+          const { n: count, sum: total, sumSq: totalSq } = cumulative[found];
+          const mean = total / count;
+          const sd = Math.sqrt(Math.max(0, (totalSq - count * mean * mean) / (count - 1)));
+          return mean + (z * sd) / Math.sqrt(count) < 0;
+        };
+        for (const row of rows) {
+          const pa = a.get(row.log.id);
+          const pb = b.get(row.log.id);
+          if (!pa && !pb) continue;
+          const origin = horizon.kind === "lead" ? originOf(row.date, horizon as LeadHorizon, team.anchorDay) : dayNumber(row.date) - 1;
+          const chosen = pb && (helpsBy(origin) || !pa) ? pb : pa!;
+          out.set(row.log.id, { ...chosen, pBreakBy: pb?.pBreakBy });
+        }
       }
       return out;
     },

@@ -26,11 +26,26 @@ import { createRng, type Rng } from "./rng";
  *     a split instead of the final time, two swimmers' times swapped);
  *   - missing data that carries information: race-pace sets get timed far more than aerobic ones,
  *     sessions with no times, sessions never entered, wellness filled more on bad nights.
+ *
+ * v3 — every athlete is different, and the differences matter:
+ *   - an individual anaerobic reserve W′ (8–50 m) and recovery time constant (30–240 s); the reserve
+ *     available for a set shrinks with the volume already swum (5–30 % per 4 km);
+ *   - a real cliff: when a rep needs more W′ than is left, the rest of it is swum at critical speed —
+ *     the rep falls off the curve; after such a break some swimmers abandon the set (the reps that
+ *     follow are never logged: censored data), and some coaches skip logging the bad rep;
+ *   - capacity moves dimension by dimension: W′ follows the anaerobic work of the last weeks,
+ *     recovery follows short-rest work, each at the athlete's own speed (for some, not at all);
+ *   - gym, sleep and time of day act with an individual sign (positive, none or negative) and lag
+ *     (gym the day before, sleep two nights before);
+ *   - about one athlete in five is atypical on purpose (extreme reserve or recovery, unusual kick,
+ *     reversed context effects);
+ *   - truth per rep includes the capacity time ("should do": current form, reference conditions),
+ *     the systematic time in the real conditions ("will do" without the shocks) and the break.
  */
 
 export const SYNTHETIC_PREFIX = "syn-";
 /** Bumped whenever generated data changes; results in docs/ml/results name the version they used. */
-export const GENERATOR_VERSION = "2.0";
+export const GENERATOR_VERSION = "3.0";
 
 export type GroupName = "velocidade" | "intermedio" | "fundo";
 export type Phase = "ramp" | "general" | "specific" | "competitive" | "taper" | "transition";
@@ -76,6 +91,20 @@ export type AthleteProfile = {
   gymStrengthPct: number;
   gymDays: number[];
   banister: { tau1: number; tau2: number; tau3: number; a1: number; a2: number; a3: number; memory: number };
+  /** Fraction of W′ lost per 4 km already swum in the session. */
+  volumeSens: number;
+  /** How fast W′ follows the anaerobic work of the last weeks (0 = never changes). */
+  adaptW: number;
+  /** How fast recovery follows short-rest work (0 = never changes). */
+  adaptTau: number;
+  /** Signed effects on times (+ = slower): gym the same day, gym the day before, per hour of sleep under 8 last night / two nights before. */
+  gymSameDay: number;
+  gymNextDay: number;
+  sleepNight: number;
+  sleepTwoNights: number;
+  /** Chance of abandoning a set after a rep breaks. */
+  abandonShare: number;
+  atypical: boolean;
   dayPhi: number;
   daySd: number;
   sessionSd: number;
@@ -100,6 +129,8 @@ export type SyntheticAthlete = {
   /** First and last season (index) the athlete trains with the team. */
   joinSeason: number;
   leaveSeason: number;
+  /** Weekly snapshot of the parts of capacity that move with training (for parameter recovery). */
+  trajectory: { date: string; dPrimeM: number; tauS: number }[];
 };
 
 export type RepTruth = {
@@ -112,6 +143,17 @@ export type RepTruth = {
   /** What was actually swum (before any typing error), to the hundredth. */
   swumS: number;
   error: EntryError | null;
+  /** "Should do": current form in reference conditions (rested, full reserve, no session volume, no context, no shocks). */
+  capacityS: number;
+  /** "Will do" without the day and session shocks: everything systematic in the real conditions. */
+  systematicS: number;
+  /** The rep needed more W′ than was left (it fell off the curve). */
+  cliff: boolean;
+  /** Set this rep belongs to, the planned number of reps in it, and the first rep (1-based) that hit the cliff. */
+  setKey: string;
+  setPlanned: number;
+  setCliffAt: number | null;
+  setAbandoned: boolean;
 };
 
 export type SyntheticRace = {
@@ -142,6 +184,7 @@ export type SyntheticDataset = {
   dataEnd: string;
   /** Per season: the team's return day and each athlete's own return day. */
   returns: { season: number; team: string; athletes: Record<string, string> }[];
+  athleteTypes: Map<string, "típico" | "atípico">;
 };
 
 export type ScenarioConfig = {
@@ -338,7 +381,8 @@ function makeProfile(rng: Rng, group: GroupName, config: ScenarioConfig, birthYe
     im: rng.uniform(1.09, 1.16),
   };
   if (primaryStroke !== "free") strokeMult[primaryStroke] -= rng.uniform(0.02, 0.05);
-  const dPrime = group === "velocidade" ? rng.uniform(22, 35) : group === "fundo" ? rng.uniform(10, 18) : rng.uniform(15, 25);
+  const logUniform = (lo: number, hi: number) => lo * Math.pow(hi / lo, rng.next());
+  const dPrime = group === "velocidade" ? logUniform(15, 50) : group === "fundo" ? logUniform(8, 25) : logUniform(10, 35);
   const birthYear = birthYearMid + rng.int(-3, 3);
   const dateOfBirth = isoOf(dayOf(`${birthYear}-01-01`) + rng.int(0, 364));
   return {
@@ -373,12 +417,12 @@ function makeProfile(rng: Rng, group: GroupName, config: ScenarioConfig, birthYe
     turnSlowExp: rng.uniform(0.5, 1.5),
     blockGainS: rng.uniform(0.5, 1),
     dPrimeM: dPrime,
-    dPrimeTauS: rng.uniform(60, 120),
+    dPrimeTauS: 30 * Math.pow(8, rng.next()),
     dPrimeKappa: rng.uniform(0.04, 0.1),
     aerobicDrift: rng.uniform(0.0003, 0.001),
     loadBeforePerKm: rng.uniform(0, 0.0035),
     firstRepPct: rng.normal(0.004, 0.006),
-    morningPct: Math.max(0, rng.normal(0.008, 0.005)),
+    morningPct: rng.normal(0.006, 0.008),
     secondPct: Math.max(0, rng.normal(0.004, 0.003)),
     sleepPctPerHour: Math.max(0, rng.normal(0.002, 0.0015)),
     gymStrengthPct: Math.max(0, rng.normal(0.007, 0.004)),
@@ -402,6 +446,32 @@ function makeProfile(rng: Rng, group: GroupName, config: ScenarioConfig, birthYe
     attendance: rng.uniform(0.85, 0.97),
     logShare: rng.uniform(config.athleteLogShare[0], config.athleteLogShare[1]),
     wellnessShare: rng.uniform(config.wellnessShare[0], config.wellnessShare[1]),
+    volumeSens: rng.uniform(0.05, 0.3),
+    adaptW: rng.uniform(0, 1),
+    adaptTau: rng.chance(0.4) ? 0 : rng.uniform(0, 0.6),
+    gymSameDay: rng.normal(0.005, 0.008),
+    gymNextDay: rng.normal(-0.002, 0.006),
+    sleepNight: rng.normal(0.002, 0.003),
+    sleepTwoNights: rng.normal(0.001, 0.002),
+    abandonShare: rng.uniform(0.3, 0.7),
+    atypical: false,
+  };
+}
+
+/** An athlete who departs from the group on purpose: extreme reserve or recovery, unusual kick, reversed context. */
+function makeAtypical(rng: Rng, p: AthleteProfile): AthleteProfile {
+  const extremeReserve = rng.chance(0.5);
+  return {
+    ...p,
+    atypical: true,
+    dPrimeM: extremeReserve ? (rng.chance(0.5) ? rng.uniform(6, 9) : rng.uniform(45, 60)) : p.dPrimeM,
+    dPrimeTauS: extremeReserve ? p.dPrimeTauS : rng.chance(0.5) ? rng.uniform(22, 32) : rng.uniform(220, 320),
+    gearMult: { ...p.gearMult, legs: rng.chance(0.5) ? rng.uniform(1.12, 1.18) : rng.uniform(1.55, 1.7) },
+    zone: { ...p.zone, A2: p.zone.A2 * (rng.chance(0.5) ? 0.96 : 1.04) },
+    morningPct: -Math.abs(p.morningPct) - 0.01,
+    gymSameDay: -Math.abs(p.gymSameDay) - 0.006,
+    sleepNight: -Math.abs(p.sleepNight),
+    gymDays: [1, 3],
   };
 }
 
@@ -589,6 +659,16 @@ type State = {
   peak: number;
   dayShock: number;
   lastTrainingShock: { day: number; value: number } | null;
+  /** Anaerobic work (W′ spent, m) and short-rest hard reps, exponentially weighted over ~4 weeks, and their reference levels. */
+  anaerobicDose: number;
+  shortRestDose: number;
+  anaerobicRef: number | null;
+  shortRestRef: number | null;
+  /** Today's W′ and recovery time constant. */
+  dPrimeM: number;
+  tauS: number;
+  gymYesterday: boolean;
+  sleepYesterday: number;
 };
 
 function segmentOf(rep: Omit<RepSpec, "stroke"> & { stroke: Stroke | "" }, reps: number, sendOff: number): SetSegment {
@@ -631,11 +711,28 @@ type SlotResult = {
   dayAhead: number;
   timed: boolean;
   errorRate: number;
+  capacity: number;
+  systematic: number;
+  cliff: boolean;
+  set: { key: string; planned: number; cliffAt: number | null; abandoned: boolean };
 };
 
-export function generateDataset(name: ScenarioName | ScenarioConfig, seed: number, variant: Variant = DEFAULT_VARIANT): SyntheticDataset {
+/** softplus with scale s: smooth max(0, x). */
+const softplus = (x: number, s: number) => (x / s > 30 ? x : s * Math.log1p(Math.exp(x / s)));
+
+export type GenerateOptions = {
+  /** Id prefix (several teams generated side by side must not share ids). */
+  prefix?: string;
+  /** Team-level talent shift (log-time, + = slower) — other teams are separate cohorts. */
+  talentShift?: number;
+  /** Share of atypical athletes (default 0.2). */
+  atypicalShare?: number;
+};
+
+export function generateDataset(name: ScenarioName | ScenarioConfig, seed: number, variant: Variant = DEFAULT_VARIANT, options: GenerateOptions = {}): SyntheticDataset {
   const config: ScenarioConfig = typeof name === "string" ? SCENARIOS[name] : name;
   const rng = createRng(seed);
+  const prefix = options.prefix ?? SYNTHETIC_PREFIX;
   const complete = variant.data === "completos";
   const metersFactor = METERS_FACTOR[variant.meters];
   const seasons = buildSeasons(config);
@@ -654,12 +751,14 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
 
   const athletes: SyntheticAthlete[] = Array.from({ length: config.athletes + config.arrivals }, (_, index) => {
     const group = GROUPS[index % GROUPS.length];
-    const profile = makeProfile(rng, group, config, config.firstSeason - 15);
+    const base = makeProfile(rng, group, config, config.firstSeason - 15);
+    const shifted = options.talentShift ? { ...base, t100Adult: base.t100Adult * Math.exp(options.talentShift) } : base;
+    const profile = rng.chance(options.atypicalShare ?? 0.2) ? makeAtypical(rng, shifted) : shifted;
     const arrival = index >= config.athletes;
     const joinSeason = arrival ? Math.min(config.seasons - 1, 1 + (index - config.athletes)) : 0;
     const leaveSeason = !arrival && config.seasons >= 3 && index === config.athletes - 1 ? 1 : config.seasons - 1;
     return {
-      id: `${SYNTHETIC_PREFIX}ath-${String(index + 1).padStart(2, "0")}`,
+      id: `${prefix}ath-${String(index + 1).padStart(2, "0")}`,
       name: `Sintético ${index + 1}`,
       group,
       gender: profile.sex,
@@ -669,6 +768,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
       profile,
       joinSeason,
       leaveSeason,
+      trajectory: [],
     };
   });
 
@@ -719,6 +819,14 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
       peak: fitness,
       dayShock: 0,
       lastTrainingShock: null,
+      anaerobicDose: 0,
+      shortRestDose: 0,
+      anaerobicRef: null,
+      shortRestRef: null,
+      dPrimeM: athlete.profile.dPrimeM,
+      tauS: athlete.profile.dPrimeTauS,
+      gymYesterday: false,
+      sleepYesterday: 7.6,
     });
   }
 
@@ -740,7 +848,9 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
     const iso = isoOf(day);
     const seasonWeek = season ? Math.floor((day - season.returnDay) / 7) : 99;
 
-    const formToday = new Map<string, { perf: number; shock: number; forecast: number; sleep: number; gym: boolean }>();
+    const formToday = new Map<string, { perf: number; shock: number; forecast: number; sleep: number; sleepBefore: number; gym: boolean; gymYesterday: boolean }>();
+    const anaerobicToday = new Map<string, number>();
+    const shortRestToday = new Map<string, number>();
     for (const athlete of athletes) {
       const s = state.get(athlete.id)!;
       const p = athlete.profile;
@@ -759,7 +869,23 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
       const feel = Math.min(1.1, s.feel / ss3);
       const perf = b.a1 * (s.fitness / ss1 - 1) - b.a2 * (s.fatigue / ss2 - 1) - b.a3 * Math.max(0, 1 - feel);
       const sleep = clamp(Math.round(rng.normal(7.6, 0.9) * 2) / 2, 4.5, 10);
-      formToday.set(athlete.id, { perf, shock: s.dayShock, forecast, sleep, gym: p.gymDays.includes(weekday) && phase !== "taper" && phase !== "ramp" });
+      // Capacity dimension by dimension: W′ follows recent anaerobic work, recovery follows short-rest work.
+      if (s.anaerobicRef != null && s.anaerobicRef > 0) {
+        s.dPrimeM = p.dPrimeM * clamp(1 + p.adaptW * 0.5 * (s.anaerobicDose / s.anaerobicRef - 1), 0.75, 1.6);
+      }
+      if (s.shortRestRef != null && s.shortRestRef > 0) {
+        s.tauS = p.dPrimeTauS * clamp(1 - p.adaptTau * 0.4 * (s.shortRestDose / s.shortRestRef - 1), 0.6, 1.25);
+      }
+      if (weekday === 0 && day >= dataStart) athlete.trajectory.push({ date: iso, dPrimeM: s.dPrimeM, tauS: s.tauS });
+      formToday.set(athlete.id, {
+        perf,
+        shock: s.dayShock,
+        forecast,
+        sleep,
+        sleepBefore: s.sleepYesterday,
+        gym: p.gymDays.includes(weekday) && phase !== "taper" && phase !== "ramp",
+        gymYesterday: s.gymYesterday,
+      });
     }
 
     const isActive = (athlete: SyntheticAthlete) => {
@@ -912,44 +1038,59 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
             sessionsToday.set(athlete.id, sessionIndex);
             const sessionShock = rng.normal(0, p.sessionSd);
             const cs = criticalSpeed(p, day);
+            const s = state.get(athlete.id)!;
             const context =
               (slot.shift === "morning" ? p.morningPct : 0) +
               (sessionIndex > 1 ? p.secondPct : 0) +
-              p.sleepPctPerHour * Math.max(0, 8 - form.sleep) +
-              (form.gym && slot.shift === "afternoon" ? p.gymStrengthPct : 0);
+              p.sleepNight * Math.max(0, 8 - form.sleep) +
+              p.sleepTwoNights * Math.max(0, 8 - form.sleepBefore) +
+              (form.gym && slot.shift === "afternoon" ? p.gymSameDay : 0) +
+              (form.gymYesterday ? p.gymNextDay : 0);
             const timedHere = complete || rng.chance(p.logShare);
             let metersBefore = 0;
             let load = 0;
             for (const block of blocks) {
               const segment = block.segments[0];
               const primary = primaryBlocks.has(block.id);
-              let dBal = p.dPrimeM;
               const innerReps = block.segments.reduce((sum, item) => sum + item.reps, 0);
               for (let round = 1; round <= block.rounds; round += 1) {
+                // The reserve available for this set: today's W′, less what the session's volume has already cost.
+                const wMax = s.dPrimeM * (1 - p.volumeSens * Math.min(1.5, metersBefore / 4000));
+                let dBal = wMax;
+                const set = { key: `${block.id}|${round}`, planned: segment.reps, cliffAt: null as number | null, abandoned: false };
                 for (let item = 0; item < segment.reps; item += 1) {
                   const stroke: Stroke = primary ? p.primaryStroke : segment.stroke && segment.stroke !== "sub" ? segment.stroke : "free";
                   const rep: RepSpec = { distanceM: segment.distanceM, intensity: segment.intensity, fromBlock: segment.fromBlock, gear: segment.gear, stroke };
                   const structural = structuralTime(p, rep, course, day);
-                  const deficit = 1 - clamp(dBal / p.dPrimeM, 0, 1);
-                  const wPenalty = p.dPrimeKappa * deficit ** 2;
+                  const capacity = structural.timeS * (1 - RESPONSIVENESS[rep.intensity] * form.perf);
+                  const deficit = 1 - clamp(dBal / Math.max(1, wMax), 0, 1);
+                  const wPenalty = p.dPrimeKappa * 0.5 * deficit ** 2;
                   const drift = UNTIMED.includes(rep.intensity) ? 0 : structural.relSpeed < 1 ? p.aerobicDrift * item : 0;
                   const loadPenalty = RESPONSIVENESS[rep.intensity] >= 0.85 ? p.loadBeforePerKm * (metersBefore / 1000) : 0;
-                  const systematic =
-                    structural.timeS *
-                    (1 - RESPONSIVENESS[rep.intensity] * form.perf) *
-                    (1 + context) *
-                    (1 + wPenalty + drift + loadPenalty + (item === 0 ? p.firstRepPct : 0));
+                  const intended = capacity * (1 + context) * (1 + wPenalty + drift + loadPenalty + (item === 0 ? p.firstRepPct : 0));
+                  // The cliff: not enough W′ left to hold the intended pace — the rest of the rep is swum at critical speed.
+                  const need = Math.max(0, (rep.distanceM / intended - cs) * intended);
+                  const atCs = (rep.distanceM - Math.max(0, dBal)) / cs;
+                  const cliff = need > dBal && atCs > intended;
+                  const systematic = cliff ? intended + softplus(atCs - intended, 0.25) : intended;
+                  if (cliff && set.cliffAt == null) set.cliffAt = item + 1;
                   const expected = systematic * (1 + RESPONSIVENESS[rep.intensity] * form.shock) * (1 + sessionShock);
                   const dayAhead = systematic * (1 + RESPONSIVENESS[rep.intensity] * form.forecast);
                   const observed = expected * (1 + p.repSd * rng.studentT(p.repDf)) + rng.normal(0, p.timingSd);
                   const swum = Math.max(rep.distanceM * 0.45, observed);
                   const speed = rep.distanceM / swum;
-                  if (speed > cs) dBal -= (speed - cs) * swum;
+                  if (speed > cs) {
+                    dBal -= (speed - cs) * swum;
+                    anaerobicToday.set(athlete.id, (anaerobicToday.get(athlete.id) ?? 0) + (speed - cs) * swum);
+                  }
                   const rest = Math.max(5, segment.sendOffSeconds - swum);
-                  dBal = p.dPrimeM - (p.dPrimeM - dBal) * Math.exp(-rest / p.dPrimeTauS);
+                  if (speed > cs && rest < swum) shortRestToday.set(athlete.id, (shortRestToday.get(athlete.id) ?? 0) + 1);
+                  dBal = wMax - (wMax - dBal) * Math.exp(-rest / s.tauS);
                   metersBefore += rep.distanceM;
                   load += (rep.distanceM * loadPerMeter(structural.relSpeed)) / 1000;
-                  const timed = recorded && timedHere && timedBlocks.has(block.id) && (complete || rng.chance(0.96));
+                  // A broken rep is sometimes not logged (the coach skips a bad time).
+                  const skippedBad = cliff && systematic / intended > 1.06 && rng.chance(0.3);
+                  const timed = recorded && timedHere && timedBlocks.has(block.id) && !skippedBad && (complete || rng.chance(0.96));
                   results.push({
                     athleteId: athlete.id,
                     blockId: block.id,
@@ -960,12 +1101,20 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
                     dayAhead,
                     timed,
                     errorRate: p.errorRate,
+                    capacity,
+                    systematic,
+                    cliff,
+                    set,
                   });
+                  // After a clear break some swimmers stop: the rest of the set is never swum or logged (censored).
+                  if (cliff && systematic / intended > 1.06 && item < segment.reps - 1 && rng.chance(p.abandonShare)) {
+                    set.abandoned = true;
+                    break;
+                  }
                 }
                 if (block.betweenRounds && round < block.rounds) {
                   metersBefore += block.betweenRounds.distanceM;
                   load += (block.betweenRounds.distanceM * loadPerMeter(0.8)) / 1000;
-                  dBal = p.dPrimeM - (p.dPrimeM - dBal) * Math.exp(-90 / p.dPrimeTauS);
                 }
               }
             }
@@ -1010,7 +1159,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
           );
           if (!stored.length) continue;
           workoutCounter += 1;
-          const workoutId = `${SYNTHETIC_PREFIX}wk-${String(workoutCounter).padStart(5, "0")}`;
+          const workoutId = `${prefix}wk-${String(workoutCounter).padStart(5, "0")}`;
           const listed = present.map((athlete) => athlete.id);
           if (!complete) for (const athlete of active) if (!present.includes(athlete) && rng.chance(0.03)) listed.push(athlete.id);
           workouts.push({ id: workoutId, title: `Sintético ${phase}`, date: iso, shift: slot.shift, course, athleteIds: listed, blocks: stored, groups: [group], focus: "" });
@@ -1018,7 +1167,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
           for (const result of results) {
             if (!result.timed) continue;
             logCounter += 1;
-            const logId = `${SYNTHETIC_PREFIX}log-${String(logCounter).padStart(6, "0")}`;
+            const logId = `${prefix}log-${String(logCounter).padStart(6, "0")}`;
             const entry = logged.get(result)!;
             const total = Math.round(entry.value * 100);
             timeLogs.push({
@@ -1035,7 +1184,21 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
               pending: false,
               recordedAt: `${iso}T18:00:00Z`,
             });
-            truth.set(logId, { athleteId: result.athleteId, expectedS: result.expected, dayAheadS: result.dayAhead, loggedS: entry.value, swumS: Math.round(result.swum * 100) / 100, error: entry.error });
+            truth.set(logId, {
+              athleteId: result.athleteId,
+              expectedS: result.expected,
+              dayAheadS: result.dayAhead,
+              loggedS: entry.value,
+              swumS: Math.round(result.swum * 100) / 100,
+              error: entry.error,
+              capacityS: result.capacity,
+              systematicS: result.systematic,
+              cliff: result.cliff,
+              setKey: `${workoutId}|${result.athleteId}|${result.set.key}`,
+              setPlanned: result.set.planned,
+              setCliffAt: result.set.cliffAt,
+              setAbandoned: result.set.abandoned,
+            });
           }
         }
       }
@@ -1052,6 +1215,15 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
       s.feel += Math.min(load, steadyDaily.get(athlete.id)!);
       const form = formToday.get(athlete.id)!;
       if (dailyLoad.has(athlete.id)) s.lastTrainingShock = { day, value: form.shock };
+      s.anaerobicDose = s.anaerobicDose * Math.exp(-1 / 28) + (anaerobicToday.get(athlete.id) ?? 0);
+      s.shortRestDose = s.shortRestDose * Math.exp(-1 / 28) + (shortRestToday.get(athlete.id) ?? 0);
+      // The training the athlete was used to before the data starts is the reference for adaptation.
+      if (day === preSeasonEnd) {
+        s.anaerobicRef = Math.max(1, s.anaerobicDose);
+        s.shortRestRef = Math.max(0.5, s.shortRestDose);
+      }
+      s.gymYesterday = form.gym && dailyLoad.has(athlete.id);
+      s.sleepYesterday = form.sleep;
       if (variant.context === "bem-estar" && inData && sessionsToday.has(athlete.id)) {
         const share = complete ? 1 : Math.min(0.95, athlete.profile.wellnessShare * (form.sleep < 7 ? 1.6 : 1));
         if (rng.chance(share)) {
@@ -1081,5 +1253,6 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
     dataStart: isoOf(dataStart),
     dataEnd: isoOf(dataEnd),
     returns,
+    athleteTypes: new Map(athletes.map((athlete) => [athlete.id, athlete.profile.atypical ? "atípico" : "típico"])),
   };
 }

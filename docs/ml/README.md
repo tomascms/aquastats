@@ -128,6 +128,23 @@ primeiras semanas depois de agosto 1,16–1,30 % vs 1,64–1,87 %. **Curva de ap
 100 %, dígitos trocados 96 %, trocas entre atletas 59 % — muitas vezes tempos quase iguais),
 < 0,35 falsos alarmes por 1000 reps limpas, correção sugerida certa em 91–94 %.
 
+### Gerador 3.0 (atletas heterogéneos, adenda v3)
+
+Linha de base v3 em [`results/baseline-v3.md`](results/baseline-v3.md): o campeão continua a ganhar
+ao modelo atual em todas as células (−0,24 a −0,56 pp), também nos atletas atípicos.
+
+| Fase | Mudança | Veredicto | Efeito principal (horizonte dia, sementes de teste) |
+|---|---|---|---|
+| v3-1 | Fadiga individual com precipício (W′, recuperação τ e perda com o volume por atleta; grelha bayesiana; censura de séries abandonadas) | **Rejeitada** (R1, R3) | Típico −0,083 pp e denso −0,079 pp (significativos); arranque −0,056 e esparso +0,028 (não significativos). Próxima rep pior com poucos dados (+0,14/+0,18 pp) |
+| v3-1 (R7) | A mesma, só nos atletas em que já provou ganhar (IC 90 %) | **Rejeitada** (R1) | Nunca pior em nenhum atleta (0 de 371 com IC > 0), mas o ganho cai para −0,036/−0,045 pp e só em 2 de 4 células |
+| v3-1 (R8) | Probabilidade de a série quebrar | **Rejeitada** | Brier melhor que a taxa da equipa em 2 de 4 células (típico, denso) |
+
+O que aprende ([`results/fase-v3-1-recuperacao.md`](results/fase-v3-1-recuperacao.md)): com ≥ 30
+séries o erro de W′ cai para ~metade do prior (log 0,18–0,23 vs 0,31–0,35) e a ordem dos atletas
+fica certa (Spearman 0,74–0,83); τ recupera-se pior (0,57–0,66); a sensibilidade ao volume **não**
+se recupera (≈ 0). Heterogeneidade real (Q de Cochran p < 0,001): 22 % dos atletas melhoram com
+IC < 0, sobretudo os de W′ pequeno, que quebram muitas vezes.
+
 ## 5. Aprendizagem contínua
 
 ```mermaid
@@ -178,6 +195,9 @@ lento, o caminho de escala é um checkpoint por atleta com hash dos dados de ent
 - **Taper e carga A:C** na página da época são descritivos (parâmetros típicos; a evidência de que
   o ACWR prevê lesões é fraca).
 - **Provas**: o modelo prevê reps de treino; ainda não prevê tempos de prova.
+- **Fadiga dentro da série**: o modelo de precipício individual (v3-1) não passou a regra; o campeão
+  mantém um termo de fadiga linear comum. O "devia" (capacidade) e a sugestão de saída dependem
+  desta peça e ainda não existem.
 
 ## 7. Reproduzir
 

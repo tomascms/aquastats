@@ -4,7 +4,7 @@ import { predictTrainingTargets, type TrainingTarget } from "../training-predict
 import { flattenInner, needsClockTime } from "../set";
 import { hasClockTime } from "../swim-time";
 import type { Athlete, Stroke, TimeLog, Workout } from "../types";
-import { dayNumber, entryLoad, HORIZONS, isPlanned, Z80, type AthleteInfo, type Prediction, type TeamData } from "./backtest";
+import { dayNumber, entryLoad, HORIZONS, isPlanned, plannedSets, Z80, type AthleteInfo, type Prediction, type TeamData } from "./backtest";
 import { calibrated } from "./calibration";
 import { runStateModel, type TeamForecast } from "./forecaster";
 import type { AthleteFilter } from "./state-model";
@@ -112,7 +112,7 @@ export function appTeam(athletes: Athlete[], workouts: Workout[], timeLogs: Time
     const firstObserved = list.find((row) => !isPlanned(row));
     if (firstObserved) first = Math.min(first, dayNumber(firstObserved.date));
   }
-  return { team: { rows, athletes: infos, load, anchorDay: Number.isFinite(first) ? first - 1 : 0 }, planned };
+  return { team: { rows, athletes: infos, load, anchorDay: Number.isFinite(first) ? first - 1 : 0, planned: plannedSets(workouts) }, planned };
 }
 
 /* ---------- The two models ---------- */

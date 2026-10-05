@@ -22,6 +22,8 @@ import {
   runBacktest,
   teamData,
   type BacktestReport,
+  type BreakMetrics,
+  type CapacityMetrics,
   type Dataset,
   type Horizon,
   type Metrics,
@@ -30,6 +32,7 @@ import {
   type Scored,
 } from "../src/lib/ml/backtest";
 import { PREDICTORS } from "../src/lib/ml/registry";
+import { createRng } from "../src/lib/ml/rng";
 import { BASE_SCENARIOS, CONTEXT_LEVELS, DATA_LEVELS, DEFAULT_VARIANT, GENERATOR_VERSION, generateDataset, METERS_LEVELS, SCENARIOS, type ScenarioName, type SyntheticDataset, type Variant } from "../src/lib/ml/synthetic";
 
 const args = process.argv.slice(2);
@@ -118,15 +121,37 @@ function returnBucket(dataset: SyntheticDataset, athleteId: string, date: string
   return null;
 }
 
+/** Mean ± SD across seeds of every numeric field of a metrics object. */
+function aggregateFields<T extends object>(list: (T | null | undefined)[]): Record<string, { mean: number | null; sd: number | null }> | null {
+  const present = list.filter((item): item is T => item != null);
+  if (!present.length) return null;
+  const out: Record<string, { mean: number | null; sd: number | null }> = {};
+  for (const key of Object.keys(present[0])) {
+    const values = present.map((item) => (item as Record<string, unknown>)[key]).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    if (!values.length) {
+      out[key] = { mean: null, sd: null };
+      continue;
+    }
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const sd = values.length > 1 ? Math.sqrt(values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1)) : 0;
+    out[key] = { mean, sd };
+  }
+  return out;
+}
+
 type HorizonResult = {
   overall: Agg;
   overallAll: Agg;
+  byType: Record<string, Agg>;
+  capacity: ReturnType<typeof aggregateFields<CapacityMetrics>>;
+  breaks: ReturnType<typeof aggregateFields<BreakMetrics>>;
   byHistory: Record<string, Agg>;
   byWeeks: Record<string, Agg>;
   byConfidence: Record<string, Agg>;
   byReturn: Record<string, Agg>;
   runtimeMs: number;
   perSeed: Metrics[];
+  breaksPerSeed: (BreakMetrics | null)[];
 };
 
 type CellResult = {
@@ -141,7 +166,7 @@ type CellResult = {
   causality: Record<string, Record<string, number>>;
 };
 
-function collect(reports: BacktestReport[], field: "byHistory" | "byWeeks" | "byConfidence"): Record<string, Agg> {
+function collect(reports: BacktestReport[], field: "byHistory" | "byWeeks" | "byConfidence" | "byType"): Record<string, Agg> {
   const keys = [...new Set(reports.flatMap((report) => Object.keys(report[field])))];
   return Object.fromEntries(keys.map((key) => [key, aggregate(reports.map((report) => report[field][key]))]));
 }
@@ -152,12 +177,14 @@ function prepare(cell: Cell): Prepared[] {
   return cell.seeds.map((seed) => {
     const dataset = generateDataset(cell.scenario, seed, cell.variant);
     const team = teamData(dataset as unknown as Dataset);
+    // The athlete types travel with the dataset so the report can split typical vs atypical.
     return { dataset, team, evalRows: evaluationRows(team, dataset as unknown as Dataset) };
   });
 }
 
-function runCell(cell: Cell, predictors: Predictor[], checkLeaks: boolean): { result: CellResult; scored: Map<string, Map<string, Scored[][]>> } {
+function runCell(cell: Cell, predictors: Predictor[], checkLeaks: boolean): { result: CellResult; scored: Map<string, Map<string, Scored[][]>>; types: Map<string, string>[] } {
   const prepared = prepare(cell);
+  const types = prepared.map((item) => item.dataset.athleteTypes as Map<string, string>);
   const scored = new Map<string, Map<string, Scored[][]>>();
   const result: CellResult = {
     key: cell.key,
@@ -198,18 +225,91 @@ function runCell(cell: Cell, predictors: Predictor[], checkLeaks: boolean): { re
       result.predictors[predictor.name][key] = {
         overall: aggregate(reports.map((report) => report.overall)),
         overallAll: aggregate(reports.map((report) => report.overallAll)),
+        byType: collect(reports, "byType"),
+        capacity: aggregateFields(reports.map((report) => report.capacity)),
+        breaks: aggregateFields(reports.map((report) => report.breaks)),
         byHistory: collect(reports, "byHistory"),
         byWeeks: collect(reports, "byWeeks"),
         byConfidence: collect(reports, "byConfidence"),
         byReturn,
         runtimeMs: reports.reduce((sum, report) => sum + report.runtimeMs, 0) / reports.length,
         perSeed: reports.map((report) => report.overall),
+        breaksPerSeed: reports.map((report) => report.breaks),
       };
       if (checkLeaks && cell.kind !== "matrix") result.causality[predictor.name][key] = checkCausality(predictor, prepared[0].team, horizon).length;
     }
     scored.set(predictor.name, byHorizon);
   }
-  return { result, scored };
+  return { result, scored, types };
+}
+
+/* ---------- R7: heterogeneity across athletes ---------- */
+
+type AthleteEffect = { cell: string; seed: number; athleteId: string; type: string; reps: number; days: number; delta: number; se: number; lo90: number; hi90: number; lo95: number; hi95: number };
+
+/** Per athlete (of each replicate): mean ΔAPE (challenger − champion, pp) over the common clean reps, CI by bootstrap of the days. */
+function athleteEffects(cell: string, seeds: number[], a: Scored[][], b: Scored[][], types: Map<string, string>[]): AthleteEffect[] {
+  const out: AthleteEffect[] = [];
+  a.forEach((run, index) => {
+    const other = new Map(b[index].map((item) => [item.item.row.log.id, item]));
+    const byAthlete = new Map<string, Map<string, number[]>>();
+    for (const item of run) {
+      if (!item.item.clean || !item.pair.prediction) continue;
+      const twin = other.get(item.item.row.log.id);
+      if (!twin?.pair.prediction) continue;
+      const ape = (mean: number) => (Math.abs(mean - item.pair.actual) / item.pair.actual) * 100;
+      const days = byAthlete.get(item.item.athleteId) ?? new Map<string, number[]>();
+      days.set(item.item.row.date, [...(days.get(item.item.row.date) ?? []), ape(twin.pair.prediction.mean) - ape(item.pair.prediction.mean)]);
+      byAthlete.set(item.item.athleteId, days);
+    }
+    for (const [athleteId, days] of byAthlete) {
+      const perDay = [...days.values()];
+      const reps = perDay.reduce((sum, list) => sum + list.length, 0);
+      if (perDay.length < 5) continue;
+      const meanOf = (lists: number[][]) => {
+        let sum = 0;
+        let n = 0;
+        for (const list of lists) {
+          for (const value of list) {
+            sum += value;
+            n += 1;
+          }
+        }
+        return sum / n;
+      };
+      const delta = meanOf(perDay);
+      const rng = createRng(7 + index);
+      const boots: number[] = [];
+      for (let k = 0; k < 2000; k += 1) boots.push(meanOf(perDay.map(() => perDay[Math.floor(rng.uniform(0, perDay.length))])));
+      boots.sort((x, y) => x - y);
+      const q = (p: number) => boots[Math.min(boots.length - 1, Math.floor(p * boots.length))];
+      const bootMean = boots.reduce((sum, value) => sum + value, 0) / boots.length;
+      const se = Math.sqrt(boots.reduce((sum, value) => sum + (value - bootMean) ** 2, 0) / (boots.length - 1));
+      out.push({ cell, seed: seeds[index], athleteId, type: types[index].get(athleteId) ?? "típico", reps, days: perDay.length, delta, se, lo90: q(0.05), hi90: q(0.95), lo95: q(0.025), hi95: q(0.975) });
+    }
+  });
+  return out;
+}
+
+/** Cochran Q over the athletes' effects; p from the chi-square (Wilson–Hilferty approximation). */
+function cochranQ(effects: AthleteEffect[]): { q: number; df: number; p: number } {
+  const usable = effects.filter((effect) => effect.se > 0);
+  const weights = usable.map((effect) => 1 / effect.se ** 2);
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  const pooled = usable.reduce((sum, effect, i) => sum + weights[i] * effect.delta, 0) / total;
+  const q = usable.reduce((sum, effect, i) => sum + weights[i] * (effect.delta - pooled) ** 2, 0);
+  const df = usable.length - 1;
+  if (df < 1) return { q, df, p: Number.NaN };
+  const z = (Math.cbrt(q / df) - (1 - 2 / (9 * df))) / Math.sqrt(2 / (9 * df));
+  return { q, df, p: 1 - normalCdf(z) };
+}
+
+function normalCdf(z: number): number {
+  // Abramowitz–Stegun 7.1.26 (erf).
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * x);
+  const erf = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return z >= 0 ? 0.5 * (1 + erf) : 0.5 * (1 - erf);
 }
 
 /* ---------- Decision rule ---------- */
@@ -217,6 +317,8 @@ function runCell(cell: Cell, predictors: Predictor[], checkLeaks: boolean): { re
 type Verdict = {
   cell: string;
   n: number;
+  /** Mean ΔMAPE on atypical athletes' reps (R6), null when the cell has none. */
+  dAtypical: { mean: number; lo: number; hi: number } | null;
   dMape: { mean: number; lo: number; hi: number };
   dCrps: { mean: number; lo: number; hi: number };
   dCal: { mean: number; lo: number; hi: number };
@@ -224,11 +326,13 @@ type Verdict = {
   mapeB: number;
 };
 
-function verdictOf(cell: string, samples: PairedSample[]): Verdict {
+function verdictOf(cell: string, samples: PairedSample[], atypical: PairedSample[] = []): Verdict {
   const valid = samples.filter((sample) => sample.n > 0);
+  const atypicalValid = atypical.filter((sample) => sample.n > 0);
   return {
     cell,
     n: Math.round(valid.reduce((sum, sample) => sum + sample.n, 0) / Math.max(1, valid.length)),
+    dAtypical: atypicalValid.length ? bootstrapMean(atypicalValid.map((sample) => sample.mapeB - sample.mapeA)) : null,
     dMape: bootstrapMean(valid.map((sample) => sample.mapeB - sample.mapeA)),
     dCrps: bootstrapMean(valid.map((sample) => (sample.crpsA != null && sample.crpsB != null ? sample.crpsB - sample.crpsA : NaN))),
     dCal: bootstrapMean(valid.map((sample) => (sample.calA != null && sample.calB != null ? sample.calB - sample.calA : NaN))),
@@ -243,7 +347,9 @@ function decide(verdicts: Verdict[], leaks: number): { keep: boolean; rules: Rec
   const r3 = verdicts.every((v) => Number.isFinite(v.dCrps.mean) && v.dCrps.mean <= 0);
   const r4 = verdicts.every((v) => Number.isFinite(v.dCal.mean) && v.dCal.mean <= 1);
   const r5 = leaks === 0;
-  return { keep: r1 && r2 && r3 && r4 && r5, rules: { R1: r1, R2: r2, R3: r3, R4: r4, R5: r5 } };
+  const atypical = verdicts.filter((v) => v.dAtypical != null);
+  const r6 = !atypical.length || atypical.reduce((sum, v) => sum + v.dAtypical!.mean, 0) / atypical.length <= 0.1;
+  return { keep: r1 && r2 && r3 && r4 && r5 && r6, rules: { R1: r1, R2: r2, R3: r3, R4: r4, R5: r5, R6: r6 } };
 }
 
 /* ---------- Markdown ---------- */
@@ -269,7 +375,7 @@ function cellMarkdown(result: CellResult, detail: boolean): string[] {
   }
   lines.push("");
   if (!detail) return lines;
-  const bucketTable = (title: string, field: "byHistory" | "byWeeks" | "byReturn", order: string[]) => {
+  const bucketTable = (title: string, field: "byHistory" | "byWeeks" | "byReturn" | "byType", order: string[]) => {
     const present = order.filter((key) => names.some((name) => result.predictors[name].day?.[field]?.[key]));
     if (!present.length) return;
     lines.push(`${title} (horizonte dia; MAPE · reps previstas · cobertura a 80 %):`, "", `| Preditor | ${present.join(" | ")} |`, `|---|${present.map(() => "---").join("|")}|`);
@@ -283,6 +389,25 @@ function cellMarkdown(result: CellResult, detail: boolean): string[] {
     }
     lines.push("");
   };
+  const capRows = names.filter((name) => result.predictors[name].day?.capacity);
+  if (capRows.length) {
+    lines.push('"Devia fazer" (capacidade) e custo das condições, horizonte dia:', "", "| Preditor | MAPE vs verdade | Viés | Cob. 80 % vs verdade | Interval score | MAPE em reps de referência | Cob. 80 % em referência | Erro do custo (pp) |", "|---|---|---|---|---|---|---|---|");
+    for (const name of capRows) {
+      const c = result.predictors[name].day.capacity!;
+      lines.push(`| ${name} | ${fmt(c.mapePct.mean)}% | ${fmt(c.biasPct.mean)}% | ${pct(c.coverage80.mean)} | ${c.intervalScorePct.mean == null ? "—" : `${fmt(c.intervalScorePct.mean)}%`} | ${fmt(c.mapeRefPct.mean)}% (n≈${fmt(c.nRef.mean, 0)}) | ${pct(c.coverage80Ref.mean)} | ${fmt(c.costMaePp.mean)} |`);
+    }
+    lines.push("");
+  }
+  const breakRows = names.filter((name) => result.predictors[name].day?.breaks);
+  if (breakRows.length) {
+    lines.push("Quebra de série (séries com ≥ 3 reps registadas, definição operacional), horizonte dia:", "", "| Preditor | Séries | Taxa de quebra | Brier | Brier referência | Log loss | Log loss referência | Erro na rep da quebra |", "|---|---|---|---|---|---|---|---|");
+    for (const name of breakRows) {
+      const b = result.predictors[name].day.breaks!;
+      lines.push(`| ${name} | ${fmt(b.sets.mean, 0)} | ${pct(b.breakRate.mean)} | ${fmt(b.brier.mean, 4)} | ${fmt(b.brierBase.mean, 4)} | ${fmt(b.logLoss.mean, 3)} | ${fmt(b.logLossBase.mean, 3)} | ${fmt(b.repMae.mean)} |`);
+    }
+    lines.push("");
+  }
+  bucketTable("Por tipo de atleta", "byType", ["típico", "atípico"]);
   bucketTable("Por reps anteriores do mesmo grupo", "byHistory", ["0", "1", "2–3", "4–7", "8–15", "16–31", "32+"]);
   bucketTable("Erro ao longo do tempo (semanas de histórico do atleta)", "byWeeks", ["sem 0–1", "sem 2–3", "sem 4–7", "sem 8–15", "sem 16–51", "ano 2", "ano 3+"]);
   bucketTable("Depois do regresso de agosto", "byReturn", [...RETURN_BUCKETS]);
@@ -374,27 +499,79 @@ function main() {
     const secondary: { cell: string; horizon: string; verdict: Verdict }[] = [];
     const results: CellResult[] = [];
     let leaks = 0;
+    const prepared = new Map<string, Map<string, string>[]>();
+    const effects: AthleteEffect[] = [];
+    const breakRows: { cell: string; rate: number; dBrier: { mean: number; lo: number; hi: number }; dLogLoss: { mean: number; lo: number; hi: number } }[] = [];
     for (const cell of cells) {
       const started = Date.now();
-      const { result, scored } = runCell(cell, [champion, challenger], cell.kind !== "matrix");
+      const { result, scored, types } = runCell(cell, [champion, challenger], cell.kind !== "matrix");
+      prepared.set(cell.key, types);
       results.push(result);
       leaks += Object.values(result.causality[challenger.name] ?? {}).reduce((sum, value) => sum + value, 0);
       for (const horizon of cell.horizons) {
         const a = scored.get(champion.name)!.get(horizon)!;
         const b = scored.get(challenger.name)!.get(horizon)!;
-        const verdict = verdictOf(cell.key, a.map((run, index) => pairedSample(run, b[index])));
-        if (cell.kind === "decision" && horizon === "day") verdicts.push(verdict);
-        else secondary.push({ cell: cell.key, horizon, verdict });
+        const types = prepared.get(cell.key)!;
+        const onlyAtypical = (runs: Scored[][]) => runs.map((run, index) => run.filter((item) => types[index].get(item.item.athleteId) === "atípico"));
+        const atypicalA = onlyAtypical(a);
+        const atypicalB = onlyAtypical(b);
+        const verdict = verdictOf(
+          cell.key,
+          a.map((run, index) => pairedSample(run, b[index])),
+          atypicalA.map((run, index) => pairedSample(run, atypicalB[index])),
+        );
+        if (cell.kind === "decision" && horizon === "day") {
+          verdicts.push(verdict);
+          effects.push(...athleteEffects(cell.key, cell.seeds, a, b, types));
+          const perSeed = result.predictors[challenger.name].day?.breaksPerSeed ?? [];
+          const present = perSeed.filter((item): item is BreakMetrics => item != null);
+          if (present.length) {
+            breakRows.push({
+              cell: cell.key,
+              rate: present.reduce((sum, item) => sum + item.breakRate, 0) / present.length,
+              dBrier: bootstrapMean(present.map((item) => item.brier - item.brierBase)),
+              dLogLoss: bootstrapMean(present.map((item) => item.logLoss - item.logLossBase)),
+            });
+          }
+        } else secondary.push({ cell: cell.key, horizon, verdict });
       }
       console.error(`${cell.key}: ${((Date.now() - started) / 1000).toFixed(1)} s`);
     }
     const decision = decide(verdicts, leaks);
     const lines = [`# ${challenger.name} vs ${champion.name} (${seedSet === "test" ? "sementes de teste" : "sementes de ajuste"}, gerador ${GENERATOR_VERSION})`, ""];
     lines.push("Células de decisão, horizonte dia, nas mesmas reps (Δ = desafiante − campeão; IC 95 % bootstrap das sementes):", "");
-    lines.push("| Célula | Reps comuns | MAPE campeão | MAPE desafiante | ΔMAPE (pp) | ΔCRPS (pp) | Δ erro calibração 80 % (pp) |", "|---|---|---|---|---|---|---|");
+    lines.push("| Célula | Reps comuns | MAPE campeão | MAPE desafiante | ΔMAPE (pp) | ΔCRPS (pp) | Δ erro calibração 80 % (pp) | ΔMAPE atípicos (pp) |", "|---|---|---|---|---|---|---|---|");
     const ci = (v: { mean: number; lo: number; hi: number }) => `${fmt(v.mean, 3)} [${fmt(v.lo, 3)}; ${fmt(v.hi, 3)}]`;
-    for (const v of verdicts) lines.push(`| ${v.cell} | ${v.n} | ${fmt(v.mapeA)}% | ${fmt(v.mapeB)}% | ${ci(v.dMape)} | ${ci(v.dCrps)} | ${ci(v.dCal)} |`);
+    for (const v of verdicts) lines.push(`| ${v.cell} | ${v.n} | ${fmt(v.mapeA)}% | ${fmt(v.mapeB)}% | ${ci(v.dMape)} | ${ci(v.dCrps)} | ${ci(v.dCal)} | ${v.dAtypical ? ci(v.dAtypical) : "—"} |`);
     lines.push("", `Regras: ${Object.entries(decision.rules).map(([rule, ok]) => `${rule} ${ok ? "✓" : "✗"}`).join(" · ")} (fuga: ${leaks}).`, "", `**Veredicto: ${decision.keep ? "MANTER" : "NÃO MANTER"}**`, "");
+    if (breakRows.length) {
+      const ci4 = (v: { mean: number; lo: number; hi: number }) => `${fmt(v.mean, 4)} [${fmt(v.lo, 4)}; ${fmt(v.hi, 4)}]`;
+      lines.push("Probabilidade de quebra do desafiante vs taxa de quebra da equipa até à véspera (R8; Δ = modelo − referência, IC 95 % bootstrap das sementes):", "", "| Célula | Taxa de quebra | ΔBrier | ΔLog loss |", "|---|---|---|---|");
+      for (const row of breakRows) lines.push(`| ${row.cell} | ${pct(row.rate)} | ${ci4(row.dBrier)} | ${ci4(row.dLogLoss)} |`);
+      const wins = breakRows.filter((row) => row.dBrier.hi < 0).length;
+      lines.push("", `R8 (quebra): Brier com IC < 0 em ${wins} de ${breakRows.length} células → ${wins >= 3 ? "✓" : "✗"}.`, "");
+    }
+    if (effects.length) {
+      const { q, df, p } = cochranQ(effects);
+      const better = effects.filter((effect) => effect.hi95 < 0).length;
+      const worse = effects.filter((effect) => effect.lo95 > 0).length;
+      const share = (n: number) => `${((n / effects.length) * 100).toFixed(0)} %`;
+      lines.push(
+        "Heterogeneidade entre atletas (R7; cada atleta de cada réplica, ΔMAPE com IC por bootstrap dos dias):",
+        "",
+        `Q de Cochran = ${fmt(q, 1)} (gl ${df}), p ${p < 0.001 ? "< 0,001" : `= ${fmt(p, 3)}`}. Melhoram com IC 95 % < 0: ${better} de ${effects.length} (${share(better)}); pioram com IC > 0: ${worse} (${share(worse)}).`,
+        "",
+        "| Tipo | Atletas | Δ mediano (pp) | Melhoram (IC < 0) | Pioram (IC > 0) |",
+        "|---|---|---|---|---|",
+      );
+      for (const type of ["típico", "atípico"]) {
+        const list = effects.filter((effect) => effect.type === type);
+        if (!list.length) continue;
+        const sorted = list.map((effect) => effect.delta).sort((x, y) => x - y);
+        lines.push(`| ${type} | ${list.length} | ${fmt(sorted[Math.floor(sorted.length / 2)], 3)} | ${list.filter((effect) => effect.hi95 < 0).length} | ${list.filter((effect) => effect.lo95 > 0).length} |`);
+      }
+      lines.push("", `Critério da R7 para avaliar uma versão por atleta: p < 0,05 e ≥ 20 % a melhorar → ${p < 0.05 && better / effects.length >= 0.2 ? "cumpre" : "não cumpre"}.`, "");
+    }
     if (secondary.length) {
       lines.push("Outras células e horizontes (relatados, não decidem):", "", "| Célula | Horizonte | Reps comuns | MAPE campeão | MAPE desafiante | ΔMAPE (pp) | ΔCRPS (pp) |", "|---|---|---|---|---|---|---|");
       for (const { cell, horizon, verdict } of secondary) {
@@ -410,7 +587,7 @@ function main() {
       const dir = join(repoRoot(), "docs", "ml", "results");
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, `${save}.md`), md);
-      writeFileSync(join(dir, `${save}.json`), JSON.stringify({ kind: "synthetic", generator: GENERATOR_VERSION, seedSet, champion: champion.name, challenger: challenger.name, decision, verdicts, secondary, results: slim(results) }));
+      writeFileSync(join(dir, `${save}.json`), JSON.stringify({ kind: "synthetic", generator: GENERATOR_VERSION, seedSet, champion: champion.name, challenger: challenger.name, decision, verdicts, secondary, breaks: breakRows, athleteEffects: effects, results: slim(results) }));
       console.error(`Saved docs/ml/results/${save}.{json,md}`);
     }
     return;

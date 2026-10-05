@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { TrainingRep } from "../training-context";
+import { isPlausibleRep, type TrainingRep } from "../training-context";
 import type { Athlete, TimeLog } from "../types";
 import { attribute } from "./attribution";
 import { checkCausality, dayNumber, HORIZONS, isPlanned, teamData, type TeamData } from "./backtest";
@@ -25,13 +25,13 @@ const withRows = (base: TeamData, edit: (list: TrainingRep[]) => TrainingRep[]):
 };
 const forecastsAfter = (data: TeamData, from: string, excluded = new Set<string>()) => {
   const out = runStateModel(data, HORIZONS.day, DEFAULT_OPTIONS, excluded);
-  return rows.filter((row) => row.date > from).map((row) => out.get(row.log.id)!.meanS);
+  return rows.filter((row) => row.date > from && isPlausibleRep(row)).map((row) => out.get(row.log.id)!.meanS);
 };
 const maxRelChange = (a: number[], b: number[]) => Math.max(...a.map((value, i) => Math.abs(b[i] / value - 1)));
 
 describe("online learning: robustness", () => {
   it("a +1 minute typo barely moves later predictions, even before the quality filter removes it", () => {
-    const target = rows.find((row) => row.date === middle && row.distanceM <= 100)!;
+    const target = rows.find((row) => row.date === middle && row.distanceM <= 100 && isPlausibleRep(row))!;
     const typo = withRows(team, (list) => list.map((row) => (row === target ? { ...row, timeS: row.timeS + 60 } : row)));
     const clean = forecastsAfter(team, middle);
     assert.ok(maxRelChange(clean, forecastsAfter(typo, middle)) < 0.01, "Huber weights keep a gross error from contaminating the state");
@@ -41,7 +41,7 @@ describe("online learning: robustness", () => {
 
   it("one strange day does not make the model overfit to it", () => {
     const strange = withRows(team, (list) => list.map((row) => (row.date === middle ? { ...row, timeS: row.timeS * 1.04 } : row)));
-    const next = rows.find((row) => row.date > middle)!;
+    const next = rows.find((row) => row.date > middle && isPlausibleRep(row))!;
     const base = runStateModel(team, HORIZONS.day).get(next.log.id)!.meanS;
     const after = runStateModel(strange, HORIZONS.day).get(next.log.id)!.meanS;
     assert.ok(after / base - 1 < 0.02, `next day moved ${((after / base - 1) * 100).toFixed(2)} % after a +4 % day`);
