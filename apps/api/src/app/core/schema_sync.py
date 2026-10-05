@@ -164,7 +164,8 @@ create index if not exists password_reset_tokens_user_idx on password_reset_toke
 
 
 def _run_ddl(ddl: str) -> None:
-    if engine is None or get_settings().is_production:
+    settings = get_settings()
+    if engine is None or settings.is_production or settings.database_is_production:
         return
     with engine.begin() as conn:
         for statement in [part.strip() for part in ddl.split(";") if part.strip()]:

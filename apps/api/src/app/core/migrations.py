@@ -33,7 +33,8 @@ def _applied(conn) -> set[str]:
 def run_migrations() -> None:
     if engine is None:
         return
-    if get_settings().is_production:
+    settings = get_settings()
+    if settings.is_production or settings.database_is_production:
         return
     if not _MIGRATIONS_DIR.is_dir():
         return

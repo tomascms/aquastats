@@ -199,13 +199,13 @@ class RetryPolicy:
     def _calculate_delay(self, attempt: int) -> float:
         """Calculate delay with exponential backoff."""
         delay = self.initial_delay * (self.exponential_base ** attempt)
-        delay = min(delay, self.max_delay)
 
         if self.jitter:
             # Add random jitter to prevent thundering herd
             delay += random.uniform(0, delay * 0.1)
 
-        return delay
+        # The cap comes last: jitter must never push a wait past max_delay.
+        return min(delay, self.max_delay)
 
 
 class BulkheadPolicy:
