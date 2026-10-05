@@ -8,6 +8,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
+from ..core.client import stored_ip
 from ..core.passwords import clean_text
 from .models import (
     Athlete,
@@ -83,7 +84,7 @@ def _audit(session: Session, payload: dict, action: str, resource_type: str, res
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
-            ip_address=request.client.host if request.client else None,
+            ip_address=stored_ip(request),
             user_agent=(request.headers.get("user-agent") or "")[:300],
             request_id=getattr(request.state, "request_id", None),
             created_at=_now(),

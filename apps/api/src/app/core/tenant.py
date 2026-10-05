@@ -79,5 +79,5 @@ def require_member(request: Request, session: Session = Depends(get_session)) ->
         select(Athlete).where(Athlete.user_id == user.id, Athlete.team_id == team.id, Athlete.deleted_at.is_(None))
     )
     payload["athlete_uuid"] = athlete.id if athlete else None
-    set_tenant_context(session, team_id=team.id, user_id=user.id, role="swimmer")
+    set_tenant_context(session, team_id=team.id, user_id=user.id, role="swimmer", athlete_id=athlete.id if athlete else None)
     return payload

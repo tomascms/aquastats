@@ -17,7 +17,7 @@ from .core.db import engine
 from .core.migrations import run_migrations
 from .core.observability import init_observability
 from .core.schema_sync import ensure_analysis_schema, ensure_auth_schema
-from .core.startup import validate_settings
+from .core.startup import validate_settings, verify_database_role
 from .core.http_security import (
     BodySizeLimitMiddleware,
     CsrfOriginMiddleware,
@@ -35,6 +35,7 @@ from .routes.integration_routes import router as integration_router
 init_observability()
 settings = get_settings()
 validate_settings(settings)
+verify_database_role(engine, settings)
 ensure_auth_schema()
 ensure_analysis_schema()
 run_migrations()

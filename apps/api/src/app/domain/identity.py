@@ -9,6 +9,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
+from ..core.client import stored_ip
 from ..core.config import get_settings
 from ..core.sessions import issue_refresh, set_auth_cookies, sign_access
 from .models import (
@@ -263,7 +264,7 @@ def join_team(session: Session, user: User, code: str, request: Request) -> str:
             action="team.join",
             resource_type="team",
             resource_id=team.id,
-            ip_address=request.client.host if request.client else None,
+            ip_address=stored_ip(request),
             request_id=getattr(request.state, "request_id", None),
             created_at=stamp,
         )
@@ -304,7 +305,7 @@ def leave_team(session: Session, user: User, request: Request, purge: bool = Fal
             action="team.leave",
             resource_type="team",
             resource_id=member.team_id,
-            ip_address=request.client.host if request.client else None,
+            ip_address=stored_ip(request),
             request_id=getattr(request.state, "request_id", None),
             created_at=stamp,
         )
@@ -525,7 +526,7 @@ def provision_role(
             action="auth.choose_role",
             resource_type="user",
             resource_id=user.id,
-            ip_address=request.client.host if request.client else None,
+            ip_address=stored_ip(request),
             request_id=getattr(request.state, "request_id", None),
             created_at=stamp,
         )
