@@ -20,3 +20,11 @@ export const V1_OPTIONS: StateModelOptions = {
 };
 
 export const V1_CALIBRATION: CalibrationOptions = { scale: "model", tails: 4 };
+
+/*
+ * Year-ahead forecasts only (user decision, 2026-10-05): the seasonal anchors of phase 6 — "same time
+ * last year, adjusted for growth" and the usual summer break foreseen — help a year ahead (3.36 % →
+ * 2.63 %) but not a month ahead, so they apply to forecasts ≥ 300 days ahead, in shadow, behind the
+ * ML_YEAR_ANCHORS switch (/api/ml-config). Never used for the day horizon the app shows.
+ */
+export const V1_YEAR_OPTIONS: StateModelOptions = { ...V1_OPTIONS, seasonal: true, seasonalAnchorYear: 0.8 };

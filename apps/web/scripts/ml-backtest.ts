@@ -60,12 +60,13 @@ function seedsFor(seedSet: SeedSet, kind: Cell["kind"]): number[] {
 
 function protocolCells(seedSet: SeedSet, which: string): Cell[] {
   const cells: Cell[] = [];
-  if (which === "decision" || which === "all") {
+  const kinds = which === "all" ? ["decision", "regime", "matrix"] : which.split(",");
+  if (kinds.includes("decision")) {
     for (const scenario of BASE_SCENARIOS) {
       cells.push({ key: `${scenario} · ${variantKey(DEFAULT_VARIANT)}`, scenario, variant: DEFAULT_VARIANT, seeds: seedsFor(seedSet, "decision"), horizons: ["rep", "day", "semana", "mes"], kind: "decision" });
     }
   }
-  if (which === "regime" || which === "all") {
+  if (kinds.includes("regime")) {
     for (const scenario of ["multiano", "regresso-curta", "regresso-longa", "regresso-tardia"] as ScenarioName[]) {
       cells.push({
         key: `${scenario} · ${variantKey(DEFAULT_VARIANT)}`,
@@ -77,7 +78,7 @@ function protocolCells(seedSet: SeedSet, which: string): Cell[] {
       });
     }
   }
-  if (which === "matrix" || which === "all") {
+  if (kinds.includes("matrix")) {
     for (const scenario of BASE_SCENARIOS) {
       for (const data of DATA_LEVELS) {
         for (const meters of METERS_LEVELS) {
@@ -670,6 +671,36 @@ function main() {
       ...parity.map((row) => `| ${row.dimension} | ${row.value} | ${row.n} | ${fmt(row.mapeA)}% | ${fmt(row.mapeB)}% | ${fmt(row.mapeB - row.mapeA, 3)} | ${row.calA == null || row.calB == null ? "—" : fmt(row.calB - row.calA, 1)} |`),
       "",
     );
+    if (seedSet === "confirm") {
+      // Pre-registered confirmation (docs/ml/experiments.md §2.4), used once on the frozen model.
+      const pooled = bootstrapMean(pooledDeltas(decisionSamples, "mape"));
+      const coverageOf = (name: string, cell: string) => results.find((item) => item.key === cell)?.predictors[name]?.[decideOn]?.overall.coverage80.mean ?? null;
+      const c3 = verdicts.every((v) => {
+        const b = coverageOf(challenger.name, v.cell);
+        const a = coverageOf(champion.name, v.cell);
+        return b != null && ((b >= 0.77 && b <= 0.83) || (a != null && Math.abs(b - 0.8) <= Math.abs(a - 0.8)));
+      });
+      const confirm = {
+        C1: pooled.hi < 0,
+        C2: verdicts.every((v) => Number.isFinite(v.dCrps.mean) && v.dCrps.mean <= 0),
+        C3: c3,
+        C4: verdicts.every((v) => v.dMape.mean <= 0.05),
+        C5: leaks === 0,
+      };
+      lines.push(
+        "## Confirmação (pré-registada, uma única vez)",
+        "",
+        `C1 — ΔMAPE agregado ${fmt(pooled.mean, 3)} [${fmt(pooled.lo, 3)}; ${fmt(pooled.hi, 3)}] pp (IC 95 %) → ${confirm.C1 ? "✓" : "✗"}`,
+        `C2 — ΔCRPS ≤ 0 em todas as células → ${confirm.C2 ? "✓" : "✗"}`,
+        `C3 — cobertura a 80 % entre 77 % e 83 % (ou não pior que a do campeão): ${verdicts.map((v) => `${v.cell.split(" ·")[0]} ${pct(coverageOf(challenger.name, v.cell))} (campeão ${pct(coverageOf(champion.name, v.cell))})`).join(", ")} → ${confirm.C3 ? "✓" : "✗"}`,
+        `C4 — nenhuma célula pior que +0,05 pp → ${confirm.C4 ? "✓" : "✗"}`,
+        `C5 — fugas: ${leaks} → ${confirm.C5 ? "✓" : "✗"}`,
+        "C6 — dados reais (só leitura): avaliado à parte.",
+        "",
+        `**Confirmação: ${Object.values(confirm).every(Boolean) ? "PASSA" : "NÃO PASSA"} (C1–C5).**`,
+        "",
+      );
+    }
     if (breakRows.length) {
       const ci4 = (v: { mean: number; lo: number; hi: number }) => `${fmt(v.mean, 4)} [${fmt(v.lo, 4)}; ${fmt(v.hi, 4)}]`;
       lines.push("Probabilidade de quebra do desafiante vs taxa de quebra da equipa até à véspera (R8; Δ = modelo − referência, IC 95 % bootstrap das sementes):", "", "| Célula | Taxa de quebra | ΔBrier | ΔLog loss |", "|---|---|---|---|");

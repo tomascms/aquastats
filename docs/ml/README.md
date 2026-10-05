@@ -1,149 +1,184 @@
-# ML card — previsão de treino da Aquastats
+# ML card — previsão de treino e de provas da Aquastats (v1.0)
 
-> **Resumo (EN).** A hierarchical state-space model that predicts every timed training rep of a
-> swimmer (and how sure it is) from hand-entered data with gaps and typos. Physiology-based priors
-> (Riegel / critical speed, 25↔50 m turns, strokes, gear, in-set fatigue, growth by age) are shrunk
-> towards the team and corrected online by a robust Kalman filter with multi-scale form (session,
-> day, level, return-from-break deficit). Intervals are calibrated with adaptive conformal
-> prediction. Validated with a pre-registered chronological backtest on a physiology-based
-> synthetic generator (8 scenarios × variants, 5 horizons, tuning/test seed split, paired
-> bootstrap, leakage tests). On the same reps, day-ahead error drops from 1.65–1.89 % (current
-> model) to 1.25–1.39 % (−0.27 to −0.62 pp, 95 % CI below zero in every scenario), 80 % intervals
-> become calibrated (coverage error −6 to −25 pp), and 100 % of reps get a prediction (vs 21–77 %). A closed learning loop (append-only prediction ledger, reconciliation, error
-> attribution, monitoring, champion/challenger in shadow mode) is built in; real-data results are
-> pending because the production database has no logged times yet.
+> **Summary (EN).** A hierarchical state-space model that predicts every timed training rep of a
+> swimmer — and race times — with calibrated uncertainty, from hand-entered data with gaps and
+> typos. Physiology-based priors (critical speed / Riegel, strokes and the athlete's main stroke,
+> gear, turns, growth by age) are shrunk towards the team and corrected online by a robust Kalman
+> filter with multi-scale form (session, day, level, return-from-break deficit); each athlete also
+> has a Bayesian in-set fatigue profile (anaerobic reserve W′ and its recovery, with a "cliff"), and
+> race results are observations of the same engine. Intervals: adaptive conformal prediction with
+> Student-t tails. Developed under a pre-registered protocol on a physiology-based synthetic
+> generator (tuning / development / single-use confirmation seeds, paired bootstrap, Bonferroni
+> over a 15-experiment budget, leakage and property tests, stopping rule). **Validated on synthetic
+> data only**: the production database has no logged times yet. A closed learning loop
+> (append-only prediction ledger, reconciliation, error attribution, health alerts,
+> champion/challenger in shadow with a runtime kill switch) is in place to judge it on real data.
+
+| | |
+|---|---|
+| Versão | **v1.0** (congelada: `apps/web/src/lib/ml/v1.ts`; teste "golden" `v1.test.ts`) |
+| Estado na app | **Desafiante em sombra**: grava previsões, não é mostrado. O treinador continua a ver o modelo atual |
+| Validação | Só dados **sintéticos** (gerador 3.0). Base de produção: 0 tempos (2026-10-05) |
+| Registo de tentativas | [`experiments.md`](experiments.md) (todas, incluindo falhadas) |
+| Protocolo | [`protocolo.md`](protocolo.md) (pré-registado, com adendas datadas antes dos resultados) |
+| Monitorização | [`monitorizacao.md`](monitorizacao.md) · Dados que faltam: [`dados-necessarios.md`](dados-necessarios.md) · Correr: [`harness.md`](harness.md) |
 
 ## 1. O que faz
 
-Para cada repetição cronometrada (planeada ou já nadada) o modelo diz **quanto deve demorar**, um
-**intervalo a 80 %**, uma **confiança** e os **2–3 fatores** que mais pesam (forma recente,
-regresso de uma paragem, efeito do dia, cansaço na série, série nunca cronometrada). Aparece no
-painel de treino (Análise › Treino), no novo painel **Histórico de acerto** e na página do treino
-(**O que cronometrar**).
+Para cada repetição cronometrada (planeada ou já nadada): **quanto deve demorar**, um **intervalo a
+80 %**, uma **confiança** e os **2–3 fatores** que mais pesam (forma recente, regresso de uma
+paragem, efeito do dia, cansaço na série, série nunca cronometrada). Para cada prova: o **tempo
+esperado** na véspera ou semanas antes, com intervalo. Internamente também estima, por atleta, a
+reserva anaeróbia W′ e a sua recuperação, e a probabilidade de uma série "quebrar" — estas duas
+**não** aparecem na interface (validadas só em sintético; decisão do utilizador).
 
-Restrições do domínio que guiaram o desenho:
-
-- Tudo entra à mão por formulários: **faltam dados** (séries não cronometradas, sessões não
-  registadas, bem-estar esporádico) e há **erros de digitação** (+1 min, dígitos trocados, parcial,
-  tempos trocados entre atletas). A falta é informativa: cronometra-se mais o ritmo de prova.
-- **Sazonalidade**: férias de agosto, regresso progressivo em setembro, atletas que voltam tarde.
-- **Vários anos** e atletas em crescimento (juvenis/juniores).
+Não faz diagnóstico nem recomendações médicas: estima desempenho e carga.
 
 ## 2. Modelo
 
 ```mermaid
 flowchart LR
   A[Treinos e tempos<br/>introduzidos no site] --> Q[Qualidade de dados<br/>tempos suspeitos]
+  R[Resultados de provas<br/>e recordes com data] --> K
   Q -->|não aprende com suspeitos| K[Filtro de Kalman robusto<br/>por atleta]
-  P[Priors fisiológicos<br/>idade, sexo, Riegel, zonas,<br/>estilos, material, viragens] --> K
+  P[Priors fisiológicos<br/>idade, sexo, Riegel, zonas,<br/>estilos, estilo principal,<br/>material, viragens] --> K
   T[Estimativa da equipa<br/>shrinkage] --> K
-  K --> F[Previsão log-normal]
-  F --> C[Conformal adaptativo<br/>intervalo 80 %]
+  W[Perfil de fadiga por atleta<br/>W′, recuperação τ, precipício] --> K
+  K --> F[Previsão]
+  F --> C[Conformal adaptativo<br/>intervalo 80 %, caudas t]
   C --> O[Estimativa + intervalo +<br/>confiança + fatores]
+  K --> RP[Tempo de prova<br/>com intervalo]
 ```
 
 **Observação** (log-tempo de uma rep):
 
 ```
-log t = estrutura(rep; β_atleta) + r(intensidade)·(L + e + R) + s + ε
+log t = estrutura(rep; β_atleta) + r(intensidade)·(L + e + R) + s + fadiga(série; W′, τ) + ε
 ```
 
 - **Estrutura** — motor do atleta (100 m livres, piscina de 50, partida da água; prior por idade e
-  sexo), expoente de Riegel, zonas (SUAVE…PA) como frações da velocidade crítica, ritmo de prova,
-  estilos, material, viragens em piscina de 25, partida do bloco, fadiga dentro da série (posição ×
-  descanso) e 1.ª rep. Cada fator começa na **estimativa da equipa** quando os colegas já o
-  mostraram, senão no prior fisiológico — por isso uma série nova tem estimativa desde a 1.ª vez.
-- **Forma multi-escala** — `s` sessão (reinicia a cada sessão), `e` dia (AR(1)), `L` nível
-  (passeio aleatório com a deriva de crescimento esperada para a idade), `ν` tendência própria,
-  `R` défice de regresso: depois de uma paragem salta `γ·h(dias)` (γ aprendido com o atleta e os
-  colegas) e desaparece com a **carga treinada** registada — a rampa de setembro recupera-o aos
-  poucos. `r(intensidade)`: a forma vê-se mais nas reps fortes do que nas aeróbias.
-- **Aprendizagem online** — filtro de Kalman com pesos de Huber (um erro grosseiro mal mexe no
-  estado), nível de ruído adaptativo, detetor CUSUM de mudança de regime (acelera a aprendizagem
-  quando os erros insistem no mesmo sentido). Custo O(reps · 40²): anos de dados num passe.
-- **Intervalos** — conformal adaptativo (Gibbs & Candès 2021) com erros normalizados pela
-  incerteza do próprio modelo, estratificados pela quantidade de histórico e com um multiplicador
-  por atleta separado para séries novas e conhecidas. A **confiança** vem da largura resultante.
-- **Qualidade de dados** — um tempo é suspeito quando discorda das outras reps da mesma série (ou,
-  sozinho, do histórico do atleta) muito para além do normal; o padrão de digitação que melhor o
-  explica dá a sugestão de correção. Nada é apagado: só não entra no que o modelo aprende.
+  sexo), expoente de Riegel, zonas como frações da velocidade crítica, ritmo de prova, estilos (com
+  uma vantagem do **estilo principal** aprendida da equipa, E2), material, viragens em piscina de
+  25, partida do bloco, 1.ª rep. Cada fator começa na estimativa da equipa (ou no prior fisiológico).
+- **Provas como observações** (E3) — cada resultado é um esforço máximo da partida, com um fator
+  "prova" aprendido da equipa: informa o motor do atleta e as reps de ritmo de prova.
+- **Forma multi-escala** — `s` sessão, `e` dia (AR(1)), `L` nível (com o crescimento esperado
+  para a idade), `ν` tendência, `R` défice de regresso que salta depois de uma paragem e desaparece
+  com a carga treinada.
+- **Fadiga dentro da série** (E12) — por atleta, uma posterior sobre (W′, τ) numa grelha: cada
+  série é simulada (reserva gasta acima da velocidade crítica, recuperada no descanso); quando a
+  reserva acaba a rep "cai do precipício". Aprende só com a **forma** de cada série; séries
+  abandonadas contam como censuradas; cada dimensão evolui à sua velocidade. Monótona por
+  construção: mais descanso ou menos reps nunca tornam uma série mais difícil. A sensibilidade ao
+  volume foi retirada (não se aprende dos dados).
+- **Aprendizagem online** — Kalman com pesos de Huber, ruído adaptativo, CUSUM de mudança de regime.
+- **Intervalos** — conformal adaptativo (Gibbs & Candès 2021) normalizado pela incerteza do modelo,
+  por quantidade de histórico, com multiplicador por atleta; distribuição Student-t (ν = 4, E6).
+- **Qualidade de dados** — tempos que discordam da série ou do histórico muito além do normal
+  são suspeitos (com o padrão de digitação provável como sugestão); não entram na aprendizagem.
 
-Código: `apps/web/src/lib/ml/` (`state-model.ts`, `forecaster.ts`, `quality.ts`,
-`calibration.ts`, `production.ts`).
+Código: `apps/web/src/lib/ml/` — `state-model.ts`, `forecaster.ts`, `fatigue.ts`, `races.ts`,
+`quality.ts`, `calibration.ts`, `pipeline.ts`, `production.ts`, `v1.ts`.
 
-## 3. Validação
+## 3. Protocolo
 
-Protocolo **pré-registado** em [`protocolo.md`](protocolo.md) (fixado antes dos resultados; uma
-alteração registada, antes dos resultados a que se aplica).
+- **Gerador sintético** (`synthetic.ts` 3.0, congelado na fase final): atletas heterogéneos
+  (velocidade crítica e W′ próprios, recuperação, efeitos de contexto com sinal individual, ~20 %
+  atípicos), forma por impulso-resposta, pausa de agosto e regressos, provas, cronometragem manual,
+  erros de digitação e falta de dados informativa. De propósito **"ligeiramente errado"** face aos
+  priors do modelo. Hipóteses e riscos de Goodhart: [`experiments.md`](experiments.md) §2.6.
+- **Horizontes**: próxima rep, dia (decide), semana, mês, ano. **Teste de fuga** automático em
+  todos (perturbar o futuro não pode mudar nenhuma previsão anterior), incluindo provas e ledger.
+- **Sementes**: ajuste 1–5 (desenho), desenvolvimento 3001–3015 (decide cada experiência),
+  2001–2015 (tentativa única da fadiga), **confirmação 4001–4015 usada uma única vez**.
+- **Regras** R1–R10: MAPE com IC < 0 em ≥ 3 de 4 cenários, nenhum pior > 0,05 pp, CRPS e
+  calibração não piores, fuga 0, atípicos e subgrupos (sexo, escalão, estilo) não piores,
+  heterogeneidade antes de rejeitar, e **Bonferroni** sobre um orçamento de 15 experiências.
+- **Paragem**: dois pacotes seguidos sem ganho → congelar, confirmar uma vez, entregar.
 
-- **Gerador sintético** (`synthetic.ts`, v2.0) construído a partir da fisiologia e **de propósito
-  diferente dos priors do modelo**: Riegel por troços, viragens em segundos que crescem em voltas
-  lentas, fadiga por balanço de W′, três componentes impulso-resposta (fitness, fadiga, "sensação
-  de água") com memória muscular, crescimento saturante por idade, choques diários AR(1), ruído de
-  cauda pesada, cronometragem manual, erros de digitação reais e falta de dados informativa. Só
-  campos que o site pede; IDs `syn-`; nunca misturado com dados reais.
-- **Matriz**: 4 cenários base (6/12/26/40 semanas) + multi-ano (4 épocas) + regresso de agosto
-  (curto/longo/tardio) × dados completos/em falta × metros baixo/base/alto × contexto
-  nenhum/básico/carga/bem-estar.
-- **Horizontes**: próxima rep, dia (principal), semana, mês, ano; sempre só com dados anteriores
-  à origem. **Teste de fuga** automático: perturbar o futuro não pode mudar nenhuma previsão
-  anterior (todos os modelos, todos os horizontes: 0 alterações).
-- **Estatística**: sementes de ajuste (1–5) separadas das de teste (1001–1015); comparação
-  emparelhada nas mesmas reps; IC 95 % por bootstrap das sementes.
-- **Regra**: uma melhoria só fica se baixar o MAPE (IC < 0) em ≥ 3 de 4 cenários base, não piorar
-  nenhum > 0,05 pp, não piorar CRPS nem calibração, e passar o teste de fuga.
+## 4. Resultados por pacote (fase final; desenvolvimento 3001–3015, horizonte dia)
 
-## 4. Resultados (sintéticos, sementes de teste)
+| Exp. | Pacote | Mudança | Resultado | Decisão |
+|---|---|---|---|---|
+| E1 | P3 | Riegel por troços | −0,010 pp no ajuste; CRPS pior | Abandonada no ajuste |
+| **E2** | P3 | Estilo principal | −0,021 pp (Bonferroni −0,010) | **Aceite** |
+| **E3** | P3 | Provas como observações | −0,054 pp, 4 de 4 cenários | **Aceite** |
+| E4 | P1 | Erro da rep anterior na série (AR) | −0,005 pp no ajuste | Abandonada no ajuste |
+| E5 | P1 | Variâncias re-estimadas | −0,009 pp no ajuste | Abandonada no ajuste |
+| **E6** | P2 | Caudas Student-t | CRPS −0,006 pp, 4 de 4 | **Aceite** |
+| E7 | P2 | Conformal por maturidade do atleta | CRPS +0,007 pp | Abandonada no ajuste |
+| E8 | P4 | Contexto individual com sinal e atraso | −0,019/−0,053 pp com muitos dados, 0 nos outros | **Rejeitada** (R1) |
+| E9 | P4 | Encolhimento local por fator | +0,025 pp | Abandonada no ajuste |
+| E11 | P5 | Défice de regresso aprendido | ≈ 0; regresso já sem erro extra | Abandonada no ajuste |
+| — | | **Paragem**: P4 e P5 sem ganho | | |
+| **E12** | Fadiga | Fadiga individual com precipício (tentativa única, 2001–2015) | −0,092 pp; quebra melhor que a taxa da equipa em 4 de 4 | **Aceite** |
+| **E13** | P6 | Tempos de prova | −0,19 pp vs melhor tempo anterior (véspera); cobertura 83 % | **Aceite** |
 
-Fases pela ordem em que foram testadas (detalhe em [`results/`](results/)):
+Antes da fase final (gerador 2.0 e 3.0): qualidade + conformal e modelo de estado aceites;
+contexto, Banister, ensemble e sazonalidade rejeitados; fadiga individual v3-1 rejeitada (e, numa
+segunda e única tentativa pré-registada, aceite como E12). Lista completa: [`experiments.md`](experiments.md).
 
-| Fase | Mudança | Veredicto | Efeito principal (horizonte dia, mesmas reps) |
-|---|---|---|---|
-| 1 | Qualidade de dados + conformal | **Mantida** | MAPE −0,07 a −0,26 pp; erro de calibração 80 % −6 a −25 pp |
-| 2 | Modelo de estado hierárquico | **Mantida** | MAPE −0,20 a −0,36 pp; próxima rep −0,6 pp; 100 % das reps previstas |
-| 3 | Contexto (manhã, 2.º treino, sono, ginásio) | Rejeitada | ≈ 0; só ajuda com bem-estar diário completo |
-| 4 | Fitness–fadiga (Banister) nas reps | Rejeitada | +0,05 pp com poucos dados, neutro com muitos |
-| 5 | Ensemble com pesos online | Rejeitada | +0,01 pp: o modelo de estado domina |
-| 6 | Sazonalidade (pausa de agosto + "mesma altura do ano anterior") | Rejeitada pela regra | **ano: 3,36 % → 2,63 %**; mês: só 2 de 4 células significativas — decisão tua |
-| (i) | Aprendizagem ativa: que série cronometrar | Positiva | −0,16 pp (esparso), −0,065 pp (típico) vs escolha ao acaso, mesmo orçamento |
+### Confirmação do v1.0 (4001–4015, uma única vez)
 
-Campeão final vs modelo atual, comparação direta e emparelhada nas mesmas reps (horizonte dia,
-células de decisão, 15 sementes de teste — [`results/final-campeao-vs-atual.md`](results/final-campeao-vs-atual.md)):
+Critérios pré-registados ([`experiments.md`](experiments.md) §2.4), contra o campeão antes da fase
+final (estado 2.0), mesmas reps, horizonte dia — **passa** ([resultado](results/confirmacao-v1.md)):
 
-| Cenário | Modelo atual | Campeão | ΔMAPE [IC 95 %] | ΔCRPS | Δ erro de calibração 80 % | Reps com previsão |
-|---|---|---|---|---|---|---|
-| Arranque (6 sem.) | 1,66 % | 1,39 % | −0,27 [−0,49; −0,10] | −0,36 pp | −24 pp | 21 % → 100 % |
-| Esparso (12 sem.) | 1,65 % | 1,31 % | −0,34 [−0,47; −0,21] | −0,37 pp | −25 pp | 24 % → 100 % |
-| Típico (26 sem.) | 1,89 % | 1,27 % | −0,62 [−0,70; −0,54] | −0,77 pp | −10 pp | 63 % → 100 % |
-| Denso (40 sem.) | 1,80 % | 1,25 % | −0,54 [−0,61; −0,48] | −0,71 pp | −6 pp | 77 % → 100 % |
+| Cenário | estado 2.0 | **v1.0** | ΔMAPE [IC 95 %] | ΔCRPS | Cobertura 80 % |
+|---|---|---|---|---|---|
+| Arranque (6 sem.) | 3,15 % | **2,98 %** | −0,169 [−0,259; −0,087] | −0,164 pp | 77 % |
+| Esparso (12 sem.) | 2,98 % | **2,76 %** | −0,221 [−0,343; −0,116] | −0,168 pp | 80 % |
+| Típico (26 sem.) | 2,00 % | **1,85 %** | −0,146 [−0,193; −0,100] | −0,110 pp | 79 % |
+| Denso (40 sem.) | 1,67 % | **1,56 %** | −0,106 [−0,134; −0,078] | −0,082 pp | 80 % |
 
-Oráculo (melhor previsão possível na véspera, só conhecida no sintético): ≈ 1,0 %.
+Agregado −0,161 pp [−0,213; −0,113]; fuga 0; todos os subgrupos (sexo, escalão, estilo) melhoram.
+Também melhora a semana (−0,10 a −0,23), o mês (−0,06 a −0,18), o ano (−0,06) e os regressos de
+agosto (−0,10 a −0,12). **Exceção**: a próxima rep piora com poucos dados (arranque +0,07,
+esparso +0,08 pp). Provas: na véspera −0,18 pp face ao melhor tempo anterior, cobertura 84 %.
+Dados reais: **não avaliável** (0 tempos em produção).
 
-**Regimes** (campeão vs mediana simples, horizonte dia): multi-ano 1,30 % vs 1,58 %; duas
-primeiras semanas depois de agosto 1,16–1,30 % vs 1,64–1,87 %. **Curva de aprendizagem**: erro
-~1,9 % nas semanas 2–3, ~1,55 % nas semanas 8–15, ~1,25 % a partir dos 4 meses, com cobertura
-≈ 80 % sempre — é daqui que vem o aviso "a aprender" (< 8 semanas) na interface.
+**Face ao modelo que o treinador vê hoje** ("modelo atual"; sementes de desenvolvimento, nas reps
+que ele consegue prever — [resultado](results/v1-vs-modelo-atual-dev.md)): arranque 1,98 → 1,56 %,
+esparso 1,74 → 1,30 %, típico 2,11 → 1,42 %, denso 2,04 → 1,42 % (−0,42 a −0,69 pp; agregado
+−0,54 pp), erro de calibração 5 a 25 pp menor, e o v1.0 prevê 100 % das reps (o atual 24–77 %).
 
-**Deteção de tempos suspeitos** (sementes de teste): precisão 92–100 %, recall 78–100 % (+1 min
-100 %, dígitos trocados 96 %, trocas entre atletas 59 % — muitas vezes tempos quase iguais),
-< 0,35 falsos alarmes por 1000 reps limpas, correção sugerida certa em 91–94 %.
+### Onde está o erro que sobra
 
-### Gerador 3.0 (atletas heterogéneos, adenda v3)
+O oráculo (melhor previsão possível na véspera, conhecida só no sintético) fica em ≈ 1,0 %.
+Com o gerador 3.0, **55 % do erro redutível** está em reps de um tipo que o atleta nunca nadou: a
+parte individual de uma zona, estilo ou material novos é desconhecida até ser vista — nenhum
+modelo a adivinha sem dados correlacionados (no gerador as características de cada atleta são
+sorteadas de forma independente; testar uma matriz atleta × evento seria testar o gerador). Mais
+21 % nas primeiras duas semanas de um atleta e 14 % nas quebras de série.
 
-Linha de base v3 em [`results/baseline-v3.md`](results/baseline-v3.md): o campeão continua a ganhar
-ao modelo atual em todas as células (−0,24 a −0,56 pp), também nos atletas atípicos.
+### Robustez e desempenho
 
-| Fase | Mudança | Veredicto | Efeito principal (horizonte dia, sementes de teste) |
-|---|---|---|---|
-| v3-1 | Fadiga individual com precipício (W′, recuperação τ e perda com o volume por atleta; grelha bayesiana; censura de séries abandonadas) | **Rejeitada** (R1, R3) | Típico −0,083 pp e denso −0,079 pp (significativos); arranque −0,056 e esparso +0,028 (não significativos). Próxima rep pior com poucos dados (+0,14/+0,18 pp) |
-| v3-1 (R7) | A mesma, só nos atletas em que já provou ganhar (IC 90 %) | **Rejeitada** (R1) | Nunca pior em nenhum atleta (0 de 371 com IC > 0), mas o ganho cai para −0,036/−0,045 pp e só em 2 de 4 células |
-| v3-1 (R8) | Probabilidade de a série quebrar | **Rejeitada** | Brier melhor que a taxa da equipa em 2 de 4 células (típico, denso) |
+- **Cadeia de degradação**: modelo de estado → mediana do grupo → último valor → "sem estimativa";
+  nunca NaN nem exceção na interface. Determinístico; versão no ledger.
+- **Incremental**: o estado (suspeitos, filtro, calibração) fica num ponto de controlo 2 dias
+  antes do último dia cronometrado, com uma impressão digital dos dados; dados iguais → nada corre;
+  dias novos → só os dias novos correm; um tempo antigo editado → passe completo. Retomar dá
+  **exatamente** o mesmo que um passe completo (testado).
 
-O que aprende ([`results/fase-v3-1-recuperacao.md`](results/fase-v3-1-recuperacao.md)): com ≥ 30
-séries o erro de W′ cai para ~metade do prior (log 0,18–0,23 vs 0,31–0,35) e a ordem dos atletas
-fica certa (Spearman 0,74–0,83); τ recupera-se pior (0,57–0,66); a sensibilidade ao volume **não**
-se recupera (≈ 0). Heterogeneidade real (Q de Cochran p < 0,001): 22 % dos atletas melhoram com
-IC < 0, sobretudo os de W′ pequeno, que quebram muitas vezes.
+| Equipa | Reps | Passe completo | 1.º pedido na app | Mesmos dados | +1 dia novo |
+|---|---|---|---|---|---|
+| 8 atletas, 40 semanas | 7 510 | 0,27 s | 0,22 s | 11 ms | 0,07 s |
+| 8 atletas, 4 épocas | 28 164 | 0,88 s | 0,99 s | 47 ms | 0,27 s |
+| 20 atletas, 4 épocas | 59 768 | 1,98 s | 1,92 s | 99 ms | 0,56 s |
+| 30 atletas, 4 épocas | 95 287 | 3,28 s | 3,25 s | 151 ms | 0,96 s |
+
+  (~35 µs por rep num passe completo; memória retida ~37 MB por 95 mil previsões. Medido com
+  `scripts/ml-perf.ts` num portátil; no browser conte com 1,5–3× mais. A deteção de suspeitos deixou
+  de ser quadrática no tamanho da equipa: 2,2 s → 0,37 s com o mesmo resultado.)
+
+- **Testes de propriedades**: mais descanso nunca torna uma série mais lenta; menos reps nunca a
+  tornam mais difícil; invariância à ordem dos dados; determinismo; dados em falta (70 % apagados)
+  sem NaN; um erro de +1 min é assinalado e mexe < 0,2 % no que vem a seguir; **sonda
+  contrafactual**: um atleta que falha 4×50@50 hoje, dois meses depois completa 6×50@50
+  (P(quebra) 0,02) mas continua a falhar 4×50@45 (0,99), sem nunca ter feito um 4×50@45.
+- **Paridade**: em todas as experiências aceites nenhum subgrupo (sexo, escalão, estilo principal)
+  piorou mais de 0,10 pp nem perdeu calibração (R10).
+- **Interruptor**: `ML_CHAMPION` / `ML_SHADOW` lidos em tempo de execução (reversão imediata, sem
+  build); **alertas** de cobertura, viés e deriva a partir do ledger no painel "Histórico de acerto".
 
 ## 5. Aprendizagem contínua
 
@@ -154,58 +189,47 @@ sequenceDiagram
   participant L as Ledger (API, append-only)
   participant P as Painel "Histórico de acerto"
   T->>M: abre o treino de hoje
-  M->>L: previsões das reps sem tempo (campeão + desafiante em sombra)
+  M->>L: previsões das reps sem tempo (campeão + v1.0 em sombra)
   Note over L: só aceita se a rep ainda não tem tempo<br/>a primeira previsão é a que conta
   T->>L: introduz os tempos
   P->>L: lê previsões
-  P->>P: reconcilia com os tempos, atribui a causa de cada falha,<br/>relatório semanal, deriva, promoção do desafiante
-  M->>M: o filtro aprende com os tempos não suspeitos
+  P->>P: reconcilia, atribui a causa de cada falha,<br/>alertas, relatório semanal, promoção
+  M->>M: o filtro aprende com os tempos não suspeitos (só os dias novos)
 ```
 
-- **Ledger** — tabela `prediction_ledger` (migração 010): RLS por equipa, chave única por
-  modelo/versão/horizonte/rep, trigger que recusa UPDATE/DELETE (testado em produção numa
-  transação revertida). A API só grava uma previsão enquanto a rep não tem tempo.
-- **Reconciliação** — emparelha previsão e tempo na leitura; um tempo corrigido volta a emparelhar.
-- **Atribuição** — cada falha tem uma causa e o mecanismo que já a trata: erro de digitação (não
-  aprende), dado em falta (incerteza já larga), regresso (reestima o défice), dia anormal (fica no
-  efeito do dia), viés do atleta (CUSUM acelera), mal calibrado (conformal alarga), contexto.
-- **Monitorização** — "o que aprendeu esta semana" (forma, défice de regresso, fatores que
-  mudaram, mudanças de regime, tempos suspeitos), erro e cobertura por semana, alerta de deriva.
-- **Campeão/desafiante** — o campeão (por omissão o modelo atual; `NEXT_PUBLIC_ML_CHAMPION=estado`
-  troca) é o único mostrado; o outro corre em sombra e só deve substituí-lo quando ganhar nos dados
-  reais: ≥ 200 reps em ≥ 6 semanas, ΔMAPE com IC < 0, CRPS e cobertura não piores.
+Promoção do v1.0 só com dados reais: ≥ 200 reps emparelhadas em ≥ 6 semanas, ΔMAPE com IC < 0,
+CRPS e cobertura não piores. Reverter: alerta duas semanas seguidas ou desvantagem significativa.
+Detalhe em [`monitorizacao.md`](monitorizacao.md).
 
-**Arquitetura.** O modelo é TypeScript determinístico e corre onde estão os dados (o browser já
-recebe a equipa inteira); o mesmo código corre no backtest. A API (Cloud Run, sem estado) só
-guarda o ledger. O estado de cada atleta não é guardado: é reconstruído do histórico num passe
-O(reps), por isso nunca fica desatualizado quando um tempo antigo é corrigido; se um dia for
-lento, o caminho de escala é um checkpoint por atleta com hash dos dados de entrada.
+## 6. Limitações
 
-## 6. Limitações (honestas)
-
-- **Só validado em dados sintéticos.** A base de produção ainda não tem tempos; o gerador é uma
-  hipótese sobre a realidade. O ledger existe para medir o modelo nos dados reais à medida que
-  chegam — os números reais é que decidem a troca de campeão.
-- **Com < 8 semanas de tempos** as estimativas ainda estão a assentar (a interface diz "a
-  aprender" e mostra intervalos largos). Sem nenhum dado, os intervalos podem passar ±30 %.
-- **Contexto** (sono, ginásio, turno) não melhorou as previsões com bem-estar esporádico; só é
-  credível com bem-estar registado todos os dias.
-- **Horizonte de um ano**: o campeão é fraco (3,4 %); a variante sazonal (2,6 %) não passou a
-  regra por causa do horizonte mês.
-- **Taper e carga A:C** na página da época são descritivos (parâmetros típicos; a evidência de que
-  o ACWR prevê lesões é fraca).
-- **Provas**: o modelo prevê reps de treino; ainda não prevê tempos de prova.
-- **Fadiga dentro da série**: o modelo de precipício individual (v3-1) não passou a regra; o campeão
-  mantém um termo de fadiga linear comum. O "devia" (capacidade) e a sugestão de saída dependem
-  desta peça e ainda não existem.
+- **Validado só em sintético.** O gerador é uma hipótese sobre a realidade; onde o modelo usa a
+  mesma forma funcional (lei de potência, impulso-resposta, W′), os ganhos são otimistas.
+- **Não foi possível validar nada em dados reais**: 0 tempos na base de produção. O ledger
+  (migração 010, ainda por aplicar) é o mecanismo para o fazer.
+- **Só se aprende com mais dados**: os ganhos de contexto e de fadiga aparecem com meses de tempos
+  (E8 e E12 ganham sobretudo em típico/denso). W′ precisa de ~30 séries por atleta; a recuperação
+  τ aprende-se mal e a sensibilidade ao volume não se aprende — não são mostradas.
+- **Um tipo de rep nunca nadado** fica com a incerteza da equipa até ser visto (a maior fatia do
+  erro que sobra).
+- **Provas**: no arranque, 28 dias antes, a referência simples ganha; poucas provas por época →
+  intervalos de prova só estabilizam com dezenas de provas da equipa.
+- **Horizonte de um ano**: as âncoras sazonais (3,36 % → 2,63 % na fase 6) estão prontas atrás de
+  `ML_YEAR_ANCHORS`, mas a app ainda não tem previsões a um ano para gravar em sombra.
+- **Desempenho**: com 30 atletas e 4 épocas, o primeiro pedido de uma sessão do browser faz um
+  passe completo (~3 s); o estado incremental vive em memória (um reload volta a calcular).
+- **Protocolo conservador**: componentes que só ganham com muitos dados falham a R1 (que exige
+  ganho em 3 de 4 cenários, dois deles com poucos dados) — escolha deliberada.
 
 ## 7. Reproduzir
 
+Ver [`harness.md`](harness.md). Em resumo:
+
 ```bash
 cd apps/web
-npm test                                                     # 38+ testes (harness, gerador, modelo, ledger, painel)
-npx tsx scripts/ml-backtest.ts --cells all --save baseline-v2
-npx tsx scripts/ml-backtest.ts --compare "modelo atual + qualidade + conformal" "modelo de estado + qualidade + conformal"
-npx tsx scripts/ml-quality.ts --seeds test
-npx tsx scripts/ml-active.ts --seeds test
+npm test
+npx tsx scripts/ml-backtest.ts --compare "modelo de estado + qualidade + conformal" "v1.0 + qualidade + conformal" --seeds dev
+npx tsx scripts/ml-races.ts --seeds dev
+npx tsx scripts/ml-error-sources.ts
+node --expose-gc --import tsx scripts/ml-perf.ts
 ```

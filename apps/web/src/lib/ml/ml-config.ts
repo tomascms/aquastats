@@ -8,10 +8,10 @@ import { CHAMPION, type ModelId } from "./production";
  * without a new build; until the answer arrives — or if it never does — the build's default holds.
  */
 
-export type MlRoles = { champion: ModelId; challenger: ModelId; shadow: boolean };
+export type MlRoles = { champion: ModelId; challenger: ModelId; shadow: boolean; /** Year-ahead seasonal anchors (v1.ts), shadow only. */ yearAnchors: boolean };
 
 const other = (model: ModelId): ModelId => (model === "atual" ? "estado" : "atual");
-const BUILD: MlRoles = { champion: CHAMPION, challenger: other(CHAMPION), shadow: true };
+const BUILD: MlRoles = { champion: CHAMPION, challenger: other(CHAMPION), shadow: true, yearAnchors: false };
 const REFRESH_MS = 5 * 60_000;
 
 let cached: { at: number; roles: Promise<MlRoles> } | null = null;
@@ -20,9 +20,9 @@ export function fetchMlRoles(): Promise<MlRoles> {
   if (cached && Date.now() - cached.at < REFRESH_MS) return cached.roles;
   const roles = fetch("/api/ml-config", { cache: "no-store" })
     .then((response) => (response.ok ? response.json() : null))
-    .then((body: { champion?: ModelId | null; shadow?: boolean } | null) => {
+    .then((body: { champion?: ModelId | null; shadow?: boolean; yearAnchors?: boolean } | null) => {
       const champion = body?.champion === "estado" || body?.champion === "atual" ? body.champion : CHAMPION;
-      return { champion, challenger: other(champion), shadow: body?.shadow !== false };
+      return { champion, challenger: other(champion), shadow: body?.shadow !== false, yearAnchors: body?.yearAnchors === true };
     })
     .catch(() => BUILD);
   cached = { at: Date.now(), roles };

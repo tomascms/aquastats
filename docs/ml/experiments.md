@@ -190,3 +190,35 @@ interruptor de emergência e alertas de deriva/calibração a partir do ledger; 
 | E13 | 2026-10-05 | desenv. 3001–3015 | na véspera: modelo vs melhor tempo anterior + desenvolvimento −0,186 [−0,233; −0,141] pp, cobertura 80 % = 83,4 % (3304 provas); 28 dias antes: −0,071 [−0,103; −0,039], cobertura 83,3 % (no arranque a referência ganha: 1,73 % vs 1,65 %); oráculo ≈ 0,47 % | IC < 0 ✓, cobertura ✓; fuga 0 (teste em `races.test.ts`) | **Aceite** ([resultado](results/final-E13.md)) |
 
 **Modelo congelado v1.0 (2026-10-05):** estado + E2 (estilo principal) + E3 (provas como observações) + E6 (caudas t, ν = 4) + E12 (fadiga individual com precipício, quebra recalibrada) + E13 (previsão de provas). Orçamento gasto em desenvolvimento: 6 de 15 (E2, E3, E6, E8, E12, E13); 7 abandonadas no ajuste (E1, E4, E5, E7, E9, E11) ou não ativadas (E10); E14/E15 não correm (paragem).
+
+### Confirmação (2026-10-05, sementes 4001–4015, uma única vez)
+
+v1.0 vs estado 2.0 (o campeão antes da fase final), células de decisão, horizonte dia
+([resultado](results/confirmacao-v1.md); provas: [resultado](results/confirmacao-v1-provas.md)):
+
+| Cenário | estado 2.0 | v1.0 | ΔMAPE [IC 95 %] | ΔCRPS | Cobertura 80 % (campeão) |
+|---|---|---|---|---|---|
+| arranque | 3,15 % | 2,98 % | −0,169 [−0,259; −0,087] | −0,164 | 77 % (75 %) |
+| esparso | 2,98 % | 2,76 % | −0,221 [−0,343; −0,116] | −0,168 | 80 % (78 %) |
+| típico | 2,00 % | 1,85 % | −0,146 [−0,193; −0,100] | −0,110 | 79 % (78 %) |
+| denso | 1,67 % | 1,56 % | −0,106 [−0,134; −0,078] | −0,082 | 80 % (79 %) |
+
+- **C1** ΔMAPE agregado −0,161 [−0,213; −0,113] ✓ · **C2** CRPS melhor em todas ✓ · **C3** cobertura ✓ ·
+  **C4** nenhuma pior ✓ · **C5** fuga 0 ✓ · **C6** dados reais: **não avaliável** (0 tempos na base de
+  produção; 2 atletas, 2 treinos, 1 competição, 0 resultados — consulta só de leitura).
+  **Confirmação: PASSA.**
+- Relatados: semana −0,10 a −0,23 pp; mês −0,06 a −0,18; ano (multi-ano) −0,061; regressos de
+  agosto −0,10 a −0,12 (dia); paridade: todos os subgrupos melhoram (−0,08 a −0,20 pp); quebra:
+  Brier melhor que a taxa da equipa em 4 de 4; 26 % dos atletas melhoram com IC < 0, 2 % pioram.
+- **Regressão assinalada**: próxima rep pior com poucos dados — arranque +0,073 [0,013; 0,130],
+  esparso +0,081 [0,049; 0,111] (melhor em típico −0,028 e denso −0,042). Vem da fadiga individual
+  com pouca informação; abaixo do limiar de +0,3 pp, mas real.
+- Provas: na véspera −0,183 [−0,231; −0,136] pp vs melhor tempo anterior, cobertura 83,6 %;
+  28 dias antes −0,072 [−0,106; −0,034], cobertura 83,8 % (no arranque a referência ganha).
+
+**Holm** sobre as 6 experiências corridas em desenvolvimento/fadiga (E2, E3, E6, E8, E12, E13):
+todas têm p < 0,001 (aproximação normal a partir dos intervalos bootstrap), abaixo do limiar de
+Holm mais exigente (0,05/6); E8 foi rejeitada pela R1 (ganho só com muitos dados), não pela
+significância. Nenhuma decisão muda.
+
+**Fim da otimização.** O v1.0 fica congelado; qualquer melhoria futura é uma versão nova.

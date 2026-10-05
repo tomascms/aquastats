@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { HORIZONS, teamData, type Dataset } from "./backtest";
-import { ACCEPTED, ACCEPTED_CALIBRATION, V1 } from "./registry";
+import { ACCEPTED, ACCEPTED_CALIBRATION, V1, V1_YEAR } from "./registry";
 import { DEFAULT_OPTIONS } from "./state-model";
 import { generateDataset } from "./synthetic";
 import { V1_CALIBRATION, V1_OPTIONS } from "./v1";
@@ -34,6 +34,15 @@ describe("v1.0 (frozen)", () => {
       assert.equal(out.size, GOLDEN[horizon].n);
       assert.ok(Math.abs(sumMean - GOLDEN[horizon].sumMean) < 1e-5, `${horizon}: mean checksum ${sumMean}`);
       assert.ok(Math.abs(sumHi - GOLDEN[horizon].sumHi) < 1e-5, `${horizon}: interval checksum ${sumHi}`);
+    }
+  });
+
+  it("the year-ahead anchors never touch what the app shows (day and next-rep horizons)", () => {
+    const team = teamData(generateDataset("arranque", 3) as unknown as Dataset);
+    for (const horizon of ["day", "rep"] as const) {
+      const a = V1.predict(team, HORIZONS[horizon]);
+      const b = V1_YEAR.predict(team, HORIZONS[horizon]);
+      for (const [id, prediction] of a) assert.equal(b.get(id)?.mean, prediction.mean);
     }
   });
 });
