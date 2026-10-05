@@ -154,3 +154,19 @@ Verdade registada por rep: tempo de capacidade ("devia"), tempo sistemático nas
   75 % e 85 %, e sem piorar o "vai" (R2–R5).
 
 Sementes: as mesmas (ajuste 1–5; teste 1001–1015 nas células de decisão, 1001–1010 nas restantes).
+
+## Adenda final (2026-10-05, antes de qualquer resultado da fase final)
+
+Pré-registo completo em [`experiments.md`](experiments.md) §2. Em resumo:
+
+- **Três conjuntos de sementes** novos: desenvolvimento 3001–3015 (decide cada experiência),
+  confirmação 4001–4015 (uma única vez, no modelo final combinado) e 2001–2015 (só a tentativa
+  única da fadiga). As sementes 1001–1015 já foram usadas para decidir e passam a servir só para
+  desenho, como as de ajuste.
+- **Gerador congelado** na versão 3.0 durante a fase final.
+- **R9 — comparações múltiplas**: além de R1–R8, o ΔMAPE agregado das 4 células de decisão tem de
+  ter o limite superior unilateral a 99,67 % (Bonferroni sobre 15 experiências) abaixo de 0.
+- **R10 — paridade**: nenhum subgrupo (sexo, escalão, estilo principal) com ≥ 200 reps piora mais
+  de 0,10 pp nem perde mais de 2 pp de calibração.
+- **Paragem**: dois pacotes seguidos sem experiência aceite, ou 15 experiências gastas → congelar
+  v1.0 → confirmação única → entrega.
