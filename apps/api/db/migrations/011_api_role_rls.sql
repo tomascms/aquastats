@@ -38,8 +38,9 @@ BEGIN
   END IF;
   EXECUTE format('GRANT CONNECT ON DATABASE %I TO aquastats_api', current_database());
 END$$;
--- Re-asserted on every run, whatever someone changed by hand.
-ALTER ROLE aquastats_api NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+-- Re-asserted on every run, whatever someone changed by hand. SUPERUSER and REPLICATION are off from
+-- CREATE ROLE and only a superuser could change them (Neon's owner is not one); the tests check all five.
+ALTER ROLE aquastats_api NOBYPASSRLS NOCREATEDB NOCREATEROLE;
 ALTER ROLE aquastats_api SET statement_timeout = '30s';
 ALTER ROLE aquastats_api SET idle_in_transaction_session_timeout = '60s';
 ALTER ROLE aquastats_api SET lock_timeout = '10s';
