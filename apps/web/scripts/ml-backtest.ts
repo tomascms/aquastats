@@ -27,6 +27,7 @@ import {
   type Dataset,
   type Horizon,
   type Metrics,
+  type Pair,
   type PairedSample,
   type Predictor,
   type Scored,
@@ -48,12 +49,20 @@ type Cell = { key: string; scenario: ScenarioName; variant: Variant; seeds: numb
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 const variantKey = (variant: Variant) => `${variant.data}/${variant.meters}/${variant.context}`;
 
-function protocolCells(seedSet: "test" | "tune", which: string): Cell[] {
-  const test = seedSet === "test";
+type SeedSet = "tune" | "test" | "dev" | "confirm" | "fatigue";
+/** Seeds per set and kind of cell (protocol §5 and the final-phase addendum: dev decides, confirm is used once). */
+const SEED_BASE: Record<Exclude<SeedSet, "tune">, number> = { test: 1001, dev: 3001, confirm: 4001, fatigue: 2001 };
+function seedsFor(seedSet: SeedSet, kind: Cell["kind"]): number[] {
+  if (seedSet === "tune") return kind === "decision" ? range(1, 5) : kind === "regime" ? range(1, 3) : range(1, 2);
+  const base = SEED_BASE[seedSet];
+  return range(base, base + (kind === "decision" ? 14 : kind === "regime" ? 9 : 4));
+}
+
+function protocolCells(seedSet: SeedSet, which: string): Cell[] {
   const cells: Cell[] = [];
   if (which === "decision" || which === "all") {
     for (const scenario of BASE_SCENARIOS) {
-      cells.push({ key: `${scenario} · ${variantKey(DEFAULT_VARIANT)}`, scenario, variant: DEFAULT_VARIANT, seeds: test ? range(1001, 1015) : range(1, 5), horizons: ["rep", "day", "semana", "mes"], kind: "decision" });
+      cells.push({ key: `${scenario} · ${variantKey(DEFAULT_VARIANT)}`, scenario, variant: DEFAULT_VARIANT, seeds: seedsFor(seedSet, "decision"), horizons: ["rep", "day", "semana", "mes"], kind: "decision" });
     }
   }
   if (which === "regime" || which === "all") {
@@ -62,7 +71,7 @@ function protocolCells(seedSet: "test" | "tune", which: string): Cell[] {
         key: `${scenario} · ${variantKey(DEFAULT_VARIANT)}`,
         scenario,
         variant: DEFAULT_VARIANT,
-        seeds: test ? range(1001, 1010) : range(1, 3),
+        seeds: seedsFor(seedSet, "regime"),
         horizons: scenario === "multiano" ? ["day", "semana", "mes", "ano"] : ["day", "semana", "mes"],
         kind: "regime",
       });
@@ -75,7 +84,7 @@ function protocolCells(seedSet: "test" | "tune", which: string): Cell[] {
           for (const context of CONTEXT_LEVELS) {
             const variant = { data, meters, context };
             if (variantKey(variant) === variantKey(DEFAULT_VARIANT)) continue;
-            cells.push({ key: `${scenario} · ${variantKey(variant)}`, scenario, variant, seeds: test ? range(1001, 1005) : range(1, 2), horizons: ["day"], kind: "matrix" });
+            cells.push({ key: `${scenario} · ${variantKey(variant)}`, scenario, variant, seeds: seedsFor(seedSet, "matrix"), horizons: ["day"], kind: "matrix" });
           }
         }
       }
@@ -182,9 +191,12 @@ function prepare(cell: Cell): Prepared[] {
   });
 }
 
-function runCell(cell: Cell, predictors: Predictor[], checkLeaks: boolean): { result: CellResult; scored: Map<string, Map<string, Scored[][]>>; types: Map<string, string>[] } {
+type AthleteFacts = { gender?: string; dateOfBirth?: string; primaryStroke?: string };
+
+function runCell(cell: Cell, predictors: Predictor[], checkLeaks: boolean): { result: CellResult; scored: Map<string, Map<string, Scored[][]>>; types: Map<string, string>[]; facts: Map<string, AthleteFacts>[] } {
   const prepared = prepare(cell);
   const types = prepared.map((item) => item.dataset.athleteTypes as Map<string, string>);
+  const facts = prepared.map((item) => new Map(item.dataset.athletes.map((athlete) => [athlete.id, { gender: athlete.gender, dateOfBirth: athlete.dateOfBirth, primaryStroke: athlete.primaryStroke } as AthleteFacts])));
   const scored = new Map<string, Map<string, Scored[][]>>();
   const result: CellResult = {
     key: cell.key,
@@ -240,7 +252,7 @@ function runCell(cell: Cell, predictors: Predictor[], checkLeaks: boolean): { re
     }
     scored.set(predictor.name, byHorizon);
   }
-  return { result, scored, types };
+  return { result, scored, types, facts };
 }
 
 /* ---------- R7: heterogeneity across athletes ---------- */
@@ -312,6 +324,92 @@ function normalCdf(z: number): number {
   return z >= 0 ? 0.5 * (1 + erf) : 0.5 * (1 - erf);
 }
 
+/* ---------- R9 (multiplicity) and R10 (parity) ---------- */
+
+/** Experiments in the final phase's budget: R9 tests each one at 0.05 / BUDGET, one-sided. */
+const BUDGET = 15;
+
+/** One-sided upper bound of the mean at `level` by bootstrap of the replicates (seeds). */
+function bootstrapUpper(values: number[], level: number, iterations = 20_000, seed = 4242): { mean: number; upper: number } {
+  const finite = values.filter(Number.isFinite);
+  if (!finite.length) return { mean: NaN, upper: NaN };
+  const rng = createRng(seed);
+  const means: number[] = [];
+  for (let k = 0; k < iterations; k += 1) {
+    let sum = 0;
+    for (let i = 0; i < finite.length; i += 1) sum += finite[Math.floor(rng.uniform(0, finite.length))];
+    means.push(sum / finite.length);
+  }
+  means.sort((a, b) => a - b);
+  return { mean: finite.reduce((sum, value) => sum + value, 0) / finite.length, upper: means[Math.min(means.length - 1, Math.floor(level * means.length))] };
+}
+
+/** Per seed: the mean over the deciding cells of challenger − champion (MAPE or CRPS, pp). */
+function pooledDeltas(samples: PairedSample[][], metric: "mape" | "crps"): number[] {
+  const seeds = Math.min(...samples.map((cell) => cell.length));
+  const out: number[] = [];
+  for (let i = 0; i < seeds; i += 1) {
+    const deltas = samples
+      .map((cell) => cell[i])
+      .filter((sample) => sample && sample.n > 0)
+      .map((sample) => (metric === "mape" ? sample.mapeB - sample.mapeA : sample.crpsA != null && sample.crpsB != null ? sample.crpsB - sample.crpsA : NaN))
+      .filter(Number.isFinite);
+    if (deltas.length) out.push(deltas.reduce((sum, value) => sum + value, 0) / deltas.length);
+  }
+  return out;
+}
+
+const ageBand = (dateOfBirth: string | undefined, date: string) => {
+  if (!dateOfBirth) return "sem data";
+  const age = (dayNumber(date) - dayNumber(dateOfBirth)) / 365.25;
+  return age < 13 ? "≤ 12 anos" : age < 15 ? "13–14 anos" : age < 17 ? "15–16 anos" : "≥ 17 anos";
+};
+
+type ParityRow = { dimension: string; value: string; n: number; mapeA: number; mapeB: number; calA: number | null; calB: number | null };
+
+/** Subgroups (sex, age band, primary stroke) pooled over the deciding cells and seeds, on the common clean reps. */
+function parityRows(runs: { a: Scored[]; b: Scored[]; facts: Map<string, AthleteFacts> }[]): ParityRow[] {
+  const groups = new Map<string, { dimension: string; value: string; a: Pair[]; b: Pair[] }>();
+  for (const { a, b, facts } of runs) {
+    const other = new Map(b.map((item) => [item.item.row.log.id, item]));
+    for (const item of a) {
+      if (!item.item.clean || !item.pair.prediction) continue;
+      const twin = other.get(item.item.row.log.id);
+      if (!twin?.pair.prediction) continue;
+      const info = facts.get(item.item.athleteId) ?? {};
+      const keys: [string, string][] = [
+        ["Sexo", info.gender || "—"],
+        ["Escalão (idade)", ageBand(info.dateOfBirth, item.item.row.date)],
+        ["Estilo principal", info.primaryStroke || "—"],
+      ];
+      for (const [dimension, value] of keys) {
+        const key = `${dimension}|${value}`;
+        const group = groups.get(key) ?? { dimension, value, a: [], b: [] };
+        group.a.push(item.pair);
+        group.b.push(twin.pair);
+        groups.set(key, group);
+      }
+    }
+  }
+  return [...groups.values()]
+    .map((group) => {
+      const ma = metricsOf(group.a);
+      const mb = metricsOf(group.b);
+      return {
+        dimension: group.dimension,
+        value: group.value,
+        n: group.a.length,
+        mapeA: ma.mapePct,
+        mapeB: mb.mapePct,
+        calA: ma.coverage80 == null ? null : Math.abs(ma.coverage80 - 0.8) * 100,
+        calB: mb.coverage80 == null ? null : Math.abs(mb.coverage80 - 0.8) * 100,
+      };
+    })
+    .sort((x, y) => x.dimension.localeCompare(y.dimension) || x.value.localeCompare(y.value));
+}
+
+const parityOk = (rows: ParityRow[]) => rows.filter((row) => row.n >= 200).every((row) => row.mapeB - row.mapeA <= 0.1 && (row.calA == null || row.calB == null || row.calB - row.calA <= 2));
+
 /* ---------- Decision rule ---------- */
 
 type Verdict = {
@@ -341,8 +439,8 @@ function verdictOf(cell: string, samples: PairedSample[], atypical: PairedSample
   };
 }
 
-function decide(verdicts: Verdict[], leaks: number): { keep: boolean; rules: Record<string, boolean> } {
-  const r1 = verdicts.filter((v) => v.dMape.mean < 0 && v.dMape.hi < 0).length >= 3;
+function decide(verdicts: Verdict[], leaks: number, primary: "mape" | "crps" = "mape"): { keep: boolean; rules: Record<string, boolean> } {
+  const r1 = verdicts.filter((v) => (primary === "mape" ? v.dMape.mean < 0 && v.dMape.hi < 0 : v.dCrps.mean < 0 && v.dCrps.hi < 0)).length >= 3;
   const r2 = verdicts.every((v) => v.dMape.mean <= 0.05);
   const r3 = verdicts.every((v) => Number.isFinite(v.dCrps.mean) && v.dCrps.mean <= 0);
   const r4 = verdicts.every((v) => Number.isFinite(v.dCal.mean) && v.dCal.mean <= 1);
@@ -489,13 +587,19 @@ function main() {
     return;
   }
 
-  const seedSet = flag("seeds") === "tune" ? "tune" : "test";
+  const seedSet: SeedSet = (["tune", "test", "dev", "confirm", "fatigue"] as const).find((name) => name === flag("seeds")) ?? "test";
   const compare = args.indexOf("--compare");
   if (compare >= 0) {
     const [championName, challengerName] = [args[compare + 1], args[compare + 2]];
     const [champion, challenger] = pickPredictors([championName, challengerName]);
     const cells = protocolCells(seedSet, flag("cells") ?? "decision");
+    // What decides (pre-registered per experiment): the horizon, the kind of cells and the primary metric.
+    const decideOn = (flag("decide-on") ?? "day") as HorizonKey;
+    const decideCells = (flag("decide-cells") ?? "decision") as Cell["kind"];
+    const primary = flag("primary") === "crps" ? "crps" : "mape";
     const verdicts: Verdict[] = [];
+    const decisionSamples: PairedSample[][] = [];
+    const parityRuns: { a: Scored[]; b: Scored[]; facts: Map<string, AthleteFacts> }[] = [];
     const secondary: { cell: string; horizon: string; verdict: Verdict }[] = [];
     const results: CellResult[] = [];
     let leaks = 0;
@@ -504,7 +608,7 @@ function main() {
     const breakRows: { cell: string; rate: number; dBrier: { mean: number; lo: number; hi: number }; dLogLoss: { mean: number; lo: number; hi: number } }[] = [];
     for (const cell of cells) {
       const started = Date.now();
-      const { result, scored, types } = runCell(cell, [champion, challenger], cell.kind !== "matrix");
+      const { result, scored, types, facts } = runCell(cell, [champion, challenger], cell.kind !== "matrix");
       prepared.set(cell.key, types);
       results.push(result);
       leaks += Object.values(result.causality[challenger.name] ?? {}).reduce((sum, value) => sum + value, 0);
@@ -515,15 +619,18 @@ function main() {
         const onlyAtypical = (runs: Scored[][]) => runs.map((run, index) => run.filter((item) => types[index].get(item.item.athleteId) === "atípico"));
         const atypicalA = onlyAtypical(a);
         const atypicalB = onlyAtypical(b);
+        const samples = a.map((run, index) => pairedSample(run, b[index]));
         const verdict = verdictOf(
           cell.key,
-          a.map((run, index) => pairedSample(run, b[index])),
+          samples,
           atypicalA.map((run, index) => pairedSample(run, atypicalB[index])),
         );
-        if (cell.kind === "decision" && horizon === "day") {
+        if (cell.kind === decideCells && horizon === decideOn) {
           verdicts.push(verdict);
+          decisionSamples.push(samples);
+          a.forEach((run, index) => parityRuns.push({ a: run, b: b[index], facts: facts[index] }));
           effects.push(...athleteEffects(cell.key, cell.seeds, a, b, types));
-          const perSeed = result.predictors[challenger.name].day?.breaksPerSeed ?? [];
+          const perSeed = result.predictors[challenger.name][decideOn]?.breaksPerSeed ?? [];
           const present = perSeed.filter((item): item is BreakMetrics => item != null);
           if (present.length) {
             breakRows.push({
@@ -537,13 +644,32 @@ function main() {
       }
       console.error(`${cell.key}: ${((Date.now() - started) / 1000).toFixed(1)} s`);
     }
-    const decision = decide(verdicts, leaks);
-    const lines = [`# ${challenger.name} vs ${champion.name} (${seedSet === "test" ? "sementes de teste" : "sementes de ajuste"}, gerador ${GENERATOR_VERSION})`, ""];
-    lines.push("Células de decisão, horizonte dia, nas mesmas reps (Δ = desafiante − campeão; IC 95 % bootstrap das sementes):", "");
+    const base = decide(verdicts, leaks, primary);
+    const r9 = bootstrapUpper(pooledDeltas(decisionSamples, primary), 1 - 0.05 / BUDGET);
+    const parity = parityRows(parityRuns);
+    const rules = { ...base.rules, R9: Number.isFinite(r9.upper) && r9.upper < 0, R10: parityOk(parity) };
+    const decision = { keep: Object.values(rules).every(Boolean), rules };
+    const seedLabel: Record<SeedSet, string> = { tune: "sementes de ajuste", test: "sementes de teste antigas", dev: "sementes de desenvolvimento", confirm: "sementes de CONFIRMAÇÃO", fatigue: "sementes da tentativa de fadiga" };
+    const lines = [`# ${challenger.name} vs ${champion.name} (${seedLabel[seedSet]} ${cells[0].seeds[0]}–${cells[0].seeds[cells[0].seeds.length - 1]}, gerador ${GENERATOR_VERSION})`, ""];
+    lines.push(`Decide: células "${decideCells}", horizonte ${HORIZON_LABEL[decideOn]}, métrica primária ${primary === "mape" ? "MAPE" : "CRPS"}. Mesmas reps (Δ = desafiante − campeão; IC 95 % bootstrap das sementes):`, "");
     lines.push("| Célula | Reps comuns | MAPE campeão | MAPE desafiante | ΔMAPE (pp) | ΔCRPS (pp) | Δ erro calibração 80 % (pp) | ΔMAPE atípicos (pp) |", "|---|---|---|---|---|---|---|---|");
     const ci = (v: { mean: number; lo: number; hi: number }) => `${fmt(v.mean, 3)} [${fmt(v.lo, 3)}; ${fmt(v.hi, 3)}]`;
     for (const v of verdicts) lines.push(`| ${v.cell} | ${v.n} | ${fmt(v.mapeA)}% | ${fmt(v.mapeB)}% | ${ci(v.dMape)} | ${ci(v.dCrps)} | ${ci(v.dCal)} | ${v.dAtypical ? ci(v.dAtypical) : "—"} |`);
-    lines.push("", `Regras: ${Object.entries(decision.rules).map(([rule, ok]) => `${rule} ${ok ? "✓" : "✗"}`).join(" · ")} (fuga: ${leaks}).`, "", `**Veredicto: ${decision.keep ? "MANTER" : "NÃO MANTER"}**`, "");
+    lines.push(
+      "",
+      `Δ${primary === "mape" ? "MAPE" : "CRPS"} agregado (média das células por semente): ${fmt(r9.mean, 3)} pp; limite unilateral a ${((1 - 0.05 / BUDGET) * 100).toFixed(2)} % (R9, Bonferroni sobre ${BUDGET}): ${fmt(r9.upper, 3)}.`,
+      "",
+      `Regras: ${Object.entries(decision.rules).map(([rule, ok]) => `${rule} ${ok ? "✓" : "✗"}`).join(" · ")} (fuga: ${leaks}).`,
+      "",
+      `**Veredicto: ${decision.keep ? "MANTER" : "NÃO MANTER"}**`,
+      "",
+      "Paridade (R10; subgrupos com ≥ 200 reps decidem):",
+      "",
+      "| Dimensão | Valor | Reps | MAPE campeão | MAPE desafiante | Δ (pp) | Δ erro calibração 80 % (pp) |",
+      "|---|---|---|---|---|---|---|",
+      ...parity.map((row) => `| ${row.dimension} | ${row.value} | ${row.n} | ${fmt(row.mapeA)}% | ${fmt(row.mapeB)}% | ${fmt(row.mapeB - row.mapeA, 3)} | ${row.calA == null || row.calB == null ? "—" : fmt(row.calB - row.calA, 1)} |`),
+      "",
+    );
     if (breakRows.length) {
       const ci4 = (v: { mean: number; lo: number; hi: number }) => `${fmt(v.mean, 4)} [${fmt(v.lo, 4)}; ${fmt(v.hi, 4)}]`;
       lines.push("Probabilidade de quebra do desafiante vs taxa de quebra da equipa até à véspera (R8; Δ = modelo − referência, IC 95 % bootstrap das sementes):", "", "| Célula | Taxa de quebra | ΔBrier | ΔLog loss |", "|---|---|---|---|");
@@ -587,7 +713,7 @@ function main() {
       const dir = join(repoRoot(), "docs", "ml", "results");
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, `${save}.md`), md);
-      writeFileSync(join(dir, `${save}.json`), JSON.stringify({ kind: "synthetic", generator: GENERATOR_VERSION, seedSet, champion: champion.name, challenger: challenger.name, decision, verdicts, secondary, breaks: breakRows, athleteEffects: effects, results: slim(results) }));
+      writeFileSync(join(dir, `${save}.json`), JSON.stringify({ kind: "synthetic", generator: GENERATOR_VERSION, seedSet, champion: champion.name, challenger: challenger.name, decision, verdicts, r9, parity, decideOn, decideCells, primary, secondary, breaks: breakRows, athleteEffects: effects, results: slim(results) }));
       console.error(`Saved docs/ml/results/${save}.{json,md}`);
     }
     return;

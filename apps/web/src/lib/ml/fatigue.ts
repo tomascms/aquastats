@@ -25,12 +25,16 @@
 export const W_GRID = [6, 9, 13, 18, 25, 35, 48];
 export const TAU_GRID = [25, 40, 65, 100, 160, 250];
 export const VOL_GRID = [0.03, 0.12, 0.22, 0.35];
-const NW = W_GRID.length;
-const NT = TAU_GRID.length;
-const NV = VOL_GRID.length;
-export const CELLS = NW * NT * NV;
 
-const cellIndex = (w: number, t: number, v: number) => (w * NT + t) * NV + v;
+/** The values each profile dimension can take. */
+export type FatigueGrid = { w: number[]; tau: number[]; vol: number[] };
+export const FULL_GRID: FatigueGrid = { w: W_GRID, tau: TAU_GRID, vol: VOL_GRID };
+/** E12: volume sensitivity is not identifiable from the data (parameter recovery ≈ 0): fixed at the physiological centre. */
+export const NO_VOLUME_GRID: FatigueGrid = { w: W_GRID, tau: TAU_GRID, vol: [0.15] };
+export const CELLS = W_GRID.length * TAU_GRID.length * VOL_GRID.length;
+
+const sizeOf = (grid: FatigueGrid) => grid.w.length * grid.tau.length * grid.vol.length;
+const indexIn = (grid: FatigueGrid) => (w: number, t: number, v: number) => (w * grid.tau.length + t) * grid.vol.length + v;
 
 /** A rep of a set as the fatigue model sees it. `observedS` when it has been swum, for the reps before. */
 export type SetRep = { distanceM: number; intendedS: number; sendOffS: number | null; observedS?: number };
@@ -42,15 +46,16 @@ const NOISE_BREAK_PER_REP = 0.006;
 const SHAPE_SD = 0.014;
 const DRIFT_PER_DAY = { w: 0.02, tau: 0.006, vol: 0.003 };
 
-function priorWeights(): Float64Array {
+function priorWeights(grid: FatigueGrid): Float64Array {
   // Physiology: W′ ~ 18 m, τ ~ 80 s, σ ~ 0.15, wide (log-normal-ish) — the athletes' data decide.
-  const p = new Float64Array(CELLS);
-  for (let w = 0; w < NW; w += 1) {
-    for (let t = 0; t < NT; t += 1) {
-      for (let v = 0; v < NV; v += 1) {
-        const lw = Math.log(W_GRID[w] / 18) / 0.6;
-        const lt = Math.log(TAU_GRID[t] / 80) / 0.7;
-        const lv = (VOL_GRID[v] - 0.15) / 0.15;
+  const cellIndex = indexIn(grid);
+  const p = new Float64Array(sizeOf(grid));
+  for (let w = 0; w < grid.w.length; w += 1) {
+    for (let t = 0; t < grid.tau.length; t += 1) {
+      for (let v = 0; v < grid.vol.length; v += 1) {
+        const lw = Math.log(grid.w[w] / 18) / 0.6;
+        const lt = Math.log(grid.tau[t] / 80) / 0.7;
+        const lv = (grid.vol[v] - 0.15) / 0.15;
         p[cellIndex(w, t, v)] = Math.exp(-0.5 * (lw * lw + lt * lt + lv * lv));
       }
     }
@@ -65,7 +70,12 @@ function normalise(p: Float64Array): Float64Array {
   return p;
 }
 
-export const PHYSIOLOGY_PRIOR = priorWeights();
+export const PHYSIOLOGY_PRIOR = priorWeights(FULL_GRID);
+const priors = new Map<FatigueGrid, Float64Array>([[FULL_GRID, PHYSIOLOGY_PRIOR]]);
+export const physiologyPrior = (grid: FatigueGrid) => {
+  if (!priors.has(grid)) priors.set(grid, priorWeights(grid));
+  return priors.get(grid)!;
+};
 
 /** Slowdown (log) of every rep of a set under one profile, and the rep (1-based) where it first falls off. */
 export function simulateSet(plan: SetPlan, wPrime: number, tau: number, volSens: number): { penalty: number[]; cliffAt: number | null } {
@@ -98,13 +108,18 @@ export class FatigueProfile {
   post: Float64Array;
   day: number | null = null;
   sets = 0;
+  private readonly cellIndex: (w: number, t: number, v: number) => number;
 
-  constructor(prior: Float64Array = PHYSIOLOGY_PRIOR) {
-    this.post = prior.slice();
+  constructor(
+    prior: Float64Array | null = null,
+    readonly grid: FatigueGrid = FULL_GRID,
+  ) {
+    this.post = (prior ?? physiologyPrior(grid)).slice();
+    this.cellIndex = indexIn(grid);
   }
 
   clone(): FatigueProfile {
-    const copy = new FatigueProfile(this.post);
+    const copy = new FatigueProfile(this.post, this.grid);
     copy.day = this.day;
     copy.sets = this.sets;
     return copy;
@@ -123,15 +138,17 @@ export class FatigueProfile {
       [1 - Math.exp(-DRIFT_PER_DAY.tau * dt), 1],
       [1 - Math.exp(-DRIFT_PER_DAY.vol * dt), 2],
     ];
+    const { w: gw, tau: gt, vol: gv } = this.grid;
+    const cellIndex = this.cellIndex;
     for (const [rate, axis] of axes) {
-      if (rate < 1e-6) continue;
-      const next = new Float64Array(CELLS);
-      for (let w = 0; w < NW; w += 1) {
-        for (let t = 0; t < NT; t += 1) {
-          for (let v = 0; v < NV; v += 1) {
+      const size = [gw.length, gt.length, gv.length][axis];
+      if (rate < 1e-6 || size < 2) continue;
+      const next = new Float64Array(this.post.length);
+      for (let w = 0; w < gw.length; w += 1) {
+        for (let t = 0; t < gt.length; t += 1) {
+          for (let v = 0; v < gv.length; v += 1) {
             const here = this.post[cellIndex(w, t, v)];
             const coords = [w, t, v];
-            const size = [NW, NT, NV][axis];
             const neighbours = [coords[axis] - 1, coords[axis] + 1].filter((value) => value >= 0 && value < size);
             next[cellIndex(w, t, v)] += here * (1 - rate);
             for (const n of neighbours) {
@@ -151,12 +168,13 @@ export class FatigueProfile {
     const mean = new Array(n).fill(0);
     const second = new Array(n).fill(0);
     const broken = new Array(n).fill(0);
-    for (let w = 0; w < NW; w += 1) {
-      for (let t = 0; t < NT; t += 1) {
-        for (let v = 0; v < NV; v += 1) {
-          const weight = this.post[cellIndex(w, t, v)];
+    const { w: gw, tau: gt, vol: gv } = this.grid;
+    for (let w = 0; w < gw.length; w += 1) {
+      for (let t = 0; t < gt.length; t += 1) {
+        for (let v = 0; v < gv.length; v += 1) {
+          const weight = this.post[this.cellIndex(w, t, v)];
           if (weight < 1e-7) continue;
-          const { penalty, cliffAt } = simulateSet(plan, W_GRID[w], TAU_GRID[t], VOL_GRID[v]);
+          const { penalty, cliffAt } = simulateSet(plan, gw[w], gt[t], gv[v]);
           for (let i = 0; i < n; i += 1) {
             mean[i] += weight * penalty[i];
             second[i] += weight * penalty[i] * penalty[i];
@@ -181,17 +199,19 @@ export class FatigueProfile {
     const n = plan.reps.length;
     if (n < 2) return;
     const missingTail = planned > n;
-    const logLik = new Float64Array(CELLS);
+    const cells = this.post.length;
+    const logLik = new Float64Array(cells);
     let best = -Infinity;
-    for (let w = 0; w < NW; w += 1) {
-      for (let t = 0; t < NT; t += 1) {
-        for (let v = 0; v < NV; v += 1) {
-          const i0 = cellIndex(w, t, v);
+    const { w: gw, tau: gt, vol: gv } = this.grid;
+    for (let w = 0; w < gw.length; w += 1) {
+      for (let t = 0; t < gt.length; t += 1) {
+        for (let v = 0; v < gv.length; v += 1) {
+          const i0 = this.cellIndex(w, t, v);
           if (this.post[i0] < 1e-12) {
             logLik[i0] = -Infinity;
             continue;
           }
-          const { penalty } = simulateSet(plan, W_GRID[w], TAU_GRID[t], VOL_GRID[v]);
+          const { penalty } = simulateSet(plan, gw[w], gt[t], gv[v]);
           const residual = observedLog.map((y, i) => y - levelLog[i] - penalty[i]);
           const sorted = [...residual].sort((a, b) => a - b);
           const offset = sorted[Math.floor(sorted.length / 2)];
@@ -203,7 +223,7 @@ export class FatigueProfile {
           if (missingTail) {
             // Censoring: would this profile have broken by the first missing rep?
             const extended: SetPlan = { ...plan, reps: [...plan.reps, { ...plan.reps[n - 1], observedS: undefined }] };
-            const next = simulateSet(extended, W_GRID[w], TAU_GRID[t], VOL_GRID[v]).penalty[n];
+            const next = simulateSet(extended, gw[w], gt[t], gv[v]).penalty[n];
             const pStop = 0.5 + 0.5 / (1 + Math.exp(-(next - BREAK_PENALTY) / 0.01));
             ll += Math.log(pStop);
           }
@@ -212,10 +232,11 @@ export class FatigueProfile {
         }
       }
     }
-    for (let i = 0; i < CELLS; i += 1) this.post[i] = Number.isFinite(logLik[i]) ? this.post[i] * Math.exp(logLik[i] - best) : 0;
+    for (let i = 0; i < cells; i += 1) this.post[i] = Number.isFinite(logLik[i]) ? this.post[i] * Math.exp(logLik[i] - best) : 0;
     // Never fully certain: keep a sliver of the prior so a real change can still be learned.
     const floor = 1e-4;
-    for (let i = 0; i < CELLS; i += 1) this.post[i] = this.post[i] + floor * PHYSIOLOGY_PRIOR[i];
+    const physiology = physiologyPrior(this.grid);
+    for (let i = 0; i < cells; i += 1) this.post[i] = this.post[i] + floor * physiology[i];
     normalise(this.post);
     this.sets += 1;
   }
@@ -226,13 +247,14 @@ export class FatigueProfile {
     let t = 0;
     let v = 0;
     let top = 0;
-    for (let a = 0; a < NW; a += 1) {
-      for (let b = 0; b < NT; b += 1) {
-        for (let c = 0; c < NV; c += 1) {
-          const p = this.post[cellIndex(a, b, c)];
-          w += p * Math.log(W_GRID[a]);
-          t += p * Math.log(TAU_GRID[b]);
-          v += p * VOL_GRID[c];
+    const { w: gw, tau: gt, vol: gv } = this.grid;
+    for (let a = 0; a < gw.length; a += 1) {
+      for (let b = 0; b < gt.length; b += 1) {
+        for (let c = 0; c < gv.length; c += 1) {
+          const p = this.post[this.cellIndex(a, b, c)];
+          w += p * Math.log(gw[a]);
+          t += p * Math.log(gt[b]);
+          v += p * gv[c];
           top = Math.max(top, p);
         }
       }
@@ -242,12 +264,13 @@ export class FatigueProfile {
 }
 
 /** Team prior: the average of informed teammates' posteriors, flattened, blended with physiology. */
-export function teamFatiguePrior(profiles: FatigueProfile[]): Float64Array {
-  const informed = profiles.filter((profile) => profile.sets >= 10);
-  if (informed.length < 2) return PHYSIOLOGY_PRIOR;
-  const out = new Float64Array(CELLS);
-  for (const profile of informed) for (let i = 0; i < CELLS; i += 1) out[i] += Math.sqrt(profile.post[i]) / informed.length;
+export function teamFatiguePrior(profiles: FatigueProfile[], grid: FatigueGrid = FULL_GRID): Float64Array {
+  const physiology = physiologyPrior(grid);
+  const informed = profiles.filter((profile) => profile.sets >= 10 && profile.grid === grid);
+  if (informed.length < 2) return physiology;
+  const out = new Float64Array(physiology.length);
+  for (const profile of informed) for (let i = 0; i < out.length; i += 1) out[i] += Math.sqrt(profile.post[i]) / informed.length;
   normalise(out);
-  for (let i = 0; i < CELLS; i += 1) out[i] = 0.7 * out[i] + 0.3 * PHYSIOLOGY_PRIOR[i];
+  for (let i = 0; i < out.length; i += 1) out[i] = 0.7 * out[i] + 0.3 * physiology[i];
   return normalise(out);
 }

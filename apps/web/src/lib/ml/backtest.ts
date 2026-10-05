@@ -1,7 +1,7 @@
 import { workoutBands } from "../season";
 import { annotateTrainingReps, isPlausibleRep, type TrainingRep } from "../training-context";
 import { groupKey } from "../training-prediction";
-import type { TimeLog, WellnessEntry, Workout } from "../types";
+import type { Stroke, TimeLog, WellnessEntry, Workout } from "../types";
 import { createRng } from "./rng";
 
 /*
@@ -24,6 +24,8 @@ export type AthleteInfo = {
   wellness: WellnessEntry[];
   dateOfBirth?: string;
   gender?: string;
+  /** Declared main stroke (site field). */
+  primaryStroke?: Stroke | "";
 };
 
 export type TruthRecord = {
@@ -47,7 +49,12 @@ export type Dataset = {
   truth?: Map<string, TruthRecord>;
   /** Synthetic only: which athletes depart from the group on purpose. */
   athleteTypes?: Map<string, "típico" | "atípico">;
+  /** Race results (site: competition results and personal bests). */
+  races?: RaceResult[];
 };
+
+/** A race swum by an athlete: what the site keeps from competitions (final time). */
+export type RaceResult = { athleteId: string; date: string; distanceM: number; stroke: Stroke; course: "scm" | "lcm"; timeS: number; expectedS?: number };
 
 /** "Should do": what current form allows for this kind of rep in reference conditions. */
 export type CapacityPrediction = { mean: number; lo?: number; hi?: number; sd?: number };
@@ -58,6 +65,8 @@ export type Prediction = {
   capacity?: CapacityPrediction;
   /** Probability that the set has broken (a rep fell off the curve) by this rep, inclusive. */
   pBreakBy?: number;
+  /** Heavy tails (E6): the predictive distribution is a Student-t with these degrees of freedom and scale `sd`. */
+  df?: number;
   /** Central predictive interval and its nominal coverage (e.g. 0.8). Omitted = point forecast only. */
   lo?: number;
   hi?: number;
@@ -79,6 +88,8 @@ export type TeamData = {
   anchorDay: number;
   /** Reps planned per set, by `${workoutId}|${blockId}|${segmentIndex}` (a missing tail can then be told apart). */
   planned?: Map<string, number>;
+  /** Race results per athlete, by date. */
+  races?: Map<string, RaceResult[]>;
 };
 
 export const plannedKey = (workoutId: string, blockId: string, segmentIndex: number) => `${workoutId}|${blockId}|${segmentIndex}`;
@@ -163,7 +174,9 @@ export function teamData(dataset: Dataset): TeamData {
     }
     load.set(athlete.id, entryLoad(dataset.workouts, athlete.id));
   }
-  return { rows, athletes, load, anchorDay: Number.isFinite(first) ? first - 1 : 0, planned: plannedSets(dataset.workouts) };
+  const races = new Map<string, RaceResult[]>();
+  for (const race of [...(dataset.races ?? [])].sort((a, b) => a.date.localeCompare(b.date))) races.set(race.athleteId, [...(races.get(race.athleteId) ?? []), race]);
+  return { rows, athletes, load, anchorDay: Number.isFinite(first) ? first - 1 : 0, planned: plannedSets(dataset.workouts), races };
 }
 
 /* ---------- Metrics ---------- */
@@ -201,6 +214,83 @@ export function gaussianCrps(mu: number, sd: number, y: number): number {
   const pdf = Math.exp(-0.5 * z * z) / Math.sqrt(2 * Math.PI);
   const cdf = 0.5 * (1 + erf(z / Math.SQRT2));
   return sd * (z * (2 * cdf - 1) + 2 * pdf - 1 / Math.sqrt(Math.PI));
+}
+
+/* ---------- Student-t predictive distribution (E6) ---------- */
+
+function logGamma(x: number): number {
+  // Lanczos approximation (g = 7, n = 9).
+  const c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+  if (x < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * x)) - logGamma(1 - x);
+  x -= 1;
+  let a = c[0];
+  const t = x + 7.5;
+  for (let i = 1; i < 9; i += 1) a += c[i] / (x + i);
+  return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+}
+
+/** Regularised incomplete beta I_x(a, b) (continued fraction, Numerical Recipes). */
+function incompleteBeta(x: number, a: number, b: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const front = Math.exp(logGamma(a + b) - logGamma(a) - logGamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+  const fraction = (xx: number, aa: number, bb: number) => {
+    let c = 1;
+    let d = 1 - ((aa + bb) * xx) / (aa + 1);
+    d = 1 / (Math.abs(d) < 1e-30 ? 1e-30 : d);
+    let h = d;
+    for (let m = 1; m <= 200; m += 1) {
+      const m2 = 2 * m;
+      let num = (m * (bb - m) * xx) / ((aa + m2 - 1) * (aa + m2));
+      d = 1 + num * d;
+      c = 1 + num / c;
+      d = 1 / (Math.abs(d) < 1e-30 ? 1e-30 : d);
+      h *= d * c;
+      num = (-(aa + m) * (aa + bb + m) * xx) / ((aa + m2) * (aa + m2 + 1));
+      d = 1 + num * d;
+      c = 1 + num / c;
+      d = 1 / (Math.abs(d) < 1e-30 ? 1e-30 : d);
+      const delta = d * c;
+      h *= delta;
+      if (Math.abs(delta - 1) < 1e-12) break;
+    }
+    return h;
+  };
+  return x < (a + 1) / (a + b + 2) ? (front * fraction(x, a, b)) / a : 1 - (front * fraction(1 - x, b, a)) / b;
+}
+
+export function studentTCdf(z: number, df: number): number {
+  const tail = 0.5 * incompleteBeta(df / (df + z * z), df / 2, 0.5);
+  return z >= 0 ? 1 - tail : tail;
+}
+
+export function studentTPdf(z: number, df: number): number {
+  return Math.exp(logGamma((df + 1) / 2) - logGamma(df / 2) - 0.5 * Math.log(df * Math.PI) - ((df + 1) / 2) * Math.log(1 + (z * z) / df));
+}
+
+const quantileCache = new Map<string, number>();
+/** Quantile of the standard Student-t (bisection; cached). */
+export function studentTQuantile(p: number, df: number): number {
+  const key = `${p}|${df}`;
+  const cached = quantileCache.get(key);
+  if (cached != null) return cached;
+  let lo = -50;
+  let hi = 50;
+  for (let i = 0; i < 100; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (studentTCdf(mid, df) < p) lo = mid;
+    else hi = mid;
+  }
+  quantileCache.set(key, (lo + hi) / 2);
+  return (lo + hi) / 2;
+}
+
+/** CRPS of a location-scale Student-t (df > 1) at y (Thorarinsdottir & Gneiting). */
+export function studentTCrps(mu: number, scale: number, df: number, y: number): number {
+  if (!(scale > 0)) return Math.abs(y - mu);
+  const z = (y - mu) / scale;
+  const constant = (2 * Math.sqrt(df) * Math.exp(logGamma(0.5) + logGamma(df - 0.5) - logGamma(df) - 2 * (logGamma(0.5) + logGamma(df / 2) - logGamma((df + 1) / 2)))) / (df - 1);
+  return scale * (z * (2 * studentTCdf(z, df) - 1) + (2 * studentTPdf(z, df) * (df + z * z)) / (df - 1) - constant);
 }
 
 /** Abramowitz–Stegun 7.1.26 (|error| < 1.5e-7). */
@@ -251,9 +341,18 @@ export function metricsOf(pairs: Pair[]): Metrics {
         ) * 100
       : null,
     coverage80: withSd.length
-      ? withSd.filter((pair) => Math.abs(pair.actual - pair.prediction.mean) <= Z80 * pair.prediction.sd!).length / withSd.length
+      ? withSd.filter((pair) => Math.abs(pair.actual - pair.prediction.mean) <= (pair.prediction.df ? studentTQuantile(0.9, pair.prediction.df) : Z80) * pair.prediction.sd!).length / withSd.length
       : null,
-    crpsPct: withSd.length ? avg(withSd.map((pair) => gaussianCrps(pair.prediction.mean, pair.prediction.sd!, pair.actual) / pair.actual)) * 100 : null,
+    crpsPct: withSd.length
+      ? avg(
+          withSd.map(
+            (pair) =>
+              (pair.prediction.df
+                ? studentTCrps(pair.prediction.mean, pair.prediction.sd!, pair.prediction.df, pair.actual)
+                : gaussianCrps(pair.prediction.mean, pair.prediction.sd!, pair.actual)) / pair.actual,
+          ),
+        ) * 100
+      : null,
   };
 }
 

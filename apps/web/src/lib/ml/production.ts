@@ -104,7 +104,7 @@ export function appTeam(athletes: Athlete[], workouts: Workout[], timeLogs: Time
     const list = annotateTrainingReps(workouts, stubs.length ? [...timeLogs, ...stubs] : timeLogs, athlete.id, athlete.wellness ?? [], athlete.groupName ?? "").map((row) =>
       isPlanLogId(row.log.id) ? { ...row, timeS: Number.NaN } : row,
     );
-    infos.set(athlete.id, { id: athlete.id, group: athlete.groupName ?? "", wellness: athlete.wellness ?? [], dateOfBirth: athlete.dateOfBirth, gender: athlete.gender ?? "" });
+    infos.set(athlete.id, { id: athlete.id, group: athlete.groupName ?? "", wellness: athlete.wellness ?? [], dateOfBirth: athlete.dateOfBirth, gender: athlete.gender ?? "", primaryStroke: athlete.primaryStroke });
     load.set(athlete.id, entryLoad(workouts, athlete.id));
     if (!list.length) continue;
     rows.set(athlete.id, list);

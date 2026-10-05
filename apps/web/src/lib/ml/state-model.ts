@@ -30,7 +30,7 @@ import type { Gear, Intensity, Stroke, WellnessEntry } from "../types";
  * a change nobody entered). Suspect times are predicted but never learned from.
  */
 
-export type AthleteMeta = { id: string; dateOfBirth?: string; gender?: string; wellness?: WellnessEntry[] };
+export type AthleteMeta = { id: string; dateOfBirth?: string; gender?: string; wellness?: WellnessEntry[]; primaryStroke?: Stroke | "" };
 export type DayLoadMap = Map<string, { meters: number; load: number; sessions: number }>;
 
 export type StateModelOptions = {
@@ -60,6 +60,27 @@ export type StateModelOptions = {
   /** Weight of "same time last year, adjusted for growth" in forecasts made before the plan exists (0 = off): a few weeks ahead / a year ahead. */
   seasonalAnchor: number;
   seasonalAnchorYear: number;
+  /** E1: one Riegel exponent up to 100 m and another beyond (critical speed included), the second shrunk to the first. */
+  riegelPiecewise: boolean;
+  /** E2: the athlete's declared primary stroke gets a pooled "primary advantage" factor. */
+  primaryStroke: boolean;
+  /** E3: race results are observations of the same engine (MAX from a dive, plus a pooled race factor). */
+  races: boolean;
+  /** E4: share of the previous rep's error (same set) added to the next forecast, rep horizon only (0 = off). */
+  withinSetAR: number;
+  /** E8: lagged and self-reported context — sleep two nights before, gym the day before, perceived recovery (needs `context`). */
+  contextLagged: boolean;
+  /** E9: a CUSUM per structural factor — errors that keep pointing the same way on one factor loosen the team's prior on it. */
+  factorCusum: boolean;
+  /** E11: extra level uncertainty per week of break (faster learning right after a return) and the break length (days) at which the deficit is ~63 % of γ. */
+  returnLevelSd: number;
+  returnShapeDays: number;
+  /** E12: the individual fatigue profile only acts for an athlete once it has learned from this many sets (0 = always). */
+  fatigueMinSets: number;
+  /** E12: drop the volume-sensitivity dimension of the fatigue profile (not identifiable). */
+  fatigueNoVolume: boolean;
+  /** E12: recalibration of the break probability, logit(p′) = a + b·logit(p) (fitted on tuning seeds). */
+  breakCalibration: [number, number] | null;
 };
 
 /** Tuned on the tuning seeds only (scripts in docs/ml/protocolo.md §5); physiological starting points in comments. */
@@ -84,6 +105,17 @@ export const DEFAULT_OPTIONS: StateModelOptions = {
   fatigueKeepLinear: false,
   seasonalAnchor: 0,
   seasonalAnchorYear: 0,
+  riegelPiecewise: false,
+  primaryStroke: false,
+  races: false,
+  withinSetAR: 0,
+  contextLagged: false,
+  factorCusum: false,
+  returnLevelSd: 0.004,
+  returnShapeDays: 21,
+  fatigueMinSets: 0,
+  fatigueNoVolume: false,
+  breakCalibration: null,
 };
 
 /* ---------- State layout ---------- */
@@ -105,22 +137,33 @@ export const IX = {
   fatigue: 23,
   drift: 24,
   first: 25,
-  gamma: 26,
-  morning: 27,
-  second: 28,
-  sleep: 29,
-  wellnessMissing: 30,
-  gym: 31,
-  loadBefore: 32,
-  fitness: 33,
-  fatigue2: 34,
-  L: 35,
-  nu: 36,
-  e: 37,
-  s: 38,
-  R: 39,
+  /** Increment of the Riegel exponent beyond 100 m (E1). */
+  kLong: 26,
+  /** Primary-stroke advantage (E2). */
+  primary: 27,
+  /** Race conditions vs a training MAX (E3). */
+  race: 28,
+  gamma: 29,
+  morning: 30,
+  second: 31,
+  sleep: 32,
+  wellnessMissing: 33,
+  gym: 34,
+  loadBefore: 35,
+  fitness: 36,
+  fatigue2: 37,
+  /** Lagged context (E8): short sleep two nights before, gym the day before. */
+  sleepPrev: 38,
+  gymPrev: 39,
+  /** Perceived recovery (1–5) entered with the wellness (E8). */
+  recovery: 40,
+  L: 41,
+  nu: 42,
+  e: 43,
+  s: 44,
+  R: 45,
 };
-export const N = 40;
+export const N = 46;
 /** Coefficients shared through the team estimate (everything structural and contextual except the engine). */
 const POOLED = Array.from({ length: IX.L }, (_, j) => j).filter((j) => j !== IX.engine);
 
@@ -150,6 +193,11 @@ const PRIOR: [number, number][] = (() => {
   p[IX.fatigue] = [0.004, 0.006];
   p[IX.drift] = [0.0005, 0.001];
   p[IX.first] = [0, 0.01];
+  // Agnostic about the sign: the data decide whether the curve bends beyond 100 m.
+  p[IX.kLong] = [0, 0.02];
+  // Swimmers are usually relatively faster in their main stroke; how much is learned from the team.
+  p[IX.primary] = [-0.02, 0.02];
+  p[IX.race] = [-0.01, 0.02];
   p[IX.gamma] = [0.035, 0.02];
   // Context: small effects, strongly shrunk — the data has to insist before they move.
   p[IX.morning] = [0.005, 0.008];
@@ -161,6 +209,10 @@ const PRIOR: [number, number][] = (() => {
   // Banister: more fitness than usual → faster; more fatigue than usual → slower (per unit of relative impulse).
   p[IX.fitness] = [-0.02, 0.015];
   p[IX.fatigue2] = [0.015, 0.012];
+  p[IX.sleepPrev] = [0.001, 0.002];
+  p[IX.gymPrev] = [0, 0.006];
+  // Feeling fresher (recovery above 3) → faster; small, strongly shrunk.
+  p[IX.recovery] = [-0.002, 0.004];
   p[IX.L] = [0, 0.03];
   p[IX.nu] = [0, 0.01 / 365];
   p[IX.e] = [0, 0.006];
@@ -233,6 +285,11 @@ export const extraTurnsShare = (distance: number) => {
 
 type Observation = { offset: number; idx: number[]; val: number[] };
 
+/** Which structural refinements this athlete's model uses (E1, E2) and the wellness by date for lagged context (E8). */
+type Shape = { piecewise: boolean; primary: Stroke | "" | null; wellness?: Map<string, WellnessEntry> | null };
+const PLAIN: Shape = { piecewise: false, primary: null };
+const previousDay = (iso: string) => new Date((dayNumber(iso) - 1) * DAY_MS).toISOString().slice(0, 10);
+
 /** What context a forecast may use: the rep's own day (sleep, gym) only when it is known. */
 export type ContextAccess = {
   use: boolean;
@@ -241,6 +298,8 @@ export type ContextAccess = {
   impulse?: { fitness: number; fatigue: number } | null;
   /** In-set fatigue is handled outside (fatigue.ts): drop the linear position-by-rest term. */
   noLinearFatigue?: boolean;
+  /** The observation is a race (E3): the race factor applies. */
+  race?: boolean;
 };
 
 /** Extra log-time from outside the linear model (e.g. the expected in-set fatigue) and its variance. */
@@ -249,7 +308,7 @@ const NO_OFFSET: Offset = { offset: 0, variance: 0 };
 const NO_CONTEXT: ContextAccess = { use: false, dayKnown: false, planKnown: false };
 
 /** Sparse observation vector of a rep: log(time) = offset + Σ val·state[idx]. */
-function observe(row: TrainingRep, approxTime: number | null, context: ContextAccess = NO_CONTEXT): Observation {
+function observe(row: TrainingRep, approxTime: number | null, context: ContextAccess = NO_CONTEXT, shape: Shape = PLAIN): Observation {
   const idx: number[] = [IX.engine];
   const val: number[] = [1];
   const d = row.distanceM;
@@ -257,19 +316,35 @@ function observe(row: TrainingRep, approxTime: number | null, context: ContextAc
   if (row.intensity === "MAX") {
     idx.push(IX.k, IX.max);
     val.push(lg(d / 100), 1);
+    if (shape.piecewise && d > 100) {
+      idx.push(IX.kLong);
+      val.push(lg(d / 100));
+    }
   } else if (row.intensity === "P50" || row.intensity === "P100" || row.intensity === "P200" || row.intensity === "P400") {
     const event = Number(row.intensity.slice(1));
     offset = lg(d / event);
     idx.push(IX.k, IX.racePace);
     val.push(lg(event / 100), 1);
+    if (shape.piecewise && event > 100) {
+      idx.push(IX.kLong);
+      val.push(lg(event / 100));
+    }
   } else {
     offset = lg(d / 1500);
     idx.push(IX.k, IX.zone[row.intensity as (typeof ZONES)[number]]);
     val.push(lg(15), 1);
+    if (shape.piecewise) {
+      idx.push(IX.kLong);
+      val.push(lg(15));
+    }
   }
   if (row.stroke && row.stroke !== "free") {
     idx.push(IX.stroke[row.stroke as Exclude<Stroke, "free">]);
     val.push(1);
+    if (shape.primary && row.stroke === shape.primary) {
+      idx.push(IX.primary);
+      val.push(1);
+    }
   }
   for (const gear of row.gear) {
     idx.push(IX.gear[gear]);
@@ -328,6 +403,26 @@ function observe(row: TrainingRep, approxTime: number | null, context: ContextAc
       idx.push(IX.loadBefore);
       val.push(row.loadBeforeM / 1000);
     }
+    if (context.dayKnown && shape.wellness) {
+      const today = shape.wellness.get(row.date);
+      const before = shape.wellness.get(previousDay(row.date));
+      if (before?.sleepHours != null) {
+        idx.push(IX.sleepPrev);
+        val.push(Math.max(0, 8 - before.sleepHours));
+      }
+      if (before?.gym === "strength" || before?.gym === "explosive") {
+        idx.push(IX.gymPrev);
+        val.push(before.gym === "strength" ? 1 : 0.7);
+      }
+      if (today?.recovery != null) {
+        idx.push(IX.recovery);
+        val.push(today.recovery - 3);
+      }
+    }
+  }
+  if (context.race) {
+    idx.push(IX.race);
+    val.push(1);
   }
   const response = RESPONSE[row.intensity];
   if (context.impulse) {
@@ -376,6 +471,9 @@ export class AthleteFilter {
   breaks: { start: number; length: number }[] = [];
   /** Days on which the regime detector fired (errors kept pointing the same way). */
   regimeShifts: number[] = [];
+  /** E9: running CUSUM of standardised errors per structural factor (positive and negative sides). */
+  factorCusumPos = new Float64Array(N);
+  factorCusumNeg = new Float64Array(N);
   /** Filtered form (level + return deficit) at the end of every day with data: the athlete's seasons, for year-on-year comparisons. */
   formLog: { day: number; mean: number }[] = [];
 
@@ -406,6 +504,8 @@ export class AthleteFilter {
     copy.fatigueImpulse = this.fatigueImpulse;
     copy.breaks = [...this.breaks];
     copy.formLog = this.formLog;
+    copy.factorCusumPos.set(this.factorCusumPos);
+    copy.factorCusumNeg.set(this.factorCusumNeg);
     return copy;
   }
 
@@ -462,7 +562,16 @@ export class AthleteFilter {
   criticalSpeed(): number {
     const engine = this.active[IX.engine] ? this.z[IX.engine] : PRIOR[IX.engine][0];
     const k = this.active[IX.k] ? this.z[IX.k] : PRIOR[IX.k][0];
-    return 1500 / Math.exp(engine + k * Math.log(15) + this.form());
+    const kLong = this.options.riegelPiecewise ? (this.active[IX.kLong] ? this.z[IX.kLong] : PRIOR[IX.kLong][0]) : 0;
+    return 1500 / Math.exp(engine + (k + kLong) * Math.log(15) + this.form());
+  }
+
+  private wellnessByDate: Map<string, WellnessEntry> | null = null;
+
+  /** The structural refinements this athlete's observations use. */
+  shape(): Shape {
+    if (this.options.contextLagged && !this.wellnessByDate) this.wellnessByDate = new Map((this.meta.wellness ?? []).map((entry) => [entry.date, entry]));
+    return { piecewise: this.options.riegelPiecewise, primary: this.options.primaryStroke ? (this.meta.primaryStroke ?? null) : null, wellness: this.wellnessByDate };
   }
 
   /** Current form: level plus return deficit (log-time, 0 = the athlete's engine). */
@@ -509,14 +618,14 @@ export class AthleteFilter {
   /** A break of `gap` days without training: the return deficit jumps (γ learned), the level gets less certain. */
   applyBreak(gap: number, gammaPrior: [number, number]) {
     this.activate(IX.gamma, gammaPrior[0], gammaPrior[1]);
-    this.addScaled(IX.R, IX.gamma, 1 - Math.exp(-(gap - 7) / 21));
-    this.P[IX.L * N + IX.L] += 0.004 ** 2 * (gap / 7);
+    this.addScaled(IX.R, IX.gamma, 1 - Math.exp(-(gap - 7) / this.options.returnShapeDays));
+    this.P[IX.L * N + IX.L] += this.options.returnLevelSd ** 2 * (gap / 7);
   }
 
   /** Puts a deficit in place for an athlete whose data starts right after a break of unknown length. */
   startsAfterBreak(gammaPrior: [number, number], days = 35) {
     this.activate(IX.gamma, gammaPrior[0], gammaPrior[1]);
-    this.addScaled(IX.R, IX.gamma, 1 - Math.exp(-(days - 7) / 21));
+    this.addScaled(IX.R, IX.gamma, 1 - Math.exp(-(days - 7) / this.options.returnShapeDays));
   }
 
   /**
@@ -605,7 +714,7 @@ export class AthleteFilter {
   forecast(row: TrainingRep, prior: (j: number) => [number, number], access: ContextAccess = NO_CONTEXT, extra: Offset = NO_OFFSET): Forecast {
     const context = this.options.banister ? { ...access, impulse: this.impulse() } : access;
     let newFactors = 0;
-    const first = observe(row, null, context);
+    const first = observe(row, null, context, this.shape());
     for (const j of first.idx) {
       if (!this.active[j]) {
         const [m, sd] = prior(j);
@@ -616,7 +725,7 @@ export class AthleteFilter {
     }
     // Linearise the dive gain around the prediction without it.
     const approx = Math.exp(first.offset + first.idx.reduce((sum, j, i) => sum + (j === IX.block ? 0 : first.val[i] * this.z[j]), 0));
-    const obs = observe(row, approx, context);
+    const obs = observe(row, approx, context, this.shape());
     let mean = obs.offset + extra.offset;
     for (let i = 0; i < obs.idx.length; i += 1) mean += obs.val[i] * this.z[obs.idx[i]];
     let variance = 0;
@@ -644,7 +753,7 @@ export class AthleteFilter {
   update(row: TrainingRep, prior: (j: number) => [number, number], access: ContextAccess = NO_CONTEXT, extra: Offset = NO_OFFSET): number {
     const context = this.options.banister ? { ...access, impulse: this.impulse() } : access;
     const f = this.forecast(row, prior, access, extra);
-    const obs = observe(row, Math.exp(f.logMean - extra.offset), context);
+    const obs = observe(row, Math.exp(f.logMean - extra.offset), context, this.shape());
     const y = Math.log(row.timeS);
     const ph = new Float64Array(N);
     for (let a = 0; a < obs.idx.length; a += 1) {
@@ -673,6 +782,21 @@ export class AthleteFilter {
     this.noiseScale = Math.min(3, Math.max(0.5, 0.99 * this.noiseScale + 0.01 * Math.min(zScore * zScore, 9)));
     this.dayZ.push(Math.max(-3, Math.min(3, zScore)));
     this.observations += 1;
+    if (this.options.factorCusum && Number.isFinite(zScore)) {
+      // The same error, attributed to every structural factor of this rep: a factor whose errors keep the
+      // same sign rep after rep is off for this athlete, so its uncertainty is reopened (the team prior weighs less).
+      const clipped = Math.max(-3, Math.min(3, zScore));
+      for (const j of obs.idx) {
+        if (j >= IX.gamma || j === IX.engine || j === IX.k) continue;
+        this.factorCusumPos[j] = Math.max(0, this.factorCusumPos[j] + clipped - 0.5);
+        this.factorCusumNeg[j] = Math.min(0, this.factorCusumNeg[j] + clipped + 0.5);
+        if (this.factorCusumPos[j] > 4 || this.factorCusumNeg[j] < -4) {
+          this.factorCusumPos[j] = 0;
+          this.factorCusumNeg[j] = 0;
+          this.P[j * N + j] += 0.25 * this.initVar[j];
+        }
+      }
+    }
     return zScore;
   }
 

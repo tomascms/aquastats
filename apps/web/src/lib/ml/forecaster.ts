@@ -1,6 +1,6 @@
 import { isPlausibleRep, type TrainingRep } from "../training-context";
-import { dayNumber, isPlanned, originOf, plannedKey, setIdOf, type Horizon, type LeadHorizon, type TeamData } from "./backtest";
-import { FatigueProfile, teamFatiguePrior, type SetPlan } from "./fatigue";
+import { dayNumber, isPlanned, originOf, plannedKey, setIdOf, type Horizon, type LeadHorizon, type RaceResult, type TeamData } from "./backtest";
+import { FatigueProfile, FULL_GRID, NO_VOLUME_GRID, teamFatiguePrior, type SetPlan } from "./fatigue";
 import { AthleteFilter, DEFAULT_OPTIONS, developmentPerDay, enginePrior, IX, TeamPool, type ContextAccess, type Forecast, type StateModelOptions } from "./state-model";
 
 /*
@@ -60,12 +60,43 @@ export type RunHooks = {
   select?: (athleteId: string, day: number, today: TrainingRep[], filter: AthleteFilter, prior: (j: number) => [number, number]) => Set<string>;
   /** With the individual fatigue model: the athlete's profile after the day was learned (parameter recovery). */
   onFatigue?: (athleteId: string, day: number, profile: FatigueProfile) => void;
+  /** E13: also forecast every race this many days ahead (from the state at the end of the origin day; training up to the race as entered). */
+  raceLeadDays?: number;
 };
 
 /**
  * Planned reps (time NaN, see `isPlanned`) are forecast at the day horizon like any other rep but
  * never learned from: that is how the app predicts a session before it is swum.
  */
+/** A race as the filter sees it: a maximal effort from a dive, in that pool, with the race factor (no context terms). */
+export const RACE_ACCESS: ContextAccess = { use: false, dayKnown: true, planKnown: true, race: true };
+/** A race forecast from an earlier origin: the race-day wellness is not known yet, the training up to it is. */
+const RACE_AHEAD: ContextAccess = { use: false, dayKnown: false, planKnown: true, race: true };
+
+export function raceRow(race: RaceResult): TrainingRep {
+  const id = `race:${race.athleteId}:${race.date}:${race.stroke}:${race.distanceM}`;
+  return {
+    log: { id, workoutId: `race:${race.date}`, blockId: "race", athleteId: race.athleteId, repNumber: 1, mm: 0, ss: 0, cc: 0, splits: [], stroke: race.stroke, pending: false, recordedAt: race.date },
+    timeS: race.timeS,
+    workoutId: `race:${race.date}`,
+    date: race.date,
+    distanceM: race.distanceM,
+    intensity: "MAX",
+    stroke: race.stroke,
+    gear: [],
+    course: race.course,
+    fromBlock: true,
+    repInSegment: 1,
+    segmentReps: 1,
+    restSeconds: null,
+    shift: "afternoon",
+    trainedEarlierToday: false,
+    sleepHours: null,
+    gymType: null,
+    loadBeforeM: 0,
+  } as unknown as TrainingRep;
+}
+
 export function runStateModel(
   team: TeamData,
   horizon: Horizon,
@@ -96,6 +127,24 @@ export function runStateModel(
     const loads = [...(team.load.get(athleteId)?.entries() ?? [])].map(([date, value]) => ({ day: dayNumber(date), load: value.load })).sort((a, b) => a.day - b.day);
     loadDays.set(athleteId, loads);
   }
+
+  // Races (E3): each one is an observation of the same engine on its day, after that day's training.
+  const racesByDay = new Map<string, Map<number, RaceResult[]>>();
+  if (options.races && team.races) {
+    for (const [athleteId, list] of team.races) {
+      if (!repDays.has(athleteId)) continue;
+      const byDay = new Map<number, RaceResult[]>();
+      for (const race of list) {
+        const day = dayNumber(race.date);
+        byDay.set(day, [...(byDay.get(day) ?? []), race]);
+        days.add(day);
+      }
+      racesByDay.set(athleteId, byDay);
+    }
+  }
+
+  // E13: race forecasts are made at the end of their origin day, which must be visited even without data.
+  if (hooks.raceLeadDays != null && team.races) for (const list of team.races.values()) for (const race of list) days.add(dayNumber(race.date) - hooks.raceLeadDays);
 
   // Lead horizons: targets grouped by origin.
   const lead = horizon.kind === "lead" ? (horizon as LeadHorizon) : null;
@@ -138,13 +187,24 @@ export function runStateModel(
   const linearOff = options.fatigueGrid && !options.fatigueKeepLinear;
   const known: ContextAccess = { use: options.context, dayKnown: true, planKnown: true, noLinearFatigue: linearOff };
   const ahead: ContextAccess = { use: options.context, dayKnown: false, planKnown: Boolean(lead?.planKnown), noLinearFatigue: linearOff };
+  // E12: until an athlete's profile has learned from enough sets, that athlete is forecast as without it (linear fatigue term).
+  const knownPlain: ContextAccess = { ...known, noLinearFatigue: false };
+  const aheadPlain: ContextAccess = { ...ahead, noLinearFatigue: false };
+  const fatigueOn = (profile: FatigueProfile) => profile.sets >= options.fatigueMinSets;
+  const breakProbability = (p: number) => {
+    if (!options.breakCalibration) return p;
+    const q = Math.min(1 - 1e-4, Math.max(1e-4, p));
+    const [a, b] = options.breakCalibration;
+    return 1 / (1 + Math.exp(-(a + b * Math.log(q / (1 - q)))));
+  };
+  const fatigueGridOf = options.fatigueNoVolume ? NO_VOLUME_GRID : FULL_GRID;
 
   // Individual in-set fatigue (fatigue.ts): one posterior per athlete, started from the team's.
   const fatigue = new Map<string, FatigueProfile>();
   const fatigueFor = (athleteId: string) => {
     let profile = fatigue.get(athleteId);
     if (!profile) {
-      profile = new FatigueProfile(teamFatiguePrior([...fatigue.values()]));
+      profile = new FatigueProfile(teamFatiguePrior([...fatigue.values()], fatigueGridOf), fatigueGridOf);
       fatigue.set(athleteId, profile);
     }
     return profile;
@@ -198,8 +258,9 @@ export function runStateModel(
 
   for (const day of [...days].sort((a, b) => a - b)) {
     for (const [athleteId, byDay] of repDays) {
-      const today = byDay.get(day);
-      if (!today) continue;
+      const today = byDay.get(day) ?? [];
+      const racesToday = racesByDay.get(athleteId)?.get(day) ?? [];
+      if (!today.length && !racesToday.length) continue;
       const fresh = !filters.has(athleteId);
       const filter = ensure(athleteId, day);
       if (!fresh) filter.advance(day, loadsBetween(athleteId, filter.day!, day), true, gammaPrior(filter, day));
@@ -209,10 +270,22 @@ export function runStateModel(
       const learns = (row: TrainingRep) => !excluded.has(row.log.id) && !isPlanned(row) && (!learnable || learnable.has(row.log.id));
       if (!options.fatigueGrid) {
         if (horizon.kind === "day") for (const row of today) record(row, athleteId, filter.forecast(row, prior, known), "day", filter);
+        // E4: what is left of the previous rep's error in the same set carries over (AR(1), rep horizon only).
+        let carrySet = "";
+        let carry = 0;
         for (const row of today) {
           filter.newSession(`${row.workoutId}`);
-          if (horizon.kind === "rep") record(row, athleteId, filter.forecast(row, prior, known), "rep", filter);
-          if (learns(row)) zScores.push(filter.update(row, prior, known));
+          if (setIdOf(row) !== carrySet) {
+            carrySet = setIdOf(row);
+            carry = 0;
+          }
+          const ar = options.withinSetAR && carry ? { offset: options.withinSetAR * carry, variance: 0 } : undefined;
+          if (horizon.kind === "rep") record(row, athleteId, filter.forecast(row, prior, known, ar), "rep", filter);
+          if (learns(row)) {
+            const before = options.withinSetAR ? filter.forecast(row, prior, known).logMean : 0;
+            zScores.push(filter.update(row, prior, known));
+            if (options.withinSetAR) carry = Math.log(row.timeS) - before;
+          }
         }
       } else {
         const profile = fatigueFor(athleteId);
@@ -221,22 +294,26 @@ export function runStateModel(
         for (const set of sets) if (!isPlanned(set[0])) noteBefore(athleteId, set[0].loadBeforeM);
         if (horizon.kind === "day") {
           // Before the day: every set from today's state, no rep of today seen.
+          const on = fatigueOn(profile);
           for (const set of sets) {
             const { plan } = planOf(filter, set, prior, known);
             const fc = profile.forecast(plan);
-            set.forEach((row, i) => record(row, athleteId, filter.forecast(row, prior, known, { offset: fc.meanPenalty[i], variance: fc.varPenalty[i] }), "day", filter, fc.pBreakBy[i]));
+            set.forEach((row, i) =>
+              record(row, athleteId, filter.forecast(row, prior, on ? known : knownPlain, on ? { offset: fc.meanPenalty[i], variance: fc.varPenalty[i] } : undefined), "day", filter, breakProbability(fc.pBreakBy[i])),
+            );
           }
         }
         for (const set of sets) {
           filter.newSession(`${set[0].workoutId}`);
+          const on = fatigueOn(profile);
           if (horizon.kind === "rep") {
             // Rep by rep: the reserve path uses the times already swum in this set, the profile is the one from before the set.
             for (let k = 0; k < set.length; k += 1) {
               const { plan } = planOf(filter, set.slice(0, k + 1), prior, known, k - 1);
               const fc = profile.forecast(plan);
-              const extra = { offset: fc.meanPenalty[k], variance: fc.varPenalty[k] };
-              record(set[k], athleteId, filter.forecast(set[k], prior, known, extra), "rep", filter, fc.pBreakBy[k]);
-              if (learns(set[k])) zScores.push(filter.update(set[k], prior, known, extra));
+              const extra = on ? { offset: fc.meanPenalty[k], variance: fc.varPenalty[k] } : undefined;
+              record(set[k], athleteId, filter.forecast(set[k], prior, on ? known : knownPlain, extra), "rep", filter, breakProbability(fc.pBreakBy[k]));
+              if (learns(set[k])) zScores.push(filter.update(set[k], prior, on ? known : knownPlain, extra));
             }
             const seen = set.filter(learns);
             if (seen.length >= 2) {
@@ -251,8 +328,13 @@ export function runStateModel(
           const { plan, levels } = planOf(filter, seen, prior, known, seen.length - 1);
           if (seen.length >= 2) profile.update(plan, seen.map((row) => Math.log(row.timeS)), levels, team.planned?.get(plannedKey(seen[0].workoutId, seen[0].blockId, seen[0].segmentIndex)) ?? seen.length);
           const fc = profile.forecast(plan);
-          seen.forEach((row, i) => zScores.push(filter.update(row, prior, known, { offset: fc.meanPenalty[i], variance: fc.varPenalty[i] })));
+          seen.forEach((row, i) => zScores.push(filter.update(row, prior, on ? known : knownPlain, on ? { offset: fc.meanPenalty[i], variance: fc.varPenalty[i] } : undefined)));
         }
+      }
+      for (const race of racesToday) {
+        const row = raceRow(race);
+        filter.newSession(row.workoutId);
+        zScores.push(filter.update(row, prior, RACE_ACCESS));
       }
       filter.closeDay();
       filter.logForm();
@@ -261,12 +343,29 @@ export function runStateModel(
     }
     pool.refresh([...filters.values()], engineRef);
 
+    if (hooks.raceLeadDays != null && team.races) {
+      for (const [athleteId, list] of team.races) {
+        const base = filters.get(athleteId);
+        if (!base) continue;
+        for (const race of list) {
+          const raceDay = dayNumber(race.date);
+          if (raceDay - hooks.raceLeadDays !== day) continue;
+          const clone = base.clone();
+          if (clone.day != null && raceDay > clone.day) clone.advance(raceDay, loadsBetween(athleteId, clone.day, raceDay), true, gammaPrior(clone, day));
+          const row = raceRow(race);
+          clone.newSession(row.workoutId);
+          record(row, athleteId, clone.forecast(row, priorFor(clone, day), RACE_AHEAD), "lead", clone);
+        }
+      }
+    }
+
     const targets = lead ? targetsByOrigin.get(day) : undefined;
     if (lead && targets) {
       for (const [athleteId, rows] of targets) {
         const base = filters.get(athleteId) ?? ensure(athleteId, day);
         const clone = base.clone();
         const profile = options.fatigueGrid ? fatigueFor(athleteId).clone() : null;
+        const profileOn = profile != null && fatigueOn(profile);
         const leadSets = new Map<string, { offset: number; variance: number; pBreakBy: number }>();
         const sorted = [...rows].sort((a, b) => dayNumber(a.date) - dayNumber(b.date));
         const teamBreaks = [...filters.values()].flatMap((filter) => filter.breaks);
@@ -309,10 +408,11 @@ export function runStateModel(
             const set = rows.filter((other) => setIdOf(other) === setIdOf(row)).sort((a, b) => a.log.repNumber - b.log.repNumber);
             const { plan } = planOf(clone, set, priorFor(clone, day), ahead, -1, lead.planKnown ? set[0].loadBeforeM : usualBeforeOf(athleteId));
             const fc = profile.forecast(plan);
-            set.forEach((other, i) => leadSets.set(other.log.id, { offset: fc.meanPenalty[i], variance: fc.varPenalty[i], pBreakBy: fc.pBreakBy[i] }));
+            set.forEach((other, i) => leadSets.set(other.log.id, { offset: fc.meanPenalty[i], variance: fc.varPenalty[i], pBreakBy: breakProbability(fc.pBreakBy[i]) }));
           }
           const extra = leadSets.get(row.log.id);
-          record(row, athleteId, clone.forecast(row, priorFor(clone, day), ahead, extra), "lead", clone, extra?.pBreakBy);
+          if (profile && !profileOn) record(row, athleteId, clone.forecast(row, priorFor(clone, day), aheadPlain), "lead", clone, extra?.pBreakBy);
+          else record(row, athleteId, clone.forecast(row, priorFor(clone, day), ahead, extra), "lead", clone, extra?.pBreakBy);
         }
       }
     }

@@ -1,6 +1,6 @@
 import { isPlausibleRep, type TrainingRep } from "../training-context";
 import { groupKey } from "../training-prediction";
-import { dayNumber, isPlanned, lastUsableDay, Z80, type Horizon, type Prediction, type Predictor, type TeamData } from "./backtest";
+import { dayNumber, isPlanned, lastUsableDay, studentTQuantile, Z80, type Horizon, type Prediction, type Predictor, type TeamData } from "./backtest";
 import { teamSuspects } from "./quality";
 
 /*
@@ -64,7 +64,14 @@ type Event = { time: number; kind: "observe" | "issue"; row: TrainingRep; athlet
 export type CalibrationOptions = {
   /** "model": errors are measured in units of the model's own uncertainty (normalised conformal). */
   scale?: "relative" | "model";
+  /** E6: heavy tails — the predictive distribution is a Student-t with these degrees of freedom (same 80 % interval). */
+  tails?: number;
+  /** E7: errors also pooled by the athlete's maturity (weeks of data: < 2, 2–8, 8+), so new athletes get their own width. */
+  byMaturity?: boolean;
 };
+
+/** Weeks since the athlete's first timed rep: 0 = under 2, 1 = 2 to 8, 2 = 8 or more. */
+const maturityBand = (weeks: number) => (weeks < 2 ? 0 : weeks < 8 ? 1 : 2);
 
 export function calibrated(base: Predictor, name = `${base.name} + conformal`, options: CalibrationOptions = {}): Predictor {
   const normalised = options.scale === "model";
@@ -78,8 +85,10 @@ export function calibrated(base: Predictor, name = `${base.name} + conformal`, o
       const suspects = teamSuspects(team.rows, { withinDayCausal: horizon.kind === "rep" });
       const events: Event[] = [];
       const history = new Map<string, number>();
+      const maturity = new Map<string, number>();
       for (const [athleteId, rows] of team.rows) {
         const counts = new Map<string, number>();
+        let firstDay: number | null = null;
         let pending: TrainingRep[] = [];
         let currentDate = "";
         for (const row of rows.filter((item) => isPlausibleRep(item) || isPlanned(item))) {
@@ -89,6 +98,8 @@ export function calibrated(base: Predictor, name = `${base.name} + conformal`, o
             currentDate = row.date;
           }
           history.set(row.log.id, counts.get(groupKey(row)) ?? 0);
+          maturity.set(row.log.id, firstDay == null ? 0 : maturityBand((dayNumber(row.date) - firstDay) / 7));
+          if (firstDay == null && !isPlanned(row)) firstDay = dayNumber(row.date);
           if (point.has(row.log.id)) events.push({ time: lastUsableDay(row, horizon, team.anchorDay) + 0.5, kind: "issue", row, athleteId });
           if (isPlanned(row)) continue;
           pending.push(row);
@@ -98,6 +109,7 @@ export function calibrated(base: Predictor, name = `${base.name} + conformal`, o
       events.sort((a, b) => a.time - b.time || (a.kind === b.kind ? 0 : a.kind === "observe" ? -1 : 1));
 
       const pools: Residual[][] = [[], [], [], []];
+      const bandPools: Residual[][][] = [0, 1, 2, 3].map(() => [[], [], []]);
       const multiplier = new Map<string, number>();
       const issued = new Map<string, number>();
       const quantileCache = new Map<string, number>();
@@ -112,6 +124,11 @@ export function calibrated(base: Predictor, name = `${base.name} + conformal`, o
           const pool = pools[stratum];
           pool.push({ day: Math.floor(event.time), abs });
           if (pool.length > POOL_LIMIT) pool.shift();
+          if (options.byMaturity) {
+            const bandPool = bandPools[stratum][maturity.get(id) ?? 0];
+            bandPool.push({ day: Math.floor(event.time), abs });
+            if (bandPool.length > POOL_LIMIT) bandPool.shift();
+          }
           quantileCache.clear();
           const width = issued.get(id);
           if (width != null) {
@@ -125,6 +142,15 @@ export function calibrated(base: Predictor, name = `${base.name} + conformal`, o
         const prediction = point.get(id)!;
         const today = Math.floor(event.time);
         let pooled = Number.NaN;
+        if (options.byMaturity) {
+          const band = maturity.get(id) ?? 0;
+          const bandPool = bandPools[stratum][band];
+          if (bandPool.length >= MIN_POOL) {
+            const key = `${stratum}|${band}#${today}`;
+            if (!quantileCache.has(key)) quantileCache.set(key, weightedQuantile(bandPool, NOMINAL, today));
+            pooled = quantileCache.get(key)!;
+          }
+        }
         // Fall back to the next stratum with more data when this one has too few checked errors.
         for (let s = stratum; s >= 0 && !Number.isFinite(pooled); s -= 1) {
           if (pools[s].length < MIN_POOL) continue;
@@ -142,7 +168,8 @@ export function calibrated(base: Predictor, name = `${base.name} + conformal`, o
           lo: prediction.mean * (1 - half),
           hi: prediction.mean * (1 + half),
           nominal: NOMINAL,
-          sd: (prediction.mean * half) / Z80,
+          sd: (prediction.mean * half) / (options.tails ? studentTQuantile(0.9, options.tails) : Z80),
+          df: options.tails,
           confidence: confidenceOf(half),
         });
       }
