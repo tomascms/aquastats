@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..core.db import get_session
 from ..core.idempotency import require_key, run_idempotent
 from ..core.tenant import require_coach, require_member, require_user
-from ..domain import commands, goals, heart_rate, lenex_import, live_results, swimrankings
+from ..domain import commands, goals, heart_rate, lenex_import, live_results, predictions, swimrankings
 from ..domain.models import Profile, TeamMember, User
 from ..domain.queries import filter_swimmer_snapshot, team_snapshot
 from ..domain.serializers import profile_out
@@ -226,6 +226,17 @@ def swimrankings_import(athlete_id: str, body: dict, request: Request, payload: 
 @router.put("/athletes/{athlete_id}/records/splits")
 def record_splits(athlete_id: str, body: dict, request: Request, payload: dict = Depends(require_member), session: Session = Depends(get_session)):
     return _command(session, payload, request, "athlete.record.splits", {"id": athlete_id, **body}, lambda: (200, swimrankings.save_record_splits(session, payload, athlete_id, body, request)))
+
+
+@router.post("/predictions")
+def record_predictions(body: dict, request: Request, payload: dict = Depends(require_coach), session: Session = Depends(get_session)):
+    """Stores training predictions made before their times exist (append-only ledger)."""
+    return _command(session, payload, request, "prediction.record", body, lambda: (200, predictions.record_predictions(session, payload, body, request)))
+
+
+@router.get("/predictions")
+def list_predictions(athleteId: str | None = None, since: str | None = None, payload: dict = Depends(require_coach), session: Session = Depends(get_session)):
+    return predictions.list_predictions(session, payload, athleteId, since)
 
 
 @router.put("/goals")

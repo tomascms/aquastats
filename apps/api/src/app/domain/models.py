@@ -395,6 +395,32 @@ class HrSession(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class PredictionLedger(Base):
+    """A training prediction, stored when it was made, before the time it predicts existed. Append-only."""
+
+    __tablename__ = "prediction_ledger"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid_pk)
+    team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"))
+    athlete_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("athletes.id"))
+    workout_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("workouts.id"))
+    block_id: Mapped[str] = mapped_column(Text)
+    rep_number: Mapped[int] = mapped_column(SmallInteger)
+    target_date: Mapped[datetime] = mapped_column(Date)
+    model: Mapped[str] = mapped_column(Text)
+    model_version: Mapped[str] = mapped_column(Text)
+    role: Mapped[str] = mapped_column(Text)
+    horizon: Mapped[str] = mapped_column(Text, default="day")
+    mean_s: Mapped[float] = mapped_column(Float)
+    lo_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hi_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nominal: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sd_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    details: Mapped[dict] = mapped_column(JSONB, default=dict)
+    predicted_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    predicted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class PolarLink(Base):
     """An athlete's Polar AccessLink authorisation (token encrypted at rest)."""
 

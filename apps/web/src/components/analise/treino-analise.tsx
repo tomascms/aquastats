@@ -14,6 +14,7 @@ import { formatRaceClock } from "@/lib/race";
 import { useAppState } from "@/lib/store";
 import { annotateTrainingReps } from "@/lib/training-context";
 import { predictTrainingTargets } from "@/lib/training-prediction";
+import { appTeam, CHAMPION, statePredictions } from "@/lib/ml/production";
 import { toCentiseconds } from "@/lib/swim-time";
 import type { TimeLog, WorkoutBlock } from "@/lib/types";
 import { useT } from "@/i18n/provider";
@@ -72,11 +73,15 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
   );
   const logs = useMemo(() => timeLogs.filter((log) => log.athleteId === athleteId), [athleteId, timeLogs]);
   const estimates = useMemo(() => {
-    const own = athleteId ? annotateTrainingReps(workouts, timeLogs, athleteId, athlete?.wellness, athlete?.groupName) : [];
     const byLog = new Map<string, number>();
+    if (CHAMPION === "estado") {
+      for (const [logId, prediction] of statePredictions(appTeam(athletes, workouts, timeLogs).team)) byLog.set(logId, prediction.mean);
+      return byLog;
+    }
+    const own = athleteId ? annotateTrainingReps(workouts, timeLogs, athleteId, athlete?.wellness, athlete?.groupName) : [];
     for (const [logId, target] of predictTrainingTargets(own)) byLog.set(logId, target.targetS);
     return byLog;
-  }, [athlete?.wellness, athleteId, timeLogs, workouts]);
+  }, [athlete?.wellness, athleteId, athletes, timeLogs, workouts]);
   const dayWorkouts = useMemo(() => mine.filter((workout) => workout.date === selected), [mine, selected]);
   const workoutCountByDate = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -194,6 +199,8 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
           {view === "model" ? (
             <TreinoDashboard
               athleteId={athlete.id}
+              athletes={athletes}
+              canReadLedger={role === "coach"}
               workouts={workouts}
               timeLogs={timeLogs}
               wellness={athlete.wellness}

@@ -32,7 +32,10 @@ import {
   type LearnedEffect,
   type TrainingTarget,
 } from "@/lib/training-prediction";
-import type { TimeLog, WellnessEntry, Workout } from "@/lib/types";
+import { appTeam, asTrainingTargets, CHAMPION, statePredictions } from "@/lib/ml/production";
+import { findSuspects, type Suspect } from "@/lib/ml/quality";
+import type { Athlete, TimeLog, WellnessEntry, Workout } from "@/lib/types";
+import { TrackRecordPanel } from "@/components/analise/track-record-panel";
 import { useT } from "@/i18n/provider";
 
 const INK = "#0b1d33";
@@ -120,16 +123,21 @@ function Toggle({
 
 export function TreinoDashboard({
   athleteId,
+  athletes,
   workouts,
   timeLogs,
   wellness,
   groupName,
+  canReadLedger = false,
 }: {
   athleteId: string;
+  /** The whole team: the state model learns from teammates too. */
+  athletes: Athlete[];
   workouts: Workout[];
   timeLogs: TimeLog[];
   wellness?: WellnessEntry[];
   groupName?: string;
+  canReadLedger?: boolean;
 }) {
   const t = useT();
   const allRows = useMemo(
@@ -155,7 +163,13 @@ export function TreinoDashboard({
   const [moreFilters, setMoreFilters] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
 
-  const predictions = useMemo(() => predictTrainingTargets(rows), [rows]);
+  const championEstimates = useMemo(
+    () => (CHAMPION === "estado" ? asTrainingTargets(statePredictions(appTeam(athletes, workouts, timeLogs).team)) : null),
+    [athletes, timeLogs, workouts],
+  );
+  const predictions = useMemo(() => championEstimates ?? predictTrainingTargets(rows), [championEstimates, rows]);
+  // Times that look like typing errors: shown to the coach, kept out of what the state model learns.
+  const suspects = useMemo(() => findSuspects(allRows), [allRows]);
   const patterns = useMemo(() => learnedPatterns(rows), [rows]);
   const form = useMemo(() => formTimeline(rows), [rows]);
   const atDistance = useMemo(() => rows.filter((row) => row.distanceM === activeDistance), [activeDistance, rows]);
@@ -334,6 +348,8 @@ export function TreinoDashboard({
           <RepTimeline items={visible.slice(-60)} predictions={predictions} />
         </section>
 
+        <TrackRecordPanel athleteId={athleteId} athletes={athletes} workouts={workouts} timeLogs={timeLogs} canReadLedger={canReadLedger} />
+
         <section className="rounded-2xl border border-line bg-panel p-5">
           <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
             <div>
@@ -376,7 +392,7 @@ export function TreinoDashboard({
           <GroupBars rows={visible} groupBy={groupBy} />
         </section>
 
-        <RepTable rows={visible} predictions={predictions} picked={picked} setPicked={setPicked} />
+        <RepTable rows={visible} predictions={predictions} suspects={suspects} picked={picked} setPicked={setPicked} />
       </div>
 
       <aside className="rounded-2xl border border-line bg-panel p-5 xl:sticky xl:top-6" aria-label={t("Filtros")}>
@@ -871,11 +887,13 @@ function EmptyChart({ text }: { text: string }) {
 function RepTable({
   rows,
   predictions,
+  suspects,
   picked,
   setPicked,
 }: {
   rows: TrainingRep[];
   predictions: Map<string, TrainingTarget>;
+  suspects: Map<string, Suspect>;
   picked: string[];
   setPicked: React.Dispatch<React.SetStateAction<string[]>>;
 }) {
@@ -962,7 +980,10 @@ function RepTable({
                         {row.round > 1 ? `S${row.round} · ` : ""}
                         {row.repInSegment}/{row.segmentReps}
                       </td>
-                      <td className="px-3 py-2.5 text-right font-display text-lg font-bold tabular text-mist">{clock(row.timeS)}</td>
+                      <td className="px-3 py-2.5 text-right font-display text-lg font-bold tabular text-mist">
+                        {clock(row.timeS)}
+                        {suspects.has(row.log.id) ? <SuspectNote suspect={suspects.get(row.log.id)!} /> : null}
+                      </td>
                       <td className="px-3 py-2.5 text-right tabular text-sand">
                         {target ? clock(target.targetS) : "—"}
                         {target ? <span className="block text-[11px] text-mute">{t("confiança {level}", { level: t(target.confidence) })}</span> : null}
@@ -989,6 +1010,24 @@ function RepTable({
         </table>
       </div>
     </section>
+  );
+}
+
+const SUSPECT_REASON: Record<Suspect["reason"], "Parece +/− 1 minuto" | "Parece dígitos trocados" | "Parece um parcial" | "Parece o tempo de outro atleta" | "Muito longe das outras reps"> = {
+  minute: "Parece +/− 1 minuto",
+  digits: "Parece dígitos trocados",
+  split: "Parece um parcial",
+  swap: "Parece o tempo de outro atleta",
+  outlier: "Muito longe das outras reps",
+};
+
+function SuspectNote({ suspect }: { suspect: Suspect }) {
+  const t = useT();
+  const hint = suspect.suggestedS != null ? t("{reason}: talvez {time}?", { reason: t(SUSPECT_REASON[suspect.reason]), time: clock(suspect.suggestedS) }) : t(SUSPECT_REASON[suspect.reason]);
+  return (
+    <span className="block text-[11px] font-semibold text-coral" title={t("{hint} O modelo não aprende com este tempo até ser corrigido.", { hint })}>
+      {t("suspeito")}
+    </span>
   );
 }
 

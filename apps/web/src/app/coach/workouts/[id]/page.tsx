@@ -8,6 +8,7 @@ import { formatMeters, workoutMeters } from "@/lib/rankings";
 import { actions, useAppState } from "@/lib/store";
 import { useT } from "@/i18n/provider";
 import { HrChart } from "@/components/heart-rate/hr-chart";
+import { TimingHints } from "@/components/workouts/timing-hints";
 import { sessionFor } from "@/lib/heart-rate";
 import { confirmDialog } from "@/lib/confirm";
 
@@ -15,7 +16,7 @@ export default function ViewWorkoutPage() {
   const t = useT();
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { athletes, workouts, hrSessions } = useAppState();
+  const { athletes, workouts, hrSessions, timeLogs } = useAppState();
   const workout = workouts.find((item) => item.id === params.id);
   const present = workout ? athletes.filter((athlete) => workout.athleteIds.includes(athlete.id)) : [];
 
@@ -71,6 +72,7 @@ export default function ViewWorkoutPage() {
             <p className="text-sm text-white/70">{t("Volume total")}</p>
             <p className="font-display text-4xl font-bold tabular">{formatMeters(workoutMeters(workout))}</p>
           </section>
+          <TimingHints workout={workout} athletes={athletes} workouts={workouts} timeLogs={timeLogs} />
           <section className="rounded-2xl border border-line bg-panel p-5">
             <h2 className="font-display text-xl font-bold">{t("Na água")}</h2>
             {present.length ? (

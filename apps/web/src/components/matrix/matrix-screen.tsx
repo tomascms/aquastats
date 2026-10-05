@@ -21,6 +21,7 @@ import {
   totalReps,
 } from "@/lib/set";
 import { actions, emptyParts, useAppState } from "@/lib/store";
+import { useRecordPredictions } from "@/lib/ml/use-record-predictions";
 import { sessionFor } from "@/lib/heart-rate";
 import { isTimeComplete } from "@/lib/time-save";
 import {
@@ -110,6 +111,8 @@ export function MatrixScreen() {
   const saveChain = useRef(Promise.resolve());
   const saveErrors = useRef(0);
   workoutIdRef.current = workout?.id;
+  // Before any time of this session exists, store what the models predict for it (prediction ledger).
+  useRecordPredictions(workout, { athletes, workouts, timeLogs });
 
   const present = workout ? athletes.filter((athlete) => workout.athleteIds.includes(athlete.id)) : [];
   const presentIds = present.map((athlete) => athlete.id);
