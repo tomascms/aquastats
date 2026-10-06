@@ -90,10 +90,14 @@ export function buildTimeDraft(
   const deleting = !hasFinal && splits.length === 0 && !skipped;
   const recordedAt = existing?.recordedAt ?? new Date().toISOString();
   const stableId = existing?.id ?? crypto.randomUUID();
+  // When the coach made this edit: the API keeps the latest edit, so a late retry cannot overwrite a newer time.
+  const clientUpdatedAt = new Date().toISOString();
   // The key must change with the value: the API rejects a reused key carrying a different body (409),
   // which silently dropped every edit of an already-saved time.
   const fingerprint = contentHash(
-    deleting ? "delete" : JSON.stringify({ mm, ss, cc, splits, stroke: nextStroke, skipped }),
+    // The edit time is part of it: going back to an earlier value (31.40 -> 31.20 -> 31.40) is a new request,
+    // not a replay of the first one (which the API would answer from its idempotency cache without saving).
+    (deleting ? "delete" : JSON.stringify({ mm, ss, cc, splits, stroke: nextStroke, skipped })) + clientUpdatedAt,
   );
   // Keep it short: the API caps keys, and a truncated key would drop the fingerprint.
   const idempotencyKey = `t-${stableId}-${fingerprint}`;
@@ -112,6 +116,7 @@ export function buildTimeDraft(
         stroke: nextStroke,
         skipped: false,
         recordedAt,
+        clientUpdatedAt,
       }
     : {
         id: stableId,
@@ -126,6 +131,7 @@ export function buildTimeDraft(
         stroke: nextStroke,
         skipped,
         recordedAt,
+        clientUpdatedAt,
       };
 
   return { payload, logKey, deleting, idempotencyKey };

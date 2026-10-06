@@ -424,6 +424,12 @@ function applyTimeDraft(draft: TimeSavePayload, nextStroke: string) {
   });
 }
 
+function withoutStale(row: TimeLog & { stale?: boolean }): TimeLog {
+  const log = { ...row };
+  delete log.stale;
+  return log;
+}
+
 async function persistTimeDraft(draft: TimeSavePayload, nextStroke: string) {
   const key = draft.logKey;
   try {
@@ -444,7 +450,8 @@ async function persistTimeDraft(draft: TimeSavePayload, nextStroke: string) {
       timeLogs: current.timeLogs.map((log) =>
         timeLogKey(log) === key
           ? {
-              ...(stored as TimeLog),
+              // A "stale" reply carries the newer time already stored (another device, or a later edit).
+              ...withoutStale(stored as TimeLog & { stale?: boolean }),
               pending: false,
               skipped: Boolean((stored as TimeLog).skipped),
               stroke: ((stored as TimeLog).stroke || nextStroke) as TimeLog["stroke"],

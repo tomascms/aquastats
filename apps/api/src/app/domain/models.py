@@ -168,6 +168,8 @@ class TimeLog(Base):
     stroke: Mapped[str] = mapped_column(Text, default="free")
     recorded_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # When the edit was made on the device (migration 013): later edits win, late retries do not.
+    client_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Competition(Base):

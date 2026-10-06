@@ -183,6 +183,7 @@ create table if not exists time_logs (
   stroke text not null default 'free',
   recorded_by uuid not null references users(id),
   recorded_at timestamptz not null default now(),
+  client_updated_at timestamptz,
   unique (workout_id, block_id, athlete_id, rep_number)
 );
 create index if not exists time_logs_athlete_recorded_idx on time_logs (athlete_id, recorded_at);
