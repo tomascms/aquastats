@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -10,7 +12,7 @@ from ..core.idempotency import require_key, run_idempotent
 from ..core.tenant import require_coach, require_member, require_user
 from ..domain import commands, goals, heart_rate, lenex_import, live_results, predictions, swimrankings
 from ..domain.models import Profile, TeamMember, User
-from ..domain.queries import filter_swimmer_snapshot, team_snapshot
+from ..domain.queries import filter_swimmer_snapshot, snapshot_body, team_snapshot
 from ..domain.serializers import profile_out
 from ..schemas import (
     CompetitionCreateBody,
@@ -64,11 +66,14 @@ def patch_swimmer_profile(body: dict, request: Request, user: User = Depends(req
 
 @router.get("/snapshot")
 def snapshot(payload: dict = Depends(require_member), session: Session = Depends(get_session)):
-    data = team_snapshot(session, payload["team_uuid"])
     if payload.get("role") == "swimmer":
-        athlete_id = str(payload.get("athlete_uuid") or "")
-        return filter_swimmer_snapshot(data, athlete_id)
-    return data
+        athlete = payload.get("athlete_uuid")
+        # No athlete record yet: nothing of theirs to show (and never the team's times).
+        data = team_snapshot(session, payload["team_uuid"], athlete_id=athlete or UUID(int=0))
+        data = filter_swimmer_snapshot(data, str(athlete or ""))
+    else:
+        data = team_snapshot(session, payload["team_uuid"])
+    return Response(snapshot_body(data), media_type="application/json")
 
 
 @router.post("/athletes")

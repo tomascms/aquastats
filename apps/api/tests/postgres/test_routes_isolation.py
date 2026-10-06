@@ -2,7 +2,9 @@
 RLS still holds when the application code itself asks for the wrong team."""
 from __future__ import annotations
 
+import json
 import uuid
+from datetime import datetime
 
 import pytest
 from sqlalchemy import text
@@ -68,6 +70,7 @@ def test_rls_holds_even_when_the_code_asks_for_the_wrong_team(world, api_engine)
         set_tenant_context(session, team_id=world.a.team, user_id=world.a.coach, role="coach")
         leaked = team_snapshot(session, world.b.team)
         session.rollback()
+    leaked["timeLogs"] = json.loads(leaked["timeLogs"])
     for key in ("athletes", "workouts", "timeLogs", "competitions", "meetEntries", "meetResults", "goals", "hrSessions"):
         assert leaked[key] == [], key
 
@@ -95,3 +98,27 @@ def test_api_role_cannot_become_the_auth_role(admin_engine):
         assert not conn.execute(text("select pg_has_role('aquastats_api', 'aquastats_auth', 'MEMBER')")).scalar()
         attrs = conn.execute(text("select rolsuper, rolbypassrls, rolcreaterole, rolcreatedb from pg_roles where rolname = 'aquastats_auth'")).one()
         assert tuple(attrs) == (False, False, False, False)
+
+
+def test_time_logs_built_by_postgres_match_the_python_serializer(world, admin_engine):
+    """The snapshot's time logs now come from SQL (performance); their content must not change."""
+    from sqlalchemy import select
+
+    from app.domain.models import TimeLog, Workout
+    from app.domain.queries import team_snapshot
+    from app.domain.serializers import time_log_out
+
+    with Session(admin_engine) as session:
+        built = json.loads(team_snapshot(session, world.a.team)["timeLogs"])
+        workouts = select(Workout.id).where(Workout.team_id == world.a.team, Workout.deleted_at.is_(None))
+        expected = [time_log_out(row) for row in session.scalars(select(TimeLog).where(TimeLog.workout_id.in_(workouts)))]
+
+    def norm(rows):
+        out = []
+        for row in rows:
+            row = dict(row)
+            row["recordedAt"] = datetime.fromisoformat(row["recordedAt"]).timestamp()
+            out.append(row)
+        return sorted(out, key=lambda r: r["id"])
+
+    assert built and norm(built) == norm(expected)

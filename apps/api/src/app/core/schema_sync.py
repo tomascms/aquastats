@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import text
 
 from .config import get_settings
-from .db import engine
+from .db import can_change_schema, engine
 
 ANALYSIS_DDL = """
 create table if not exists race_sessions (
@@ -165,7 +165,7 @@ create index if not exists password_reset_tokens_user_idx on password_reset_toke
 
 def _run_ddl(ddl: str) -> None:
     settings = get_settings()
-    if engine is None or settings.is_production or settings.database_is_production:
+    if engine is None or settings.is_production or settings.database_is_production or not can_change_schema():
         return
     with engine.begin() as conn:
         for statement in [part.strip() for part in ddl.split(";") if part.strip()]:

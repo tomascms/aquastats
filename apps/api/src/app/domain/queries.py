@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+import json
+
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from .goals import team_goals
@@ -16,12 +18,34 @@ from .serializers import (
     race_session_out,
     result_out,
     season_plan_out,
-    time_log_out,
     workout_out,
 )
 
 
-def team_snapshot(session: Session, team_id: UUID) -> dict:
+class RawJSON(str):
+    """JSON text built by Postgres, spliced into the response as is (see snapshot_body)."""
+
+
+# Time logs are by far the biggest part of a snapshot (94k rows for 32 athletes over 4 seasons): Postgres
+# builds their JSON directly, in the shape of serializers.time_log_out, instead of ORM objects + dicts + encoder.
+_TIME_LOGS_JSON = text(
+    """
+    select coalesce(json_agg(json_build_object(
+             'id', t.id, 'workoutId', t.workout_id, 'blockId', t.block_id, 'athleteId', t.athlete_id,
+             'repNumber', t.rep_number, 'mm', t.mm, 'ss', t.ss, 'cc', t.cc, 'splits', t.splits,
+             'stroke', t.stroke, 'pending', false,
+             'skipped', jsonb_path_exists(t.splits, '$[*] ? (@.skipped == true)'),
+             'recordedAt', t.recorded_at)), '[]')::text,
+           coalesce(array_agg(distinct t.workout_id), '{}')
+    from time_logs t
+    where t.workout_id = any(:workouts) and (cast(:athlete as uuid) is null or t.athlete_id = cast(:athlete as uuid))
+    """
+)
+
+
+def team_snapshot(session: Session, team_id: UUID, athlete_id: UUID | None = None) -> dict:
+    """Everything a team page needs. With `athlete_id` (a swimmer) the time logs are only theirs, filtered in
+    SQL on top of row-level security, so a swimmer's request never loads the team's history."""
     team = session.get(Team, team_id)
     athletes = session.scalars(select(Athlete).where(Athlete.team_id == team_id).order_by(Athlete.name)).all()
     active_athletes = [row for row in athletes if row.deleted_at is None]
@@ -29,9 +53,11 @@ def team_snapshot(session: Session, team_id: UUID) -> dict:
         select(Workout).where(Workout.team_id == team_id, Workout.deleted_at.is_(None)).order_by(Workout.workout_date.desc())
     ).all()
     workout_ids = [row.id for row in workouts]
-    time_logs = (
-        session.scalars(select(TimeLog).where(TimeLog.workout_id.in_(workout_ids))).all() if workout_ids else []
-    )
+    time_logs_json, logged_workouts = "[]", []
+    if workout_ids:
+        time_logs_json, logged_workouts = session.execute(
+            _TIME_LOGS_JSON, {"workouts": workout_ids, "athlete": str(athlete_id) if athlete_id else None}
+        ).one()
     meets = session.scalars(
         select(Competition).where(Competition.team_id == team_id, Competition.deleted_at.is_(None)).order_by(Competition.meet_date.desc())
     ).all()
@@ -55,7 +81,7 @@ def team_snapshot(session: Session, team_id: UUID) -> dict:
         "joinCode": team.join_code if team else None,
         "athletes": [athlete_out(row) for row in athletes],
         "workouts": [workout_out(row) for row in workouts],
-        "timeLogs": [time_log_out(row) for row in time_logs],
+        "timeLogs": RawJSON(time_logs_json),
         "competitions": [competition_out(row) for row in meets],
         "meetEntries": [entry_out(row) for row in entries],
         "meetResults": [result_out(row) for row in results],
@@ -65,12 +91,20 @@ def team_snapshot(session: Session, team_id: UUID) -> dict:
         "personalRecords": personal_records(entries, results, meets, active_athletes),
         "goals": team_goals(session, team_id),
         "hrSessions": team_hr_sessions(session, team_id),
+        "_loggedWorkoutIds": [str(item) for item in logged_workouts],
     }
+
+
+def snapshot_body(data: dict) -> bytes:
+    """The response body, with the time logs' JSON spliced in untouched (no re-parsing, no jsonable_encoder)."""
+    rest = {key: value for key, value in data.items() if key != "timeLogs" and not key.startswith("_")}
+    head = json.dumps(rest, ensure_ascii=False, separators=(",", ":"), default=str)
+    return (head[:-1] + ',"timeLogs":' + str(data["timeLogs"]) + "}").encode("utf-8")
 
 
 def filter_swimmer_snapshot(data: dict, athlete_id: str) -> dict:
     workout_ids = {item["id"] for item in data["workouts"] if athlete_id in (item.get("athleteIds") or [])}
-    workout_ids |= {item["workoutId"] for item in data["timeLogs"] if item.get("athleteId") == athlete_id}
+    workout_ids |= set(data.get("_loggedWorkoutIds") or [])  # time logs were filtered to this athlete in SQL
     entry_ids = {item["id"] for item in data["meetEntries"] if item.get("athleteId") == athlete_id}
     meet_ids = {item["competitionId"] for item in data["meetEntries"] if item.get("athleteId") == athlete_id}
     return {
@@ -78,7 +112,7 @@ def filter_swimmer_snapshot(data: dict, athlete_id: str) -> dict:
         "swimmerId": athlete_id,
         "athletes": [item for item in data["athletes"] if item["id"] == athlete_id and item.get("active", True)],
         "workouts": [item for item in data["workouts"] if item["id"] in workout_ids],
-        "timeLogs": [item for item in data["timeLogs"] if item.get("athleteId") == athlete_id],
+        "timeLogs": data["timeLogs"],
         "competitions": [item for item in data["competitions"] if item["id"] in meet_ids],
         "meetEntries": [item for item in data["meetEntries"] if item.get("athleteId") == athlete_id],
         "meetResults": [item for item in data["meetResults"] if item.get("entryId") in entry_ids],

@@ -8,6 +8,7 @@ truststore.inject_into_ssl()
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy import text
@@ -61,6 +62,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Content-Type", "Idempotency-Key", "X-Request-Id"],
 )
+# Outermost: compresses what the Worker fetches (a team snapshot is mostly repetitive JSON).
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
 app.include_router(auth_router)
 app.include_router(data_router)

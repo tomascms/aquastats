@@ -109,3 +109,17 @@ def get_auth_session():
     session = AuthSessionLocal()
     set_system_context(session)
     yield from _session_lifecycle(session)
+
+
+def can_change_schema() -> bool:
+    """Startup DDL and migrations run only with a role allowed to create in the schema (local owner/superuser).
+    The application roles (aquastats_api/aquastats_auth) cannot: there migrations are an operator step."""
+    if engine is None:
+        return False
+    try:
+        with engine.connect() as conn:
+            from sqlalchemy import text as _text
+
+            return bool(conn.execute(_text("select has_schema_privilege(current_user, 'public', 'CREATE')")).scalar())
+    except Exception:
+        return False
