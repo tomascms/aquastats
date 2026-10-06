@@ -1,4 +1,6 @@
-﻿fastapi==0.115.12
+fastapi==0.142.2
+# fastapi accepts any starlette >= 0.46; pinned to a release without the 0.46.x advisories.
+starlette==1.7.0
 uvicorn==0.34.2
 pydantic==2.10.1
 pydantic-settings==2.10.1
@@ -8,10 +10,10 @@ redis==5.2.1
 httpx==0.28.1
 truststore==0.10.4
 argon2-cffi==23.1.0
-PyJWT[crypto]==2.10.1
-cryptography==41.0.7
+PyJWT[crypto]==2.15.1
+cryptography==50.0.2
 structlog==26.1.0
 sentry-sdk[fastapi]==2.25.1
 defusedxml==0.7.1
 fitdecode==0.10.0
-pypdf==5.1.0
+pypdf==6.19.0
