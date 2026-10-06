@@ -4,9 +4,9 @@ import { useEffect, useRef } from "react";
 import { todayIso } from "../dates";
 import type { Athlete, TimeLog, Workout } from "../types";
 import type { RaceResult } from "./backtest";
-import { flushQueuedPredictions, ledgerItems, recordOrQueue } from "./ledger";
+import { flushQueuedPredictions, recordOrQueue } from "./ledger";
+import { runMlJob } from "./ml-client";
 import { fetchMlRoles } from "./ml-config";
-import { appTeam, predictionsFor } from "./production";
 
 /** Delay so the timing screen is fully interactive before the model runs. */
 const IDLE_MS = 1500;
@@ -41,12 +41,13 @@ export function useRecordPredictions(workout: Workout | undefined, data: { athle
       try {
         // Roles decided at run time: the kill switch reverts the champion, ML_SHADOW=off stops the shadow.
         const roles = await fetchMlRoles();
-        const { team, planned } = appTeam(athletes, workouts, timeLogs, [target], races);
-        if (!planned.length) return;
-        const recordings: [typeof roles.champion, "champion" | "challenger"][] = [[roles.champion, "champion"]];
-        if (roles.shadow) recordings.push([roles.challenger, "challenger"]);
-        for (const [model, role] of recordings) {
-          void recordOrQueue(model, role, ledgerItems(predictionsFor(model, team), planned)).catch(() => undefined);
+        const models: [typeof roles.champion, "champion" | "challenger"][] = [[roles.champion, "champion"]];
+        if (roles.shadow) models.push([roles.challenger, "challenger"]);
+        // The model runs in a Web Worker: timing keeps answering every tap while it works.
+        const result = await runMlJob({ kind: "ledger", models, athletes, workouts, timeLogs, races, workoutId: target.id });
+        if (result.kind !== "ledger") return;
+        for (const { model, role, items } of result.recordings) {
+          if (items.length) void recordOrQueue(model, role, items).catch(() => undefined);
         }
       } catch {
         // The ledger never blocks timing.

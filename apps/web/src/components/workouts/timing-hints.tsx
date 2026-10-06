@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useT } from "@/i18n/provider";
 import { todayIso } from "@/lib/dates";
-import { appTeam, timingSuggestions } from "@/lib/ml/production";
+import { runMlJob } from "@/lib/ml/ml-client";
+import type { TimingSuggestion } from "@/lib/ml/production";
 import { formatSet } from "@/lib/set";
 import type { Athlete, TimeLog, Workout } from "@/lib/types";
 
@@ -15,12 +16,19 @@ import type { Athlete, TimeLog, Workout } from "@/lib/types";
 export function TimingHints({ workout, athletes, workouts, timeLogs }: { workout: Workout; athletes: Athlete[]; workouts: Workout[]; timeLogs: TimeLog[] }) {
   const t = useT();
   const upcoming = workout.date >= todayIso();
-  const hints = useMemo(() => {
-    if (!upcoming) return [];
-    const { team, planned } = appTeam(athletes, workouts, timeLogs, [workout]);
-    return planned.length ? timingSuggestions(team, planned).slice(0, 3) : [];
-  }, [athletes, timeLogs, upcoming, workout, workouts]);
-  if (!hints.length) return null;
+  const [hints, setHints] = useState<TimingSuggestion[]>([]);
+  useEffect(() => {
+    if (!upcoming) return;
+    let alive = true;
+    // In a Web Worker: the model's full pass must not freeze the page.
+    runMlJob({ kind: "hints", limit: 3, athletes, workouts, timeLogs, workoutId: workout.id })
+      .then((result) => alive && result.kind === "hints" && setHints(result.hints))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [athletes, timeLogs, upcoming, workout.id, workouts]);
+  if (!upcoming || !hints.length) return null;
   const name = (id: string) => athletes.find((athlete) => athlete.id === id)?.name ?? "";
   const setLabel = (blockId: string) => {
     const block = workout.blocks.find((item) => item.id === blockId);
