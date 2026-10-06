@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import secrets
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -11,13 +12,17 @@ from starlette.responses import JSONResponse, Response
 from .config import get_settings
 from .rate_limit import check_rate_limit
 
+_REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
+
 # Re-export for existing imports
 from .client import client_ip  # noqa: F401
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        request_id = request.headers.get("x-request-id") or secrets.token_hex(16)
+        # A caller's id is kept only if it is a plain token (it ends up in logs and audit rows).
+        incoming = request.headers.get("x-request-id") or ""
+        request_id = incoming if _REQUEST_ID.fullmatch(incoming) else secrets.token_hex(16)
         request.state.request_id = request_id
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id

@@ -31,7 +31,7 @@ export function PasswordStrength({ password }: { password: string }) {
       </div>
       <p className="text-[11px] text-mute">
         {t("Força:")} <span className="font-medium text-mist">{label}</span>
-        {password.length < 8 ? ` · ${t("mínimo 8, letras e números")}` : null}
+        {password.length < 12 ? ` · ${t("mínimo 12, letras e números")}` : null}
       </p>
     </div>
   );

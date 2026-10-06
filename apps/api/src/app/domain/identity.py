@@ -100,6 +100,9 @@ def remember_invite(response: Response, code: str | None) -> str:
 
 def safe_app_path(path: str, fallback: str = "/") -> str:
     value = (path or "").strip()
+    # Browsers drop tabs/newlines inside URLs, so "/\t/evil.com" would become "//evil.com".
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
+        return fallback
     if not value.startswith("/") or value.startswith("//") or "\\" in value or "://" in value:
         return fallback
     return value
@@ -536,14 +539,16 @@ def provision_role(
     return user
 
 
+# One message for every failed sign-in: it never tells whether an email has an account.
+LOGIN_FAILED = "Email ou palavra-passe incorrectos. Depois de várias tentativas, espera 15 minutos."
+
+
 def lock_or_fail(user: User) -> None:
     stamp = now()
-    if user.locked_until and user.locked_until > stamp:
-        raise HTTPException(status_code=423, detail="Conta temporariamente bloqueada. Tenta mais tarde.")
     user.failed_login_count = int(user.failed_login_count or 0) + 1
     if user.failed_login_count >= 8:
         from datetime import timedelta
 
         user.locked_until = stamp + timedelta(minutes=15)
         user.failed_login_count = 0
-    raise HTTPException(status_code=401, detail="Email ou palavra-passe incorrectos.")
+    raise HTTPException(status_code=401, detail=LOGIN_FAILED)

@@ -159,7 +159,7 @@ export function LoginForm() {
               onChange={(event) => setPassword(event.target.value)}
               className="field pr-20"
               autoComplete={mode === "register" ? "new-password" : "current-password"}
-              minLength={8}
+              minLength={mode === "register" ? 12 : undefined}
               required
             />
             <button

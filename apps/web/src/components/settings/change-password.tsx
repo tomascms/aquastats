@@ -23,8 +23,8 @@ export function ChangePasswordSection({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
-      setError(t("Mínimo 8 caracteres, com letras e números."));
+    if (newPassword.length < 12 || !/[a-zA-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      setError(t("Mínimo 12 caracteres, com letras e números."));
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -97,7 +97,7 @@ export function ChangePasswordSection({
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               autoComplete="new-password"
-              minLength={8}
+              minLength={12}
               required
             />
           </label>
@@ -110,7 +110,7 @@ export function ChangePasswordSection({
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               autoComplete="new-password"
-              minLength={8}
+              minLength={12}
               required
             />
           </label>

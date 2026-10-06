@@ -24,35 +24,28 @@ def verify_password(password: str, password_hash: str | None) -> bool:
         return False
 
 
+# Frequent passwords (and their obvious variants) that pass the length and letters+digits rules; lower-cased.
 _COMMON = frozenset(
     {
-        "1234567890",
-        "password12",
-        "password123",
-        "qwerty1234",
-        "qwertyuiop",
-        "1111111111",
-        "0000000000",
-        "abcdefghij",
-        "letmein123",
-        "welcome123",
-        "admin12345",
-        "passw0rd12",
-        "iloveyou12",
-        "monkey1234",
-        "dragon1234",
-        "baseball12",
-        "football12",
-        "s3nha12345",
-        "palavrapasse",
-        "treinador1",
+        "1234567890ab", "123456789abc", "abc123456789", "password1234", "password12345", "passw0rd1234",
+        "qwerty123456", "qwertyuiop12", "qwertyuiop123", "asdfghjkl123", "zaq12wsxcde3", "1q2w3e4r5t6y",
+        "iloveyou1234", "letmein12345", "welcome12345", "admin1234567", "monkey123456", "dragon123456",
+        "football1234", "baseball1234", "sunshine1234", "princess1234", "superman1234", "trustno12345",
+        "palavrapasse1", "palavrapasse123", "palavra12345", "senha1234567", "s3nha1234567", "portugal1234",
+        "portugal2024", "portugal2025", "portugal2026", "benfica12345", "sporting1234", "fcporto12345",
+        "lisboa123456", "aquastats123", "aquastats2026", "natacao12345", "natacao2026", "piscina12345",
+        "nadador12345", "treinador123", "treinador2026", "atleta123456", "swimming1234", "swimmer12345",
+        "1234qwerasdf", "qwer1234asdf", "abcd1234efgh", "a1b2c3d4e5f6",
     }
 )
 
 
+MIN_PASSWORD_LENGTH = 12  # docs/security: new passwords only; existing ones keep working at login
+
+
 def valid_password(password: str) -> bool:
     value = password or ""
-    if not (8 <= len(value) <= 128):
+    if not (MIN_PASSWORD_LENGTH <= len(value) <= 128):
         return False
     if value.lower() in _COMMON:
         return False

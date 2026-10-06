@@ -127,7 +127,7 @@ class ProfilePatchBody(StrictModel):
 
 class ChangePasswordBody(StrictModel):
     currentPassword: str | None = Field(default=None, max_length=128)
-    newPassword: str = Field(min_length=8, max_length=128)
+    newPassword: str = Field(min_length=12, max_length=128)
 
 
 class DeleteAccountBody(StrictModel):
