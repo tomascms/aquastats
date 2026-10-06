@@ -18,7 +18,8 @@ def clear_rls_context(session: Session) -> None:
 
 
 def set_system_context(session: Session) -> None:
-    """Auth/signup paths that must touch global tables (users, tokens)."""
+    """Auth/signup paths that must touch global tables (users, tokens). Only the auth role's sessions honour it
+    (migration 012): set on an API-role session it changes nothing."""
     if not get_settings().database_enable_rls:
         return
     clear_rls_context(session)
@@ -34,3 +35,11 @@ def set_tenant_context(session: Session, *, team_id: UUID, user_id: UUID, role: 
     _set_local(session, "app.user_id", str(user_id))
     _set_local(session, "app.role", role)
     _set_local(session, "app.athlete_id", str(athlete_id) if athlete_id else "")
+
+
+def set_user_context(session: Session, user_id: UUID) -> None:
+    """Before the team is known: the user may read their own account, memberships and athlete rows."""
+    if not get_settings().database_enable_rls:
+        return
+    clear_rls_context(session)
+    _set_local(session, "app.user_id", str(user_id))

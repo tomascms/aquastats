@@ -28,6 +28,7 @@ LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "postgres"}
 DB_NAME = "aquastats_test"
 DB_DIR = Path(__file__).resolve().parents[2] / "db"
 API_ROLE = "aquastats_api"
+AUTH_ROLE = "aquastats_auth"
 PASSWORD = "Teste-sintetico-2026"  # synthetic accounts of a throwaway local database
 
 def pytest_collection_modifyitems(config, items):
@@ -68,6 +69,7 @@ def _build_database() -> None:
             conn.execute("INSERT INTO schema_migrations (version) VALUES (%s) ON CONFLICT DO NOTHING", (path.name,))
         # Local test server only: trust authentication, so the role logs in without a password.
         conn.execute(f"ALTER ROLE {API_ROLE} LOGIN")
+        conn.execute(f"ALTER ROLE {AUTH_ROLE} LOGIN")
 
 
 @dataclass
@@ -85,6 +87,7 @@ class Team:
 class World:
     admin_url: str
     api_url: str
+    auth_url: str
     a: Team
     b: Team
 
@@ -181,7 +184,8 @@ def world() -> World:
         conn.execute("insert into saga_logs (saga_id, step, status) values (%s, 'provision', 'completed')", (saga,))
         conn.execute("insert into oauth_states (state, code_verifier, nonce, expires_at) values ('s', 'v', 'n', now() + interval '5 minutes')")
         conn.commit()
-    return World(admin_url=admin, api_url=_with_db(ADMIN_URL, DB_NAME, user=API_ROLE), a=a, b=b)
+    return World(admin_url=admin, api_url=_with_db(ADMIN_URL, DB_NAME, user=API_ROLE),
+                 auth_url=_with_db(ADMIN_URL, DB_NAME, user=AUTH_ROLE), a=a, b=b)
 
 
 def _engine(url: str):
@@ -196,14 +200,21 @@ def api_engine(world: World):
 
 
 @pytest.fixture(scope="session")
+def auth_engine(world: World):
+    engine = _engine(world.auth_url)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(scope="session")
 def admin_engine(world: World):
     engine = _engine(world.admin_url)
     yield engine
     engine.dispose()
 
 
-def make_client(engine):
-    """The real FastAPI app, with its database dependencies bound to `engine`."""
+def make_client(engine, auth_engine=None):
+    """The real FastAPI app: team requests on `engine`, auth flows on `auth_engine` (default: the same)."""
     from fastapi.testclient import TestClient
 
     from app.core import db as core_db
@@ -211,12 +222,13 @@ def make_client(engine):
     from app.main import app
 
     factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    auth_factory = sessionmaker(bind=auth_engine or engine, autoflush=False, autocommit=False)
 
     def get_session():
         yield from core_db._session_lifecycle(factory())
 
     def get_auth_session():
-        session = factory()
+        session = auth_factory()
         set_system_context(session)
         yield from core_db._session_lifecycle(session)
 
@@ -233,10 +245,11 @@ def login_as(client, user_id: uuid.UUID, role: str, team: Team) -> None:
 
 
 @pytest.fixture
-def client_for():
-    """client_for(engine, user_id, role, team) -> TestClient logged in as that user."""
+def client_for(api_engine, auth_engine):
+    """client_for(engine, user_id, role, team) -> TestClient logged in as that user. With the API role's engine
+    the auth flows run as aquastats_auth, exactly as in production; with any other engine, on that engine."""
     def build(engine, user_id: uuid.UUID, role: str, team: Team):
-        client = make_client(engine)
+        client = make_client(engine, auth_engine if engine is api_engine else engine)
         login_as(client, user_id, role, team)
         return client
     return build

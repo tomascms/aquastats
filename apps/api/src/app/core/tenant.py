@@ -7,18 +7,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import get_session
-from .rls import set_system_context, set_tenant_context
+from .rls import set_tenant_context, set_user_context
 from .sessions import current_user_payload
 from ..domain.models import Athlete, Team, TeamMember, User
 
 
 def require_user(request: Request, session: Session = Depends(get_session)) -> User:
-    set_system_context(session)
     payload = current_user_payload(request)
     try:
         user_id = UUID(str(payload["sub"]))
     except (KeyError, ValueError):
         raise HTTPException(status_code=401, detail="Sessão inválida.")
+    # The signed session names the user; the database then shows only their own account and memberships.
+    set_user_context(session, user_id)
     user = session.get(User, user_id)
     if not user or not user.is_active or user.deleted_at:
         raise HTTPException(status_code=401, detail="Sessão inválida.")
@@ -27,10 +28,14 @@ def require_user(request: Request, session: Session = Depends(get_session)) -> U
     return user
 
 
-def _load_member(session: Session, user: User) -> tuple[TeamMember, Team]:
+def _load_member(session: Session, user: User, role: str) -> tuple[TeamMember, Team]:
     member = session.scalar(select(TeamMember).where(TeamMember.user_id == user.id))
-    team = session.get(Team, member.team_id) if member else None
-    if not member or not team:
+    if not member:
+        raise HTTPException(status_code=403, detail="Entra numa equipa primeiro.")
+    # From here on the request sees its team (and, for a swimmer, only their own athlete rows).
+    set_tenant_context(session, team_id=member.team_id, user_id=user.id, role=role)
+    team = session.get(Team, member.team_id)
+    if not team:
         raise HTTPException(status_code=403, detail="Entra numa equipa primeiro.")
     return member, team
 
@@ -41,10 +46,9 @@ def require_coach(request: Request, session: Session = Depends(get_session)) -> 
         raise HTTPException(status_code=403, detail="Escolhe se és treinador ou atleta.")
     if user.role != "coach":
         raise HTTPException(status_code=403, detail="Só o treinador entra nesta área.")
-    member, team = _load_member(session, user)
+    member, team = _load_member(session, user, "coach")
     if member.status not in {"owner", "coach"}:
         raise HTTPException(status_code=403, detail="Sem acesso a esta equipa.")
-    set_tenant_context(session, team_id=team.id, user_id=user.id, role="coach")
     return {
         **current_user_payload(request),
         "role": "coach",
@@ -60,7 +64,7 @@ def require_member(request: Request, session: Session = Depends(get_session)) ->
         raise HTTPException(status_code=403, detail="Escolhe se és treinador ou atleta.")
     if user.role not in {"coach", "swimmer"}:
         raise HTTPException(status_code=403, detail="Sem acesso.")
-    member, team = _load_member(session, user)
+    member, team = _load_member(session, user, user.role)
     payload = {
         **current_user_payload(request),
         "role": user.role,
@@ -71,7 +75,6 @@ def require_member(request: Request, session: Session = Depends(get_session)) ->
     if user.role == "coach":
         if member.status not in {"owner", "coach"}:
             raise HTTPException(status_code=403, detail="Sem acesso a esta equipa.")
-        set_tenant_context(session, team_id=team.id, user_id=user.id, role="coach")
         return payload
     if member.status != "swimmer":
         raise HTTPException(status_code=403, detail="Só o atleta entra nesta área.")

@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     app_url: str = "http://127.0.0.1:3000"
     api_url: str = "http://127.0.0.1:8000"
     database_url: str = ""
+    # aquastats_auth (migration 012): login, signup, tokens and account deletion. Empty = DATABASE_URL.
+    auth_database_url: str = ""
     database_sslmode: str = "auto"
     session_secret: str = ""
     google_client_id: str = ""
@@ -63,8 +65,11 @@ class Settings(BaseSettings):
 
     @property
     def database_is_production(self) -> bool:
-        host = (urlparse(self.database_url.strip().replace("postgresql+psycopg://", "postgresql://", 1)).hostname or "").lower()
-        return any(host.startswith(endpoint) for endpoint in _PRODUCTION_DB_ENDPOINTS)
+        for url in (self.database_url, self.auth_database_url):
+            host = (urlparse(url.strip().replace("postgresql+psycopg://", "postgresql://", 1)).hostname or "").lower()
+            if any(host.startswith(endpoint) for endpoint in _PRODUCTION_DB_ENDPOINTS):
+                return True
+        return False
 
     @staticmethod
     def _production_origin_allowed(origin: str) -> bool:

@@ -13,7 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy import text
 
 from .core.config import get_settings
-from .core.db import engine
+from .core.db import auth_engine, engine
 from .core.migrations import run_migrations
 from .core.observability import init_observability
 from .core.schema_sync import ensure_analysis_schema, ensure_auth_schema
@@ -35,7 +35,7 @@ from .routes.integration_routes import router as integration_router
 init_observability()
 settings = get_settings()
 validate_settings(settings)
-verify_database_role(engine, settings)
+verify_database_role(engine, settings, auth_engine if auth_engine is not engine else None)
 ensure_auth_schema()
 ensure_analysis_schema()
 run_migrations()

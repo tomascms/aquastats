@@ -35,16 +35,17 @@ def _connect_args(url: str) -> dict:
     return args
 
 
-def _engine():
+def _engine(raw_url: str | None = None, *, pool_size: int = 3, max_overflow: int = 7):
     settings = get_settings()
-    if not settings.database_url:
+    raw_url = settings.database_url if raw_url is None else raw_url
+    if not raw_url:
         return None
-    url = _normalize_url(settings.database_url.strip())
+    url = _normalize_url(raw_url.strip())
     eng = create_engine(
         url,
         pool_pre_ping=True,
-        pool_size=3,
-        max_overflow=7,
+        pool_size=pool_size,
+        max_overflow=max_overflow,
         pool_recycle=300,
         pool_timeout=10,
         future=True,
@@ -65,6 +66,10 @@ def _engine():
 
 engine = _engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False) if engine else None
+# Auth flows (login, signup, tokens, account deletion) use their own role, aquastats_auth (migration 012): the
+# only one the database lets skip row-level security. Without AUTH_DATABASE_URL (local runs) it is the same DB.
+auth_engine = _engine(get_settings().auth_database_url, pool_size=2, max_overflow=4) if get_settings().auth_database_url.strip() else engine
+AuthSessionLocal = sessionmaker(bind=auth_engine, autoflush=False, autocommit=False) if auth_engine else None
 
 
 def _session_lifecycle(session):
@@ -95,12 +100,12 @@ def get_session():
 
 
 def get_auth_session():
-    """Login/signup — bypass RLS for global auth tables."""
-    if SessionLocal is None:
+    """Login/signup/account flows: the auth role, which may cross tenants (migration 012)."""
+    if AuthSessionLocal is None:
         raise HTTPException(
             status_code=503,
             detail="A base de dados ainda não está ligada. Cola a DATABASE_URL PostgreSQL no api/.env e reinicia a API.",
         )
-    session = SessionLocal()
+    session = AuthSessionLocal()
     set_system_context(session)
     yield from _session_lifecycle(session)

@@ -72,11 +72,26 @@ def test_rls_holds_even_when_the_code_asks_for_the_wrong_team(world, api_engine)
         assert leaked[key] == [], key
 
 
-def test_known_limit_the_bypass_flag_is_settable_by_the_api_role(world, api_engine):
-    """app.bypass_rls is a session setting the API itself sets for the auth flows: whoever can run SQL as
-    the API can set it too. RLS protects against application bugs, not against SQL injection — that
-    limit is written down in docs/security/rls.md. This test pins the behaviour so a change is noticed."""
+def test_api_role_cannot_bypass_even_by_setting_the_flag(api_engine):
+    """Migration 012: the bypass needs the flag AND the auth role. SQL injected into a team request can set the
+    flag; it still sees nothing beyond its context."""
     with api_engine.connect() as conn, conn.begin() as trans:
         conn.execute(text("select set_config('app.bypass_rls', 'true', true)"))
-        assert conn.execute(text("select count(*) from teams")).scalar() >= 2  # every team, not only its own
+        assert conn.execute(text("select count(*) from teams")).scalar() == 0
+        assert conn.execute(text("select count(*) from users")).scalar() == 0
         trans.rollback()
+
+
+def test_auth_role_bypasses_only_with_the_flag(auth_engine):
+    with auth_engine.connect() as conn, conn.begin() as trans:
+        assert conn.execute(text("select count(*) from teams")).scalar() == 0
+        conn.execute(text("select set_config('app.bypass_rls', 'true', true)"))
+        assert conn.execute(text("select count(*) from teams")).scalar() >= 2
+        trans.rollback()
+
+
+def test_api_role_cannot_become_the_auth_role(admin_engine):
+    with admin_engine.connect() as conn:
+        assert not conn.execute(text("select pg_has_role('aquastats_api', 'aquastats_auth', 'MEMBER')")).scalar()
+        attrs = conn.execute(text("select rolsuper, rolbypassrls, rolcreaterole, rolcreatedb from pg_roles where rolname = 'aquastats_auth'")).one()
+        assert tuple(attrs) == (False, False, False, False)
