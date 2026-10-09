@@ -95,15 +95,22 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 
 ## Fase D — Velocidade e acessibilidade
 
-- [ ] (a detalhar após o relatório da Fase A)
+- [x] Logótipos WebP à medida (135+88 → 25+6 KB), sem imagem escondida com prioridade, cache; `_next/image` desligado
+- [x] Alvos de toque 44 px no login, contraste do texto pequeno, nome acessível dos links, sem prefetch de 32 atletas
+- [x] Movimento reduzido já global; #418 não reproduzido no código atual
+- [ ] axe completo (Lighthouse cobre um subconjunto: 95–100) e leitor de ecrã
 
 ## Fase E — Dashboards
 
-- [ ] (a detalhar)
+- [x] "Hoje" do treinador (carga A:C, falta de tempos, bem-estar, ação sugerida, desde o último treino, semana vs anterior)
+- [x] Nota de privacidade do atleta; tabelas alternativas nos gráficos de forma e de acerto
+- [ ] Roadmap: previsão de provas futuras (exige v1.1 do modelo), comparação por escalão, capacidade vs esperado
 
 ## Fase F — Repositório e README
 
-- [ ] (a detalhar)
+- [x] README, arquitetura, ADRs 0001–0003, runbooks, CONTRIBUTING, CHANGELOG, SECURITY, templates, LICENSE, resumo CV
+- [x] Código e documentos mortos removidos; descrição e tópicos do repositório
+- [x] CI: Postgres 18, pip-audit, npm audit, gitleaks (PR #14 verde); CodeQL indisponível em repositório privado gratuito
 
 ## Fase G — Produção (só com "autorizo o passo N")
 
