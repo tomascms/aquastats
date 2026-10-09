@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -65,14 +66,20 @@ def patch_swimmer_profile(body: dict, request: Request, user: User = Depends(req
 
 
 @router.get("/snapshot")
-def snapshot(payload: dict = Depends(require_member), session: Session = Depends(get_session)):
+def snapshot(
+    payload: dict = Depends(require_member),
+    session: Session = Depends(get_session),
+    since: date | None = None,
+    before: date | None = None,
+):
+    window = {"since": since, "before": before}
     if payload.get("role") == "swimmer":
         athlete = payload.get("athlete_uuid")
         # No athlete record yet: nothing of theirs to show (and never the team's times).
-        data = team_snapshot(session, payload["team_uuid"], athlete_id=athlete or UUID(int=0))
+        data = team_snapshot(session, payload["team_uuid"], athlete_id=athlete or UUID(int=0), **window)
         data = filter_swimmer_snapshot(data, str(athlete or ""))
     else:
-        data = team_snapshot(session, payload["team_uuid"])
+        data = team_snapshot(session, payload["team_uuid"], **window)
     return Response(snapshot_body(data), media_type="application/json")
 
 

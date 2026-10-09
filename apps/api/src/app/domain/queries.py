@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from uuid import UUID
 
 import json
@@ -43,15 +44,19 @@ _TIME_LOGS_JSON = text(
 )
 
 
-def team_snapshot(session: Session, team_id: UUID, athlete_id: UUID | None = None) -> dict:
+def team_snapshot(session: Session, team_id: UUID, athlete_id: UUID | None = None, since: date | None = None, before: date | None = None) -> dict:
     """Everything a team page needs. With `athlete_id` (a swimmer) the time logs are only theirs, filtered in
-    SQL on top of row-level security, so a swimmer's request never loads the team's history."""
+    SQL on top of row-level security, so a swimmer's request never loads the team's history. `since`/`before`
+    limit workouts (and their times) by date: the app loads recent weeks first and the older history after."""
     team = session.get(Team, team_id)
     athletes = session.scalars(select(Athlete).where(Athlete.team_id == team_id).order_by(Athlete.name)).all()
     active_athletes = [row for row in athletes if row.deleted_at is None]
-    workouts = session.scalars(
-        select(Workout).where(Workout.team_id == team_id, Workout.deleted_at.is_(None)).order_by(Workout.workout_date.desc())
-    ).all()
+    workout_filter = [Workout.team_id == team_id, Workout.deleted_at.is_(None)]
+    if since:
+        workout_filter.append(Workout.workout_date >= since)
+    if before:
+        workout_filter.append(Workout.workout_date < before)
+    workouts = session.scalars(select(Workout).where(*workout_filter).order_by(Workout.workout_date.desc())).all()
     workout_ids = [row.id for row in workouts]
     time_logs_json, logged_workouts = "[]", []
     if workout_ids:

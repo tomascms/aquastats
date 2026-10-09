@@ -122,3 +122,25 @@ def test_time_logs_built_by_postgres_match_the_python_serializer(world, admin_en
         return sorted(out, key=lambda r: r["id"])
 
     assert built and norm(built) == norm(expected)
+
+
+def test_recent_and_older_windows_add_up_to_the_full_snapshot(world, api_engine, client_for, admin_engine):
+    from datetime import date
+
+    with admin_engine.begin() as conn:  # an older workout with a time, so both windows have something
+        old = conn.execute(text(
+            "insert into workouts (team_id, created_by, title, workout_date, shift, athlete_ids) "
+            "values (:t, :c, 'Antigo', '2024-01-10', 'morning', array[:a]::uuid[]) returning id"),
+            {"t": world.a.team, "c": world.a.coach, "a": str(world.a.athletes[0])}).scalar()
+        conn.execute(text("insert into time_logs (workout_id, block_id, athlete_id, rep_number, ss, recorded_by) values (:w, 'b1', :a, 1, 40, :c)"),
+                     {"w": old, "a": world.a.athletes[0], "c": world.a.coach})
+    client = client_for(api_engine, world.a.coach, "coach", world.a)
+    cutoff = date(2025, 1, 1).isoformat()
+    full = client.get("/api/v1/snapshot").json()
+    recent = client.get(f"/api/v1/snapshot?since={cutoff}").json()
+    older = client.get(f"/api/v1/snapshot?before={cutoff}").json()
+    ids = lambda rows: {row["id"] for row in rows}
+    assert ids(recent["workouts"]) & ids(older["workouts"]) == set()
+    assert ids(recent["workouts"]) | ids(older["workouts"]) == ids(full["workouts"])
+    assert ids(recent["timeLogs"]) | ids(older["timeLogs"]) == ids(full["timeLogs"])
+    assert str(old) in ids(older["workouts"]) and str(old) not in ids(recent["workouts"])
