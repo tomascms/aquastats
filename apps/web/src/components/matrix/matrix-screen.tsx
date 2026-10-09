@@ -435,6 +435,11 @@ export function MatrixScreen() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  if (!workout && !historyLoaded) {
+    // An older workout arrives with the history, a moment after the recent weeks.
+    return <div className="px-4 py-16 text-center text-mute" role="status">{t("A carregar…")}</div>;
+  }
+
   if (!workout) {
     return (
       <div className="px-4 py-16 text-center text-mute">

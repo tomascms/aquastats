@@ -17,6 +17,7 @@ import { sameMeters } from "./distances";
 import { meetTitle, treinoTitle } from "./labels";
 import { flattenInner, flatRepNumber, innerCount, persistDraft } from "./set";
 import { analyzeRace } from "./race";
+import { RECENT_DAYS, takeEarlySnapshot } from "./early-snapshot";
 import {
   commitClockParts,
   EMPTY_PARTS,
@@ -216,8 +217,7 @@ function timeLogKey(log: Pick<TimeLog, "workoutId" | "blockId" | "athleteId" | "
   return `${log.workoutId}:${log.blockId}:${log.athleteId}:${log.repNumber}`;
 }
 
-/** Pages show the last weeks first; older history arrives right after, in the background. */
-const RECENT_DAYS = 120;
+const HISTORY_DELAY_MS = 2000;
 const recentSince = () => addDays(todayIso(), -RECENT_DAYS);
 
 /** With `since`, the snapshot only holds workouts from that day on: older ones already loaded are kept. */
@@ -227,6 +227,13 @@ function applySnapshot(snapshot: Snapshot, role: AppState["role"], swimmerId = "
   const olderWorkouts = since ? state.workouts.filter((workout) => workout.date < since) : [];
   const olderIds = new Set(olderWorkouts.map((workout) => workout.id));
   const olderLogs = state.timeLogs.filter((log) => !log.pending && olderIds.has(log.workoutId));
+  // Competitions follow the same window: keep the older ones already merged from the history.
+  const shownMeets = new Set(snapshot.competitions.map((meet) => meet.id));
+  const olderMeets = since ? state.competitions.filter((meet) => meet.date < since && !shownMeets.has(meet.id)) : [];
+  const olderMeetIds = new Set(olderMeets.map((meet) => meet.id));
+  const olderEntries = state.meetEntries.filter((entry) => olderMeetIds.has(entry.competitionId));
+  const olderEntryIds = new Set(olderEntries.map((entry) => entry.id));
+  const olderResults = state.meetResults.filter((result) => olderEntryIds.has(result.entryId));
   const pendingKeys = new Set(pendingLogs.map((log) => timeLogKey(log)));
   setState({
     role,
@@ -242,9 +249,9 @@ function applySnapshot(snapshot: Snapshot, role: AppState["role"], swimmerId = "
         .map((log) => ({ ...log, pending: false, stroke: (log.stroke || "") as TimeLog["stroke"] })),
       ...pendingLogs,
     ],
-    competitions: snapshot.competitions.map((meet) => ({ ...meet, endDate: meet.endDate || meet.date })),
-    meetEntries: snapshot.meetEntries,
-    meetResults: snapshot.meetResults,
+    competitions: [...snapshot.competitions.map((meet) => ({ ...meet, endDate: meet.endDate || meet.date })), ...olderMeets],
+    meetEntries: [...snapshot.meetEntries, ...olderEntries],
+    meetResults: [...snapshot.meetResults, ...olderResults],
     raceSessions: (snapshot.raceSessions ?? []).map((session) => ({
       ...session,
       officialTimeS: session.officialTimeS ?? 0,
@@ -264,11 +271,17 @@ async function hydrate() {
   wipeLegacyStorage();
   restorePendingTimes();
   try {
+    // Snapshot and session at once (the snapshot usually started in the page's <head>); without a team: 403, ignored.
+    const since = recentSince();
+    const early = takeEarlySnapshot<Snapshot>(since).then(
+      (snapshot) => snapshot ?? api<Snapshot>(`/api/v1/snapshot?since=${since}`).catch(() => null),
+    );
     const me = await api<Me>("/api/v1/auth/me");
     if (me.role === "coach" || (me.role === "swimmer" && me.teamId)) {
-      const since = recentSince();
-      applySnapshot(await api<Snapshot>(`/api/v1/snapshot?since=${since}`), me.role, me.athleteId || "", since);
-      void loadOlderHistory(since);
+      const snapshot = (await early) ?? (await api<Snapshot>(`/api/v1/snapshot?since=${since}`));
+      applySnapshot(snapshot, me.role, me.athleteId || "", since);
+      // After the first paint: on a phone network the history (megabytes) would compete with the page itself.
+      setTimeout(() => void loadOlderHistory(since), HISTORY_DELAY_MS);
     } else if (me.role === "swimmer") {
       const profile = await api<Athlete>("/api/v1/swimmer/profile");
       setState({
@@ -353,13 +366,16 @@ async function refreshSnapshot() {
   applySnapshot(await api<Snapshot>(`/api/v1/snapshot?since=${since}`), state.role, "", since);
 }
 
-/** Workouts before `before` and their times, merged once the page is already usable. */
+/** Workouts and competitions before `before` (with times and results), merged once the page is usable. */
 async function loadOlderHistory(before: string) {
   try {
     const older = await api<Snapshot>(`/api/v1/snapshot?before=${before}`);
     setState((current) => {
       const knownWorkouts = new Set(current.workouts.map((workout) => workout.id));
       const knownLogs = new Set(current.timeLogs.map((log) => timeLogKey(log)));
+      const knownMeets = new Set(current.competitions.map((meet) => meet.id));
+      const knownEntries = new Set(current.meetEntries.map((entry) => entry.id));
+      const knownResults = new Set(current.meetResults.map((result) => result.id));
       return {
         ...current,
         historyLoaded: true,
@@ -370,6 +386,14 @@ async function loadOlderHistory(before: string) {
             .filter((log) => !knownLogs.has(timeLogKey(log)))
             .map((log) => ({ ...log, pending: false, stroke: (log.stroke || "") as TimeLog["stroke"] })),
         ],
+        competitions: [
+          ...current.competitions,
+          ...older.competitions
+            .filter((meet) => !knownMeets.has(meet.id))
+            .map((meet) => ({ ...meet, endDate: meet.endDate || meet.date })),
+        ],
+        meetEntries: [...current.meetEntries, ...older.meetEntries.filter((entry) => !knownEntries.has(entry.id))],
+        meetResults: [...current.meetResults, ...older.meetResults.filter((result) => !knownResults.has(result.id))],
       };
     });
   } catch {
