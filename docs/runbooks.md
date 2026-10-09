@@ -40,7 +40,16 @@ para parar o desafiante.
 Consola Neon → *Branches* → *New branch* → *Branch data and schema from a past point in time* → parent
 `production`, hora anterior ao incidente → verificar os dados na branch nova → se estiverem certos, *Reset from
 parent* ou apontar a API para a branch restaurada (nova revisão Cloud Run com o `DATABASE_URL` dessa branch).
-Ensaio: preparado no staging a 09/10/2026; por concluir (consola Neon exigiu novo login).
+Ensaio (09/10/2026, branch `staging-hardening`, dados sintéticos):
+
+- Às 11:01:30Z foi inserida uma linha de teste em `organizations`, e às 11:01:38Z foi apagada.
+- Às 12:39:56Z foi pedida, na consola, uma branch do *parent* `staging-hardening` no instante 11:01:35Z
+  (`br-fragrant-star-b10idiu7`, auto-apagada em 1 dia).
+- **Resultado: a linha voltou com o mesmo id e a mesma `created_at`; no *parent* continua apagada (0 linhas).**
+- A branch ficou pronta em menos de 10 s. Os dados foram verificados por SQL às 12:40:44Z, 48 s depois do pedido,
+  incluindo a consulta manual.
+- O seletor da consola usa a hora local (Europe/Lisbon, UTC+1) e aceita segundos.
+- Limite: o PITR gratuito cobre 6 h. Uma reversão tem de ser decidida dentro dessa janela.
 
 ## Incidentes
 
