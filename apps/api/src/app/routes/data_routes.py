@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from datetime import date
 from uuid import UUID
 
@@ -73,6 +74,16 @@ def snapshot(
     before: date | None = None,
 ):
     window = {"since": since, "before": before}
+    with _SNAPSHOT_SLOTS:  # bulkhead: snapshots queue, time writes keep their CPU
+        return _snapshot_response(payload, session, window)
+
+
+# ponytail: per-process limit. Local load test (20 coaches, 60 s): PUT /times p95 924 -> 708 ms with snapshots
+# in the mix, 102 ms without them; the rest is CPU shared with snapshot building (more instances, smaller payloads).
+_SNAPSHOT_SLOTS = threading.BoundedSemaphore(2)
+
+
+def _snapshot_response(payload: dict, session: Session, window: dict) -> Response:
     if payload.get("role") == "swimmer":
         athlete = payload.get("athlete_uuid")
         # No athlete record yet: nothing of theirs to show (and never the team's times).

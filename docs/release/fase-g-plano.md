@@ -29,13 +29,13 @@ login, criar treino, cronometrar.
 Reversão: `gcloud run services update-traffic aquastats-api --to-revisions <revisão anterior>=100 ...`;
 `npx wrangler rollback` (versão anterior do Worker).
 
-## Passo 2 — Migrações 005–012 na base de produção
+## Passo 2 — Migrações 005–014 na base de produção
 
 O quê: as mesmas instruções ensaiadas no staging (`br-raspy-leaf-b1wvhlo5`), numa transação, como `neondb_owner`,
 pelo conector Neon. Idempotentes; 005–009 já existem (só ficam registadas), 010 cria o ledger, 011/012 criam as
-roles novas (sem login), as políticas por papel e o FORCE RLS.
+roles novas (sem login), as políticas por papel e o FORCE RLS; 013 acrescenta `time_logs.client_updated_at`; 014 remove índices duplicados.
 Impacto: nenhum para o código atual — a API continua com `aquastats_app` (BYPASSRLS), que ignora as políticas.
-Verificação: catálogo (roles, políticas, FORCE, permissões do ledger, `schema_migrations` 001–012).
+Verificação: catálogo (roles, políticas, FORCE, permissões do ledger, `schema_migrations` 001–014).
 Reversão: o código atual não depende de nada disto; em último caso, restauro PITR para a hora anotada.
 
 ## Passo 3 — Credenciais das roles novas (sem nunca mostrar as passwords)
