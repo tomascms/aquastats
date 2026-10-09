@@ -35,6 +35,10 @@ function uuidOf(value: string): string {
 const lastSeason = new Date().getUTCMonth() >= 8 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
 const data = generateDataset({ ...SCENARIOS.multiano, athletes, seasons, firstSeason: lastSeason - seasons + 1 }, seed);
 const id = (value: string) => uuidOf(`${seed}:${value}`);
+// The generator simulates whole seasons; a real team has no times or results after today.
+const today = new Date().toISOString().slice(0, 10);
+const workouts = data.workouts.filter((w) => w.date <= today);
+const kept = new Set(workouts.map((w) => w.id));
 
 const payload = {
   generator: "apps/web/scripts/export-synthetic.ts",
@@ -50,9 +54,9 @@ const payload = {
     primaryStroke: a.primaryStroke,
     wellness: a.wellness,
   })),
-  workouts: data.workouts.map((w) => ({ ...w, id: id(w.id), athleteIds: w.athleteIds.map(id) })),
-  timeLogs: data.timeLogs.map((t) => ({ ...t, id: id(t.id), workoutId: id(t.workoutId), athleteId: id(t.athleteId) })),
-  races: data.races.map((r) => ({ ...r, athleteId: id(r.athleteId) })),
+  workouts: workouts.map((w) => ({ ...w, id: id(w.id), athleteIds: w.athleteIds.map(id) })),
+  timeLogs: data.timeLogs.filter((t) => kept.has(t.workoutId)).map((t) => ({ ...t, id: id(t.id), workoutId: id(t.workoutId), athleteId: id(t.athleteId) })),
+  races: data.races.filter((r) => r.date <= today).map((r) => ({ ...r, athleteId: id(r.athleteId) })),
   meets: data.meets,
 };
 
