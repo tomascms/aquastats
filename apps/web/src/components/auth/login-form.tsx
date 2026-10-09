@@ -164,7 +164,7 @@ export function LoginForm() {
             />
             <button
               type="button"
-              className="absolute inset-y-0 right-1.5 my-auto h-8 rounded-md px-2.5 text-xs text-mute hover:text-mist"
+              className="absolute inset-y-0 right-1.5 my-auto h-11 rounded-md px-2.5 text-xs text-mute hover:text-mist"
               onClick={() => setShowPassword((value) => !value)}
             >
               {showPassword ? t("Ocultar") : t("Mostrar")}
@@ -186,13 +186,13 @@ export function LoginForm() {
 
       <div className="mt-6 flex items-center justify-between text-sm font-medium">
         {mode === "login" ? (
-          <Link href="/repor" className="text-sand hover:text-aqua transition-colors">
+          <Link href="/repor" className="inline-flex min-h-11 items-center text-sand hover:text-aqua transition-colors">
             {t("Recuperar")}
           </Link>
         ) : (
           <span />
         )}
-        <button type="button" className="text-sand hover:text-aqua transition-colors" onClick={() => setMode(mode === "login" ? "register" : "login")}>
+        <button type="button" className="inline-flex min-h-11 items-center text-sand hover:text-aqua transition-colors" onClick={() => setMode(mode === "login" ? "register" : "login")}>
           {mode === "login" ? t("Criar conta") : t("Já tenho conta")}
         </button>
       </div>

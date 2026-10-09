@@ -64,7 +64,7 @@ export function AuthFrame({ children }: { children: React.ReactNode }) {
         <footer className="safe-bottom px-6 pb-6">
           <nav aria-label={t("Informação legal")} className="flex justify-center gap-5 text-sm text-mute">
             {LINKS.map((item) => (
-              <Link key={item.href} href={item.href} className="hover:text-mist">
+              <Link key={item.href} href={item.href} className="inline-flex min-h-11 items-center hover:text-mist">
                 {t(item.label)}
               </Link>
             ))}

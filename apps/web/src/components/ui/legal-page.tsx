@@ -20,7 +20,7 @@ export function LegalPage({
   return (
     <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-5 pb-8 lg:max-w-2xl">
       <header className="safe-top flex items-center justify-between gap-4 pt-8">
-        <Link href="/" aria-label={t("Ir para a página inicial")}>
+        <Link href="/">
           <BrandLockup />
         </Link>
         <LanguageSwitch />

@@ -97,7 +97,7 @@ export default function TeamPage() {
               {roster.map((item) => (
                 <tr key={item.athlete.id} className="group border-t border-line">
                   <td className="px-5 py-3">
-                    <Link href={`/coach/team/${item.athlete.id}`} className="flex items-center gap-3 rounded-md">
+                    <Link href={`/coach/team/${item.athlete.id}`} prefetch={false} className="flex items-center gap-3 rounded-md">
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-aqua-soft font-display text-base font-bold text-aqua">
                         {initials(item.athlete.name)}
                       </span>

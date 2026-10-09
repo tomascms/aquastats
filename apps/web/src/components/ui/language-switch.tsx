@@ -41,7 +41,7 @@ export function LanguageSwitch({
             lang={code}
             title={LOCALE_NAME[code]}
             onClick={() => setLocale(code)}
-            className={`${compact ? "min-h-8 min-w-8 px-1.5" : "min-h-8 min-w-10 px-2.5"} rounded-md font-mono text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 ${
+            className={`min-h-11 min-w-11 ${compact ? "px-1.5" : "px-2.5"} rounded-md font-mono text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 ${
               active
                 ? dark
                   ? "bg-white text-aqua shadow-sm"
