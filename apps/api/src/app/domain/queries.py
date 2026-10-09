@@ -44,6 +44,21 @@ _TIME_LOGS_JSON = text(
 )
 
 
+# The best official time per athlete, course, stroke and distance, over every season (RLS applies).
+_BEST_RESULTS = text(
+    """
+    select distinct on (e.athlete_id, c.course, e.stroke, e.distance_m)
+           e.athlete_id, c.course, e.stroke, e.distance_m, r.mm, r.ss, r.cc, r.id as result_id,
+           c.id as competition_id, c.meet_date
+    from meet_results r
+    join meet_entries e on e.id = r.entry_id
+    join competitions c on c.id = e.competition_id
+    where c.team_id = :team and c.deleted_at is null and r.mm * 6000 + r.ss * 100 + r.cc > 0
+    order by e.athlete_id, c.course, e.stroke, e.distance_m, r.mm * 6000 + r.ss * 100 + r.cc, r.id
+    """
+)
+
+
 def team_snapshot(session: Session, team_id: UUID, athlete_id: UUID | None = None, since: date | None = None, before: date | None = None) -> dict:
     """Everything a team page needs. With `athlete_id` (a swimmer) the time logs are only theirs, filtered in
     SQL on top of row-level security, so a swimmer's request never loads the team's history. `since`/`before`
@@ -51,25 +66,44 @@ def team_snapshot(session: Session, team_id: UUID, athlete_id: UUID | None = Non
     team = session.get(Team, team_id)
     athletes = session.scalars(select(Athlete).where(Athlete.team_id == team_id).order_by(Athlete.name)).all()
     active_athletes = [row for row in athletes if row.deleted_at is None]
+    # Workouts, entries and results come as plain rows (same attribute names), not ORM objects: thousands of
+    # them, read-only, and hydrating them held the GIL long enough to slow concurrent time writes.
     workout_filter = [Workout.team_id == team_id, Workout.deleted_at.is_(None)]
     if since:
         workout_filter.append(Workout.workout_date >= since)
     if before:
         workout_filter.append(Workout.workout_date < before)
-    workouts = session.scalars(select(Workout).where(*workout_filter).order_by(Workout.workout_date.desc())).all()
+    workouts = session.execute(select(Workout.__table__).where(*workout_filter).order_by(Workout.workout_date.desc())).all()
     workout_ids = [row.id for row in workouts]
     time_logs_json, logged_workouts = "[]", []
     if workout_ids:
         time_logs_json, logged_workouts = session.execute(
             _TIME_LOGS_JSON, {"workouts": workout_ids, "athlete": str(athlete_id) if athlete_id else None}
         ).one()
-    meets = session.scalars(
-        select(Competition).where(Competition.team_id == team_id, Competition.deleted_at.is_(None)).order_by(Competition.meet_date.desc())
-    ).all()
-    meet_ids = [row.id for row in meets]
-    entries = session.scalars(select(MeetEntry).where(MeetEntry.competition_id.in_(meet_ids))).all() if meet_ids else []
-    entry_ids = [row.id for row in entries]
-    results = session.scalars(select(MeetResult).where(MeetResult.entry_id.in_(entry_ids))).all() if entry_ids else []
+    # Competitions follow the same window as workouts; personal records still count every season (in SQL).
+    meet_filter = [Competition.team_id == team_id, Competition.deleted_at.is_(None)]
+    if since:
+        meet_filter.append(Competition.meet_date >= since)
+    if before:
+        meet_filter.append(Competition.meet_date < before)
+    shown_meets = session.scalars(select(Competition).where(*meet_filter).order_by(Competition.meet_date.desc())).all()
+    meet_ids = [row.id for row in shown_meets]
+    entry_table, result_table = MeetEntry.__table__, MeetResult.__table__
+    shown_entries = session.execute(select(entry_table).where(entry_table.c.competition_id.in_(meet_ids))).all() if meet_ids else []
+    entry_ids = [row.id for row in shown_entries]
+    shown_results = session.execute(select(result_table).where(result_table.c.entry_id.in_(entry_ids))).all() if entry_ids else []
+    if before:  # older history: the app merges only these (loadOlderHistory)
+        return {
+            "teamName": team.name if team else "Equipa",
+            "workouts": [workout_out(row) for row in workouts],
+            "timeLogs": RawJSON(time_logs_json),
+            "competitions": [competition_out(row) for row in shown_meets],
+            "meetEntries": [entry_out(row) for row in shown_entries],
+            "meetResults": [result_out(row) for row in shown_results],
+            **{key: [] for key in ("athletes", "raceSessions", "seasonPlans", "attendance", "personalRecords", "goals",
+                                   "hrSessions")},
+            "_loggedWorkoutIds": [str(item) for item in logged_workouts],
+        }
     races = session.scalars(
         select(RaceSession).where(RaceSession.team_id == team_id, RaceSession.deleted_at.is_(None)).order_by(RaceSession.session_date.desc())
     ).all()
@@ -87,13 +121,13 @@ def team_snapshot(session: Session, team_id: UUID, athlete_id: UUID | None = Non
         "athletes": [athlete_out(row) for row in athletes],
         "workouts": [workout_out(row) for row in workouts],
         "timeLogs": RawJSON(time_logs_json),
-        "competitions": [competition_out(row) for row in meets],
-        "meetEntries": [entry_out(row) for row in entries],
-        "meetResults": [result_out(row) for row in results],
+        "competitions": [competition_out(row) for row in shown_meets],
+        "meetEntries": [entry_out(row) for row in shown_entries],
+        "meetResults": [result_out(row) for row in shown_results],
         "raceSessions": [race_session_out(row) for row in races],
         "seasonPlans": [season_plan_out(row) for row in plans],
         "attendance": [attendance_out(row) for row in attendance],
-        "personalRecords": personal_records(entries, results, meets, active_athletes),
+        "personalRecords": personal_records(session.execute(_BEST_RESULTS, {"team": team_id}).all(), active_athletes),
         "goals": team_goals(session, team_id),
         "hrSessions": team_hr_sessions(session, team_id),
         "_loggedWorkoutIds": [str(item) for item in logged_workouts],
@@ -136,14 +170,8 @@ def filter_swimmer_snapshot(data: dict, athlete_id: str) -> dict:
     }
 
 
-def personal_records(
-    entries: list[MeetEntry],
-    results: list[MeetResult],
-    meets: list[Competition],
-    athletes: list[Athlete] | None = None,
-) -> list[dict]:
-    meet_map = {row.id: row for row in meets}
-    entry_map = {row.id: row for row in entries}
+def personal_records(best_results: list, athletes: list[Athlete] | None = None) -> list[dict]:
+    """Best time per athlete, course, stroke and distance: seed records first, then `_BEST_RESULTS` rows."""
     best: dict[tuple, dict] = {}
 
     def consider(key: tuple, cs: int, payload: dict) -> None:
@@ -181,30 +209,21 @@ def personal_records(
                     "splits": item.get("splits") if isinstance(item.get("splits"), list) else [],
                 },
             )
-    for result in results:
-        cs = result.mm * 6000 + result.ss * 100 + result.cc
-        if cs <= 0:
-            continue
-        entry = entry_map.get(result.entry_id)
-        if not entry:
-            continue
-        meet = meet_map.get(entry.competition_id)
-        if not meet:
-            continue
+    for row in best_results:
         consider(
-            (entry.athlete_id, meet.course, entry.stroke, entry.distance_m),
-            cs,
+            (row.athlete_id, row.course, row.stroke, row.distance_m),
+            row.mm * 6000 + row.ss * 100 + row.cc,
             {
-                "athleteId": str(entry.athlete_id),
-                "stroke": entry.stroke,
-                "distanceM": entry.distance_m,
-                "course": meet.course,
-                "mm": result.mm,
-                "ss": result.ss,
-                "cc": result.cc,
-                "competitionId": str(meet.id),
-                "resultId": str(result.id),
-                "date": meet.meet_date.isoformat() if meet.meet_date else "",
+                "athleteId": str(row.athlete_id),
+                "stroke": row.stroke,
+                "distanceM": row.distance_m,
+                "course": row.course,
+                "mm": row.mm,
+                "ss": row.ss,
+                "cc": row.cc,
+                "competitionId": str(row.competition_id),
+                "resultId": str(row.result_id),
+                "date": row.meet_date.isoformat() if row.meet_date else "",
                 "source": "meet",
             },
         )

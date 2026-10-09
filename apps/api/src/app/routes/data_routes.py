@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import threading
 from datetime import date
 from uuid import UUID
@@ -68,6 +69,7 @@ def patch_swimmer_profile(body: dict, request: Request, user: User = Depends(req
 
 @router.get("/snapshot")
 def snapshot(
+    request: Request,
     payload: dict = Depends(require_member),
     session: Session = Depends(get_session),
     since: date | None = None,
@@ -75,15 +77,20 @@ def snapshot(
 ):
     window = {"since": since, "before": before}
     with _SNAPSHOT_SLOTS:  # bulkhead: snapshots queue, time writes keep their CPU
-        return _snapshot_response(payload, session, window)
+        body = _snapshot_body(payload, session, window)
+        if "gzip" not in request.headers.get("accept-encoding", ""):
+            return Response(body, media_type="application/json")
+        # Compressed here, in the worker thread: GZipMiddleware would deflate megabytes on the event loop and stall
+        # every other request (time writes included). zlib releases the GIL, so this runs alongside them.
+        return Response(gzip.compress(body, 5), media_type="application/json",
+                        headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
 
 
-# ponytail: per-process limit. Local load test (20 coaches, 60 s): PUT /times p95 924 -> 708 ms with snapshots
-# in the mix, 102 ms without them; the rest is CPU shared with snapshot building (more instances, smaller payloads).
-_SNAPSHOT_SLOTS = threading.BoundedSemaphore(2)
+# ponytail: per-process limit; more instances when one is not enough.
+_SNAPSHOT_SLOTS = threading.BoundedSemaphore(1)
 
 
-def _snapshot_response(payload: dict, session: Session, window: dict) -> Response:
+def _snapshot_body(payload: dict, session: Session, window: dict) -> bytes:
     if payload.get("role") == "swimmer":
         athlete = payload.get("athlete_uuid")
         # No athlete record yet: nothing of theirs to show (and never the team's times).
@@ -91,7 +98,7 @@ def _snapshot_response(payload: dict, session: Session, window: dict) -> Respons
         data = filter_swimmer_snapshot(data, str(athlete or ""))
     else:
         data = team_snapshot(session, payload["team_uuid"], **window)
-    return Response(snapshot_body(data), media_type="application/json")
+    return snapshot_body(data)
 
 
 @router.post("/athletes")
