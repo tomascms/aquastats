@@ -59,7 +59,7 @@ export default function SwimmerHomePage() {
         </p>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-ink-2 px-3 py-3">
-            <p className="text-xs tracking-[0.16em] text-mute">{t("Volume")}</p>
+            <p className="text-xs tracking-[0.16em] text-mute">{t("Volume total")}</p>
             <p className="font-mono text-xl text-aqua">{formatMeters(me ? athleteVolumeM(workouts, me.id) : 0)}</p>
           </div>
           <div className="rounded-2xl bg-ink-2 px-3 py-3">

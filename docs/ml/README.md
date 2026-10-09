@@ -10,7 +10,8 @@
 > Student-t tails. Developed under a pre-registered protocol on a physiology-based synthetic
 > generator (tuning / development / single-use confirmation seeds, paired bootstrap, Bonferroni
 > over a 15-experiment budget, leakage and property tests, stopping rule). **Validated on synthetic
-> data only**: the production database has no logged times yet. A closed learning loop
+> data only, now in shadow validation**: the production database has no logged times yet, and race-time
+> estimates are not shown in the app. A closed learning loop
 > (append-only prediction ledger, reconciliation, error attribution, health alerts,
 > champion/challenger in shadow with a runtime kill switch) is in place to judge it on real data.
 
@@ -18,7 +19,7 @@
 |---|---|
 | Versão | **v1.0** (congelada: `apps/web/src/lib/ml/v1.ts`; teste "golden" `v1.test.ts`) |
 | Estado na app | **Desafiante em sombra**: grava previsões, não é mostrado. O treinador continua a ver o modelo atual |
-| Validação | Só dados **sintéticos** (gerador 3.0). Base de produção: 0 tempos (2026-10-05) |
+| Validação | **Validado em dados sintéticos, em validação em modo sombra** (gerador 3.0). Base de produção: 0 tempos (2026-10-05) |
 | Registo de tentativas | [`experiments.md`](experiments.md) (todas, incluindo falhadas) |
 | Protocolo | [`protocolo.md`](protocolo.md) (pré-registado, com adendas datadas antes dos resultados) |
 | Monitorização | [`monitorizacao.md`](monitorizacao.md) · Dados que faltam: [`dados-necessarios.md`](dados-necessarios.md) · Correr: [`harness.md`](harness.md) |
@@ -28,7 +29,8 @@
 Para cada repetição cronometrada (planeada ou já nadada): **quanto deve demorar**, um **intervalo a
 80 %**, uma **confiança** e os **2–3 fatores** que mais pesam (forma recente, regresso de uma
 paragem, efeito do dia, cansaço na série, série nunca cronometrada). Para cada prova: o **tempo
-esperado** na véspera ou semanas antes, com intervalo. Internamente também estima, por atleta, a
+esperado** na véspera ou semanas antes, com intervalo — validado só em sintético (E13; no arranque, a 28 dias, a
+referência simples ganha) e **não mostrado na app**. Internamente também estima, por atleta, a
 reserva anaeróbia W′ e a sua recuperação, e a probabilidade de uma série "quebrar" — estas duas
 **não** aparecem na interface (validadas só em sintético; decisão do utilizador).
 

@@ -1,5 +1,8 @@
 # Fase A — Diagnóstico com medições (linha de base)
 
+> Nota (09/10/2026): as medições com a equipa sintética foram feitas com um conjunto que incluía uma época futura
+> simulada (mais pesado do que uma equipa real). Linha de base refeita em [desempenho.md](desempenho.md).
+
 Data: 06/10/2026 · Branch: `release/hardening` (= `ml/modelo-estado` @ `d1ccb2a`) · Autor: agente, revisão do dono pendente.
 
 Regras desta fase: nada foi alterado na produção. Na base de produção só correram `SELECT` de catálogo

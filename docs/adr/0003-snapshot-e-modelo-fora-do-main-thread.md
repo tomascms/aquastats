@@ -25,3 +25,15 @@ O site carrega a equipa inteira (`GET /snapshot`) e corre o modelo no browser. C
 
 Medido: snapshot 4 965 → 1 867 ms (janela: 604 ms), atleta 2 689 → 681 ms, TBT da matriz 10 331 → 610 ms, LCP
 21,8 → 10,0 s. O resto do LCP é transferência em 4G simulada; próximo passo é a sincronização incremental.
+
+## Atualização (09/10/2026)
+
+Os números acima foram medidos com um conjunto sintético que incluía uma época futura (22 210 tempos depois de
+hoje), por isso a "janela de 120 dias" levava cerca de 10 meses. Com o conjunto corrigido:
+
+- A janela inicial passou a 42 dias e é pedida no `<head>`, em paralelo com o JavaScript.
+- As competições seguem a janela e os recordes vêm de uma consulta SQL.
+- O gzip saiu do *event loop*.
+
+Matriz: LCP 5,6 → 3,8 s. `PUT /times` p95 com leituras pesadas: 375 → 121 ms.
+Detalhe em [desempenho.md](../release/desempenho.md).

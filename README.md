@@ -48,35 +48,38 @@ Detalhe, modelo de dados e decisões: [docs/arquitetura.md](docs/arquitetura.md)
 
 ## Modelo de previsão (resumo honesto)
 
-Modelo de estado hierárquico (v1.0) que prevê o tempo de cada repetição e de provas, com intervalos calibrados.
-**Validado só em dados sintéticos:** em todos os cenários do gerador erra ~0,16 pontos percentuais menos do que o
-modelo anterior e prevê 100 % das repetições (o anterior cobria 24–77 %). A produção ainda não tem dados reais
-suficientes para o confirmar; por isso corre **em sombra** (grava previsões num ledger imutável e o treinador
-continua a ver o modelo anterior). Não mostra probabilidades de quebra de série nem "saída recomendada".
+Modelo de estado hierárquico (v1.0) que prevê o tempo de cada repetição de treino, com intervalos.
+**Validado em dados sintéticos, em validação em modo sombra.** Nas sementes de confirmação do gerador erra 0,16
+pontos percentuais menos do que o modelo anterior (IC 95 % 0,11–0,21) e prevê 100 % das repetições (o modelo em
+produção cobre 24–77 %). A produção ainda não tem tempos reais para o confirmar. Por isso, quando ligado, corre
+**em sombra**: grava previsões num ledger imutável, e o treinador continua a ver o modelo anterior. O motor
+também estima tempos de prova, mas isso só foi validado em sintético e não aparece na app. A app não mostra
+probabilidades de quebra de série nem "saída recomendada".
 Ficha completa: [docs/ml/README.md](docs/ml/README.md).
 
 ## Segurança e privacidade
 
 - Isolamento na base de dados (RLS) com uma role sem BYPASSRLS para os pedidos de equipa e outra só para a
-  autenticação; o atleta só vê os seus dados. Provado por 40+ testes contra Postgres real.
+  autenticação; o atleta só vê os seus dados. Verificado por 49 testes contra Postgres real.
 - Apagar um atleta ou uma conta apaga tudo o que lhe pertence, previsões incluídas.
 - Sessões HttpOnly/Secure/SameSite, CSRF por origem, argon2id, mensagens de login sem enumeração, rate limit.
 - Detalhe e limites conhecidos: [docs/security/](docs/security/). Auditoria própria, não substitui um pentest.
 
 ## Desempenho e resiliência (medidos)
 
-Equipa sintética de 32 atletas × 4 épocas (93 813 tempos), API local com a RLS ativa, telemóvel simulado pelo
-Lighthouse. Linha de base completa em [docs/release/fase-a-diagnostico.md](docs/release/fase-a-diagnostico.md).
+Medições locais com uma equipa sintética de 32 atletas × 4 épocas (71 636 tempos), API com a RLS ativa e telemóvel
+simulado pelo Lighthouse (4G, CPU 4×). Método, ruído e limites: [docs/release/desempenho.md](docs/release/desempenho.md).
 
 | Medida | Antes | Depois |
 |---|---:|---:|
-| `GET /snapshot` do treinador (p50) | 4 965 ms | 1 867 ms (janela de 120 dias: 604 ms) |
-| `GET /snapshot` do atleta (p50) | 2 689 ms | 681 ms |
-| Snapshot transferido | 39–43 MB | 4,0 MB (janela: 1,3 MB) |
-| Matriz de cronometragem: bloqueio do ecrã (TBT) | 10 331 ms | 610 ms |
-| Matriz de cronometragem: LCP | 21,8 s | 10,0 s |
+| Matriz de cronometragem: LCP | 21,8 s¹ · 5,6 s² | 3,8 s |
+| Matriz de cronometragem: bloqueio do ecrã (TBT) | 10 331 ms¹ · 662 ms² | 40 ms |
+| Bytes até a matriz estar pronta | 3,9 MB¹ · 3,2 MB² | 0,4 MB |
+| `PUT /times` p95, 20 treinadores com leituras pesadas (`scripts/load_test.py`) | 375 ms² | 121 ms |
 | 8 gravações simultâneas da mesma célula | 5 falhavam | 0 falham |
-| Carga local (20 treinadores, 60 s): `PUT /times` p95 | — | 708 ms com leituras pesadas, 102 ms sem |
+
+¹ Código original ([diagnóstico](docs/release/fase-a-diagnostico.md)), medido com um conjunto sintético que
+incluía uma época futura simulada (mais pesado). ² Código anterior às últimas otimizações, com o conjunto corrigido.
 
 ## Correr localmente
 

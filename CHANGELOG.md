@@ -14,8 +14,11 @@
 - Timeouts Worker→API (504), orçamento de 25 s nos resultados ao vivo, bulkhead nos snapshots, logs JSON.
 
 ### Desempenho
-- Snapshot 2,7× mais rápido (treinador) e 4× (atleta), gzip, janela de 120 dias; modelo num Web Worker;
-  índices duplicados removidos (migração 014); logótipos WebP.
+- Snapshot em janela (42 dias primeiro, pedidos no `<head>`; competições incluídas), gzip fora do *event loop*,
+  recordes em SQL; modelo num Web Worker; índices duplicados removidos (migração 014); logótipos WebP.
+  Medido localmente, com dados sintéticos: matriz com LCP de 5,6 → 3,8 s e `PUT /times` p95 com leituras
+  pesadas de 375 → 121 ms (`docs/release/desempenho.md`).
+- Etiqueta "Volume total" no atleta: o valor é o de todas as épocas, não o do treino do dia.
 
 ### Produto
 - "Hoje": quem merece atenção e a ação sugerida; nota de privacidade do atleta; tabelas alternativas aos gráficos;
