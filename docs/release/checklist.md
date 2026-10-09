@@ -73,15 +73,25 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 
 ## Fase C — Resiliência, concorrência, escalabilidade
 
-- [ ] `PUT /times`: upsert `ON CONFLICT` + ordem por `clientUpdatedAt` (edição antiga não sobrescreve nova)
-- [ ] Testes de corrida (dois treinadores, duplo clique, reenvio offline) contra Postgres real
-- [ ] `/snapshot`: janela temporal + paginação/incremental, payload enxuto, compressão; medir antes/depois
-- [ ] Previsões ML fora do *main thread* (Web Worker) e em lote; orçamento de tempo medido
-- [ ] Chamadas externas fora do pedido ou com orçamento curto + disjuntor; pool separada; timeout Worker→API
-- [ ] Índices duplicados removidos (planos antes/depois)
-- [ ] Observabilidade: logs estruturados com request id, métricas básicas, alertas, SLOs
-- [ ] Ensaio de restauro PITR numa branch Neon
-- [ ] Arranque a frio: decisão de custo (min-instances) ou alternativa gratuita
+- [x] `PUT /times`: upsert `ON CONFLICT` ordenado por `clientUpdatedAt` (migração 013); antigo: 5/8 gravações
+      simultâneas rebentavam e um reenvio atrasado sobrescrevia; chave de idempotência inclui a hora da edição
+      (corrige a perda silenciosa 31,40→31,20→31,40)
+- [x] Testes de corrida contra Postgres (8 gravações simultâneas, reenvio atrasado, apagar antigo, relógio adiantado,
+      6 abas a gravar previsões)
+- [x] `/snapshot` (sintético 32×4, RLS ativa): treinador p50 4965→1867 ms, atleta 2689→681 ms; gzip 42,6→4,0 MB;
+      janela de 120 dias primeiro (604 ms / 1,28 MB) e histórico depois
+- [x] Modelo ML num Web Worker (resultados idênticos, testado); matriz TBT 10 331→610 ms, LCP 21,8→10,0 s
+- [x] Ledger: `ON CONFLICT DO NOTHING`
+- [x] Resultados ao vivo: 10 s por ficheiro, 25 s por execução, tudo ou nada; timeout Worker→API 30 s (120 s
+      uploads) → 504 verificado
+- [x] 10 índices duplicados removidos (migração 014)
+- [x] Logs JSON em produção + uma linha por pedido (sem query string)
+- [!] Ensaio de restauro PITR: preparado no staging (linha sintética às 11:01:30Z, apagada às 11:01:38Z); falta criar
+      a branch no instante 11:01:35Z pela consola Neon (sessão expirou; o conector não cria branches por instante)
+- [ ] Arranque a frio: otimizar arranque (gratuito)
+- [ ] Teste de carga local (staging Cloud Run espera decisão)
+- [ ] 013/014 no staging Neon
+- [ ] Junção do histórico antigo no main thread (TBT /coach 282→505 ms): mover para depois do idle
 
 ## Fase D — Velocidade e acessibilidade
 
