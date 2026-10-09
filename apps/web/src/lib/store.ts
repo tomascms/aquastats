@@ -127,6 +127,7 @@ function emptyState(): AppState {
     swimmerId: "",
     online: typeof navigator === "undefined" ? true : navigator.onLine,
     syncing: false,
+    historyLoaded: false,
     teamName: "",
     joinCode: "",
     athletes: [],
@@ -255,6 +256,7 @@ function applySnapshot(snapshot: Snapshot, role: AppState["role"], swimmerId = "
     goals: snapshot.goals ?? [],
     hrSessions: snapshot.hrSessions ?? [],
     syncing: false,
+    historyLoaded: since ? state.historyLoaded : true,
   });
 }
 
@@ -360,6 +362,7 @@ async function loadOlderHistory(before: string) {
       const knownLogs = new Set(current.timeLogs.map((log) => timeLogKey(log)));
       return {
         ...current,
+        historyLoaded: true,
         workouts: [...current.workouts, ...older.workouts.filter((workout) => !knownWorkouts.has(workout.id))],
         timeLogs: [
           ...current.timeLogs,
