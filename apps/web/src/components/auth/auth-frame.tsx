@@ -19,12 +19,11 @@ export function AuthFrame({ children }: { children: React.ReactNode }) {
         <div className="lane-rope" aria-hidden="true" />
         <div className="flex flex-1 flex-col justify-between px-12 py-12">
           <Image
-            src="/aquastats-logo.png"
+            src="/aquastats-logo.webp"
             alt="Aquastats"
             width={900}
             height={880}
             className="h-40 w-auto self-start brightness-0 invert"
-            priority
           />
           <div>
             <p className="font-display text-7xl font-bold leading-[0.9]">know your swim</p>
@@ -43,7 +42,7 @@ export function AuthFrame({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex flex-col items-center px-6 pb-6 pt-4">
             <Image
-              src="/aquastats-logo.png"
+              src="/aquastats-logo.webp"
               alt="Aquastats"
               width={280}
               height={274}

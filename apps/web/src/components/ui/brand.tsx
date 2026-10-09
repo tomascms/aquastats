@@ -3,7 +3,7 @@ import Image from "next/image";
 export function WaveMark({ className = "h-8 w-8" }: { className?: string }) {
   return (
     <Image
-      src="/aquastats-mark.png"
+      src="/aquastats-mark.webp"
       alt=""
       width={80}
       height={80}
@@ -17,7 +17,7 @@ export function BrandLockup({ compact = false, onDark = false }: { compact?: boo
   return (
     <span className="inline-flex items-center gap-2">
       <Image
-        src="/aquastats-mark.png"
+        src="/aquastats-mark.webp"
         alt=""
         width={40}
         height={40}
@@ -38,7 +38,7 @@ export function BrandLockup({ compact = false, onDark = false }: { compact?: boo
 export function BrandLockupFull({ className = "h-28 w-auto" }: { className?: string }) {
   return (
     <Image
-      src="/aquastats-logo.png"
+      src="/aquastats-logo.webp"
       alt="Aquastats"
       width={320}
       height={314}

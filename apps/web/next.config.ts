@@ -20,6 +20,9 @@ const contentSecurityPolicy = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Cloudflare Workers has no image optimiser here (_next/image served originals with no cache):
+  // the few images are static, pre-sized WebP files in public/.
+  images: { unoptimized: true },
   productionBrowserSourceMaps: false,
   compress: true,
   async redirects() {
