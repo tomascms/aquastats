@@ -27,14 +27,14 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 - [x] Latências de produção (health, 30 pedidos sequenciais)
 - [x] Lighthouse móvel (páginas públicas de produção, mediana de 3)
 - [x] Build OpenNext + tamanho dos bundles
-- [ ] testes web (inclui harness ML), tsc, eslint, backtest de fumo
-- [ ] axe completo (Lighthouse já cobre um subconjunto)
+- [x] testes web (78, inclui harness ML), tsc, eslint
+- [~] axe completo: ver Fase D
 - [x] Branch Neon `staging-hardening` (só esquema, 0 linhas) criada pela consola com o login do dono
 - [!] Credencial de staging: geração bloqueada pelo classificador de segurança → dono cola em `.env.staging` ou autoriza
 - [x] Postgres 16 local (pgserver, só localhost) com espelho do esquema de produção (fingerprint comparado)
 - [x] Equipa sintética seed 9001 (32 atletas, 4 épocas, 93 812 tempos) — `.local/`, fora do git
 - [x] Latências da API local com dados sintéticos
-- [~] Lighthouse móvel nas páginas autenticadas (preview local do Worker)
+- [x] Lighthouse móvel nas páginas autenticadas (preview local do Worker)
 - [x] Teclado no `/entrar`; ledger vs cascata testado em SQL com ROLLBACK
 - [x] Revisão de segurança do código e modelo de ameaças (resumo)
 - [x] Revisão de resiliência
@@ -47,9 +47,10 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 - [!] `.env.staging` com credencial — à espera do dono (classificador bloqueou a geração por mim)
 - [x] Guarda: a API recusa arrancar contra o endpoint de produção fora de `APP_ENV=production` (testado com o
       `.env` real); migrações/DDL também a saltam (`a13df47`)
-- [ ] `next` 16.3.8 (RCE `next/og`) + `eslint-config-next` 16.3.8
-- [ ] `pyjwt`, `pypdf`, `cryptography`, `fastapi/starlette` atualizados com testes verdes
-- [~] CI verde: pytest já não depende do `.env` (feito); `next typegen` antes do `tsc` espera decisão sobre `ci.yml`
+- [x] `next` 16.3.8 (GHSA-vcvr-r3jv-pc5j) + `eslint-config-next` 16.3.8 — PR #14
+- [x] `pyjwt`, `pypdf`, `cryptography`, `fastapi/starlette` atualizados com testes verdes — PR #14; wrangler 4.149.0
+      (CVE-2026-96889 do `sharp`, publicado a 09/10)
+- [x] CI verde (PR #14): typegen, tsc, lint, testes, build, Postgres 18, pip-audit, npm audit, gitleaks
 - [x] Migração 011 (`b90089f`, `084c2ac`): role `aquastats_api` (sem BYPASSRLS/CREATEROLE/CREATEDB, fora de
       `neon_superuser`), GRANTs por tabela, ledger só SELECT/INSERT, timeouts, FORCE RLS, triggers `updated_at`,
       RLS defensiva nas tabelas de autenticação, audit/convites/outbox só para treinadores
@@ -63,13 +64,12 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 - [x] Ensaio no staging Neon (PG 18, como `neondb_owner`): 005–010 OK; 011 falhou ("permission denied to alter
       role" — só superuser mexe em SUPERUSER/REPLICATION) → corrigida e aplicada; catálogo verificado;
       `schema_migrations` 001–011 registadas
-- [ ] Mesma suite no CI com `postgres:18` (espera decisão sobre `ci.yml`)
-- [ ] Limite conhecido: `app.bypass_rls` pode ser definido pela role da API (RLS protege de bugs, não de SQL
-      injection) → proposta: role separada para os fluxos de autenticação
-- [ ] Login: mensagens uniformes (sem enumeração), bloqueio progressivo por conta+IP, password mínima 12
-- [ ] `next=` rejeita caracteres de controlo; `X-Request-Id` validado; limpeza do `_hits` do rate limit
-- [ ] Dependabot: triagem; seguros em lote; majors explicados antes
-- [ ] `docs/security/` (modelo de ameaças, matriz RLS, controlos e limites)
+- [x] Mesma suite no CI com `postgres:18`
+- [x] Role `aquastats_auth` separada (migração 012): a role da API já não contorna a RLS mesmo com a flag
+- [x] Login: mensagens uniformes (sem enumeração), password mínima 12
+- [x] `next=` rejeita caracteres de controlo; `X-Request-Id` validado; limpeza do `_hits` do rate limit
+- [x] Dependabot: triagem em `dependabot.md` (7 substituídos pelo #14; 3 majors abertos com razão)
+- [x] `docs/security/` (modelo de ameaças, matriz RLS, controlos e limites)
 
 ## Fase C — Resiliência, concorrência, escalabilidade
 
@@ -78,6 +78,7 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
       (corrige a perda silenciosa 31,40→31,20→31,40)
 - [x] Testes de corrida contra Postgres (8 gravações simultâneas, reenvio atrasado, apagar antigo, relógio adiantado,
       6 abas a gravar previsões)
+- [x] Seed sintético sem dados futuros (havia 22 210 tempos depois de hoje; números anteriores marcados como tal)
 - [x] `/snapshot` (sintético 32×4, RLS ativa): treinador p50 4965→1867 ms, atleta 2689→681 ms; gzip 42,6→4,0 MB;
       janela de 120 dias primeiro (604 ms / 1,28 MB) e histórico depois
 - [x] Modelo ML num Web Worker (resultados idênticos, testado); matriz TBT 10 331→610 ms, LCP 21,8→10,0 s
@@ -86,19 +87,26 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
       uploads) → 504 verificado
 - [x] 10 índices duplicados removidos (migração 014)
 - [x] Logs JSON em produção + uma linha por pedido (sem query string)
-- [!] Ensaio de restauro PITR: preparado no staging (linha sintética às 11:01:30Z, apagada às 11:01:38Z); falta criar
-      a branch no instante 11:01:35Z pela consola Neon (sessão expirou; o conector não cria branches por instante)
+- [x] Ensaio de restauro PITR no staging (09/10): linha apagada recuperada numa branch no instante 11:01:35Z;
+      branch pronta em < 10 s, dados verificados 48 s após o pedido (runbooks.md)
 - [ ] Arranque a frio: otimizar arranque (gratuito)
-- [ ] Teste de carga local (staging Cloud Run espera decisão)
+- [x] Teste de carga local (`apps/api/scripts/load_test.py`): `PUT /times` p95 375 → 121 ms com leituras pesadas
+      (desempenho.md); staging sem Cloud Run nem dados → não medido em staging
 - [ ] 013/014 no staging Neon
-- [ ] Junção do histórico antigo no main thread (TBT /coach 282→505 ms): mover para depois do idle
+- [x] Histórico pedido 2 s depois da primeira pintura; janela inicial de 42 dias pedida no `<head>`; matriz LCP
+      5,6 → 3,8 s, TBT 662 → 40 ms (dados corrigidos; desempenho.md)
 
 ## Fase D — Velocidade e acessibilidade
 
 - [x] Logótipos WebP à medida (135+88 → 25+6 KB), sem imagem escondida com prioridade, cache; `_next/image` desligado
 - [x] Alvos de toque 44 px no login, contraste do texto pequeno, nome acessível dos links, sem prefetch de 32 atletas
 - [x] Movimento reduzido já global; #418 não reproduzido no código atual
-- [ ] axe completo (Lighthouse cobre um subconjunto: 95–100) e leitor de ecrã
+- [~] axe-core 4.13 completo (30 páginas × 390/1280 px): 10 regras, 166 nós → em correção; leitor de ecrã = teste manual
+
+- [x] Auditoria de alegações (README, resumos CV, ficha ML): "validado em dados sintéticos, em validação em modo
+      sombra"; previsão de provas qualificada; 3,4× sem fonte removido; capturas só com dados sintéticos
+- [x] Relatórios de segurança fora de documentos públicos: o resumo CV deixou de descrever a falha ainda aberta em
+      produção; `docs/security/` só no repositório privado (rever antes de publicar, ADR 0001)
 
 ## Fase E — Dashboards
 

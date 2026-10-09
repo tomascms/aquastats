@@ -16,18 +16,28 @@ que toca na base, e qualquer reversão de dados tem de acontecer dentro dessa ja
 - [ ] Fases A–F concluídas (`docs/release/checklist.md`).
 - [ ] Hora e LSN anotados (ponto de restauro) antes dos passos 2–4.
 
-## Passo 1 — Hotfix de segurança (independente do resto)
+## Passo 1 — Hotfix de segurança (independente do resto) — autorizado a 09/10/2026
 
-O quê: merge do PR #14 em `main` e deploy de `main`.
+O quê: merge do PR #14 em `main` (squash não; merge normal) e deploy de `main` a partir de um checkout limpo.
 ```
+gh pr merge 14 --merge
 cd apps/api && gcloud run deploy aquastats-api --source . --region europe-west3 --project gen-lang-client-0997549665 --quiet
-cd apps/web && npx opennextjs-cloudflare build && npx opennextjs-cloudflare deploy
+cd apps/web && npm ci && npx opennextjs-cloudflare build && npx opennextjs-cloudflare deploy
 ```
-Impacto: Next 16.3.8 (GHSA-vcvr-r3jv-pc5j) e dependências Python corrigidas; sem mudança funcional.
-Verificação: `https://aquastats.net/api/v1/health` → `aquastats-api`; `/entrar` carrega; chunk JS com `16.3.8`;
-login, criar treino, cronometrar.
-Reversão: `gcloud run services update-traffic aquastats-api --to-revisions <revisão anterior>=100 ...`;
-`npx wrangler rollback` (versão anterior do Worker).
+Impacto: Next 16.3.5 → 16.3.8 (GHSA-vcvr-r3jv-pc5j), React 19.3.0, wrangler 4.149.0; fastapi 0.142.2, starlette
+1.7.0, PyJWT 2.15.1, cryptography 50.0.2, pypdf 6.19.0. Código: `AQUASTATS_ENV_FILE` opcional (vazio em produção =
+comportamento atual) e o teto do backoff aplicado depois do jitter. Sem migrações, sem segredos, sem mudança de
+funcionalidade. `main` = produção atual (revisão 00027 de 29/09 18:13Z; o único commit posterior, `fbf4da0`, muda
+uma frase do prompt do leitor de regulamentos).
+Estado antes (09/10 12:4xZ): API `aquastats-api-00027-hm7` (100 %), Worker versão `fa90118b`, Next 16.3.5 no
+chunk, `/health` p50 211 ms, `/entrar` p50 164 ms.
+Verificação: `/api/v1/health` → `aquastats-api`; `/api/v1/health/ready` → 200; chunk com `16.3.8`; `/entrar`
+carrega; latências medidas outra vez (15 pedidos); logs da revisão nova sem erros no arranque.
+Reversão (< 2 min):
+```
+gcloud run services update-traffic aquastats-api --to-revisions aquastats-api-00027-hm7=100 --region europe-west3 --project gen-lang-client-0997549665
+cd apps/web && npx wrangler rollback fa90118b-7da7-425c-b0dc-c85f8a3beb65
+```
 
 ## Passo 2 — Migrações 005–014 na base de produção
 
