@@ -1147,6 +1147,27 @@ function FormPanel({ points, breaks }: { points: FormPoint[]; breaks: FormBreak[
           {formatDatePt(points[points.length - 1].week).slice(0, 5)}
         </text>
       </svg>
+      <details className="mt-2 text-sm">
+        <summary className="cursor-pointer text-mute">{t("Ver em tabela")}</summary>
+        <table className="mt-2 w-full tabular-nums">
+          <thead>
+            <tr className="text-left text-xs text-mute">
+              <th scope="col" className="font-medium">{t("Semana")}</th>
+              <th scope="col" className="font-medium">{t("Forma vs. habitual")}</th>
+              <th scope="col" className="font-medium">{t("Repetições")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {points.map((point) => (
+              <tr key={point.week}>
+                <td>{formatDatePt(point.week)}</td>
+                <td>{point.indexPct > 0 ? "+" : ""}{point.indexPct.toFixed(1)}%</td>
+                <td>{point.n}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
       {breaks.length ? (
         <ul className="mt-2 space-y-1 text-sm text-mist">
           {breaks.map((item) => (

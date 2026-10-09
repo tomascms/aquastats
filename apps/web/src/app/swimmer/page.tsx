@@ -86,6 +86,13 @@ export default function SwimmerHomePage() {
 
       {me ? <GoalsPanel athleteId={me.id} role="swimmer" /> : null}
 
+      <section className="rounded-2xl border border-line bg-panel px-4 py-3 text-sm" aria-labelledby="privacidade-atleta">
+        <h2 id="privacidade-atleta" className="font-semibold">{t("O que o teu treinador vê")}</h2>
+        <p className="mt-1 text-mute">
+          {t("Os teus tempos de treino e de prova, objetivos, sono e recuperação, ginásio e frequência cardíaca que juntares. Os teus colegas não veem nada disto. Ao sair da equipa podes apagar tudo.")}
+        </p>
+      </section>
+
       <section>
         <h2 className="mb-3 text-lg font-semibold">{t("Blocos de hoje")}</h2>
         <div className="space-y-2">

@@ -93,6 +93,7 @@ function WeeklyChart({ weeks }: { weeks: ReturnType<typeof trackRecord>["weekly"
   const step = innerW / shown.length;
   const y = (value: number) => pad.t + innerH - (value / top) * innerH;
   return (
+    <>
     <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 h-auto w-full" role="img" aria-label={t("Erro médio por semana")}>
       {[0, top / 2, top].map((tick) => (
         <g key={tick}>
@@ -116,6 +117,30 @@ function WeeklyChart({ weeks }: { weeks: ReturnType<typeof trackRecord>["weekly"
         {formatDatePt(shown[shown.length - 1].week).slice(0, 5)}
       </text>
     </svg>
+    <details className="mt-2 text-sm">
+      <summary className="cursor-pointer text-mute">{t("Ver em tabela")}</summary>
+      <table className="mt-2 w-full tabular-nums">
+        <thead>
+          <tr className="text-left text-xs text-mute">
+            <th scope="col" className="font-medium">{t("Semana")}</th>
+            <th scope="col" className="font-medium">{t("Erro médio")}</th>
+            <th scope="col" className="font-medium">{t("Dentro do intervalo")}</th>
+            <th scope="col" className="font-medium">{t("Tempos")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((week) => (
+            <tr key={week.week}>
+              <td>{formatDatePt(week.week)}</td>
+              <td>{week.mapePct.toFixed(1)}%</td>
+              <td>{week.coverage === null ? "—" : `${Math.round(week.coverage * 100)}%`}</td>
+              <td>{week.n}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+    </>
   );
 }
 
