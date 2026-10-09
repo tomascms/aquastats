@@ -88,3 +88,23 @@ def test_a_future_device_clock_is_capped_at_server_time(setup, admin_engine):
     coach.put("/api/v1/times", json={**cell, "ss": 40, "clientUpdatedAt": iso(3600)}, headers=key())
     coach.put("/api/v1/times", json={**cell, "ss": 41, "clientUpdatedAt": iso(0)}, headers=key())
     assert stored(admin_engine, cell)[0][1] == 41  # a phone an hour ahead cannot freeze the cell
+
+
+def test_two_tabs_recording_the_same_predictions_never_fail(setup, admin_engine, api_engine, client_for):
+    team, _, cell = setup
+    body = {"model": "estado", "modelVersion": "1.0", "role": "champion", "horizon": "day",
+            "items": [{"athleteId": cell["athleteId"], "workoutId": cell["workoutId"], "blockId": "p1", "repNumber": 1,
+                       "targetDate": datetime.now(timezone.utc).date().isoformat(), "meanS": 30.0}]}
+    results, barrier = [], threading.Barrier(6)
+
+    def record():
+        client = client_for(api_engine, team.coach, "coach", team)
+        barrier.wait()
+        response = client.post("/api/v1/predictions", json=body, headers=key())
+        results.append((response.status_code, response.json().get("recorded")))
+
+    threads = [threading.Thread(target=record) for _ in range(6)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert [code for code, _ in results] == [200] * 6, results
+    assert sum(recorded for _, recorded in results) == 1  # the unique key decides

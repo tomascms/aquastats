@@ -35,10 +35,16 @@ class FakeSession:
     def get(self, _model, key):
         return self.objects.get(key)
 
-    def execute(self, _query):
-        # First query: times already entered; second: predictions already in the ledger.
+    def execute(self, query):
+        # First query: times already entered; second: predictions already in the ledger; third: the insert.
         self.calls += 1
-        return Rows(self.timed if self.calls == 1 else self.recorded)
+        if self.calls == 1:
+            return Rows(self.timed)
+        if self.calls == 2:
+            return Rows(self.recorded)
+        rows = [PredictionLedger(**{getattr(k, "key", k): v for k, v in values.items()}) for values in query._multi_values[0]]
+        self.added.extend(rows)
+        return Rows([(uuid4(),) for _ in rows])
 
     def add(self, row):
         self.added.append(row)

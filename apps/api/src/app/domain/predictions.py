@@ -16,6 +16,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from .commands import _now
@@ -158,6 +159,7 @@ def record_predictions(session: Session, payload: dict, body: dict, _request=Non
 
     now = _now()
     counts = {"recorded": 0, "skippedHasTime": 0, "skippedDuplicate": 0, "skippedInvalid": 0}
+    rows: list[dict] = []
     for item in items:
         workout = workouts.get(item["workout_id"])
         athlete = athletes.get(item["athlete_id"])
@@ -173,19 +175,17 @@ def record_predictions(session: Session, payload: dict, body: dict, _request=Non
             counts["skippedDuplicate"] += 1
             continue
         recorded.add(key)
-        session.add(
-            PredictionLedger(
-                team_id=team_id,
-                model=model,
-                model_version=version,
-                role=role,
-                horizon=horizon,
-                predicted_by=payload.get("user_id"),
-                predicted_at=now,
-                **item,
-            )
-        )
-        counts["recorded"] += 1
+        rows.append(dict(team_id=team_id, model=model, model_version=version, role=role, horizon=horizon,
+                         predicted_by=payload.get("user_id"), predicted_at=now, **item))
+    if rows:
+        # Two tabs (or a retry) recording the same reps at once: the unique key decides, nobody gets a 500.
+        inserted = session.execute(
+            pg_insert(PredictionLedger).values(rows).on_conflict_do_nothing(
+                index_elements=["model", "model_version", "horizon", "workout_id", "block_id", "athlete_id", "rep_number"]
+            ).returning(PredictionLedger.id)
+        ).all()
+        counts["recorded"] += len(inserted)
+        counts["skippedDuplicate"] += len(rows) - len(inserted)
     return counts
 
 
