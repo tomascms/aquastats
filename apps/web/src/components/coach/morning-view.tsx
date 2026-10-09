@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { useT } from "@/i18n/provider";
+import { INTL_LOCALE } from "@/i18n";
+import { useLocale, useT } from "@/i18n/provider";
 import { todayIso } from "@/lib/dates";
 import { formatDatePt } from "@/lib/labels";
 import { sinceLastSession, weekComparison, whoNeedsAttention, type AttentionReason } from "@/lib/morning";
@@ -14,6 +15,7 @@ const SHOWN = 5;
 /** "Who needs attention today and why": first thing on the coach's home, answered in a few seconds. */
 export function MorningView() {
   const t = useT();
+  const locale = INTL_LOCALE[useLocale()];
   const { athletes, workouts, timeLogs } = useAppState();
   const today = todayIso();
   const attention = useMemo(() => whoNeedsAttention(athletes, workouts, timeLogs, today), [athletes, workouts, timeLogs, today]);
@@ -25,7 +27,7 @@ export function MorningView() {
     switch (item.kind) {
       case "load":
         return {
-          why: t("Carga A:C {ratio} ({band})", { ratio: item.ratio.toFixed(2), band: item.band === "pico" ? t("pico") : t("acima do habitual") }),
+          why: t("Carga A:C {ratio} ({band})", { ratio: item.ratio.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), band: item.band === "pico" ? t("pico") : t("acima do habitual") }),
           action: t("Rever o volume desta semana"),
         };
       case "noTimes":

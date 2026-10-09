@@ -90,3 +90,8 @@ ledger. Gatilhos de reversão: qualquer resposta com dados de outra equipa; taxa
 3. **Revogar a role antiga `aquastats_app`** ao fim de 7 dias: `REVOKE … ; DROP ROLE aquastats_app;` (Neon
    consola, porque foi criada pela consola).
 4. Remover da API a variável `DATABASE_URL` antiga e as variáveis simples que passaram para o segredo.
+
+## Passo 10 — Interruptores gratuitos nas consolas (opcional, sem código)
+
+Cloudflare: *WAF managed rules*, *Bot Fight Mode*, DNSSEC. Resend + DNS: SPF/DKIM/DMARC de `aquastats.net`.
+Neon: confirmar retenção do histórico (PITR 6 h no plano gratuito) depois de cada passo que toca na base.
