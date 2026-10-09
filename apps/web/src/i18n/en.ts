@@ -829,6 +829,7 @@ export const en = {
   "Resposta Google inválida.": "Invalid response from Google.",
   "Não foi possível iniciar login Google.": "Couldn't start Google sign-in.",
   "API indisponível.": "API unavailable.",
+  "A API demorou demasiado. Tenta outra vez.": "The server took too long. Try again.",
   // ── Singular forms (picked when count === 1) & context keys ──────────────
   "{count} tempos por sincronizar|one": "1 time waiting to sync",
   "{count} atletas|one": "1 athlete",

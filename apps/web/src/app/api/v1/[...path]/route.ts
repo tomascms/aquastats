@@ -60,10 +60,17 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     init.body = await request.arrayBuffer();
   }
 
+  // Uploads read documents with AI (up to ~60 s); everything else answers well under 30 s.
+  const slow = path[0] === "meet-files" || path[0] === "hr";
+  init.signal = AbortSignal.timeout(slow ? 120_000 : 30_000);
+
   let upstream: Response;
   try {
     upstream = await fetch(target, init);
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      return NextResponse.json({ detail: "A API demorou demasiado. Tenta outra vez." }, { status: 504 });
+    }
     return NextResponse.json({ detail: "API indisponível." }, { status: 502 });
   }
 
