@@ -161,3 +161,16 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
   - Latências (15 pedidos): `/health` p50 211 → 208 ms, máximo 6 782 → 312 ms; `/entrar` p50 164 → 159 ms.
   - Reversão disponível: revisão `aquastats-api-00027-hm7` e Worker `fa90118b`.
   - Vigilância: tarefa agendada só de leitura para 11/10 às 14:40 (`aquastats-step1-watch-24h`).
+- [x] **PR #15 em `main` (10/10):** merge `2745880`, com o CI verde. `CLAUDE.md` e `.claude/` saíram do repositório.
+- [x] **Passo 2 (10/10):** migrações 005–014 aplicadas na produção.
+  - Ponto de restauro: 14:01:00Z, LSN 0/394ECF0; janela PITR até cerca das 20:01Z.
+  - Antes, o mesmo conjunto de 112 instruções foi ensaiado numa branch tirada da produção
+    (`br-silent-forest-b1cu2mfw`).
+  - Verificado: 14 migrações registadas; RLS forçada em todas as tabelas exceto `schema_migrations`;
+    `aquastats_api` e `aquastats_auth` sem login e sem BYPASSRLS; `aquastats_app` mantém BYPASSRLS, por isso a
+    API atual não é afetada; `/health/ready` com 200; sem erros nos logs.
+- [!] **Passo 3:** bloqueado pelo classificador ("Permission Grant") no GRANT temporário de ADMIN à
+  `aquastats_app`. O script local `.local/prod_role_passwords.py` está pronto. Faltam as regras de permissão.
+- [ ] **Passo 4:** script `.local/prod_secret_bundle.py` pronto. O `EDGE_AUTH_TOKEN` fica para o passo 6, porque a
+  API daria 403 até o Worker o enviar.
+- [ ] Fase E: PR #23 (`feature/fase-e-dashboards`); faltam as capturas sintéticas.
