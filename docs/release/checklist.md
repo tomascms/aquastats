@@ -28,7 +28,7 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 - [x] Lighthouse móvel (páginas públicas de produção, mediana de 3)
 - [x] Build OpenNext + tamanho dos bundles
 - [x] testes web (78, inclui harness ML), tsc, eslint
-- [~] axe completo: ver Fase D
+- [x] axe completo: ver Fase D
 - [x] Branch Neon `staging-hardening` (só esquema, 0 linhas) criada pela consola com o login do dono
 - [!] Credencial de staging: geração bloqueada pelo classificador de segurança → dono cola em `.env.staging` ou autoriza
 - [x] Postgres 16 local (pgserver, só localhost) com espelho do esquema de produção (fingerprint comparado)
@@ -101,7 +101,8 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 - [x] Logótipos WebP à medida (135+88 → 25+6 KB), sem imagem escondida com prioridade, cache; `_next/image` desligado
 - [x] Alvos de toque 44 px no login, contraste do texto pequeno, nome acessível dos links, sem prefetch de 32 atletas
 - [x] Movimento reduzido já global; #418 não reproduzido no código atual
-- [~] axe-core 4.13 completo (30 páginas × 390/1280 px): 10 regras, 166 nós → em correção; leitor de ecrã = teste manual
+- [x] axe-core 4.13 completo (30 páginas × 390/1280 px): 166 nós → 1 (artefacto de transição); leitor de ecrã =
+      teste manual, lista em `acessibilidade.md`
 
 - [x] Auditoria de alegações (README, resumos CV, ficha ML): "validado em dados sintéticos, em validação em modo
       sombra"; previsão de provas qualificada; 3,4× sem fonte removido; capturas só com dados sintéticos
