@@ -114,6 +114,33 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 - [x] "Hoje" do treinador (carga A:C, falta de tempos, bem-estar, ação sugerida, desde o último treino, semana vs anterior)
 - [x] Nota de privacidade do atleta; tabelas alternativas nos gráficos de forma e de acerto
 - [ ] Roadmap: previsão de provas futuras (exige v1.1 do modelo), comparação por escalão, capacidade vs esperado
+- [ ] Por fazer, a partir do mapeamento de 10/10/2026:
+  - Carga A:C: só existe como valor e banda; falta o gráfico ao longo do tempo (`lib/ml/load-risk.ts` `ewmaAcwr`;
+    mostrar em `/coach/team/[id]` e em `/coach/epoca`).
+  - Comparação dia/semana/mês/ano: hoje só há "esta semana vs a anterior" (`components/coach/morning-view.tsx:83`).
+    Falta um seletor de período com volume, tempos e presenças.
+  - "Devia vs vai fazer": só o volume semanal planeado vs feito (`app/coach/page.tsx:336`). Falta por sessão e por
+    atleta.
+  - Resumo semanal do atleta: não existe vista dedicada (o treinador tem `coach/team/[id]` "Esta semana").
+  - Linha do tempo da época: existe (`components/season/season-planner.tsx`); os mesociclos estão fixos em `[]`
+    (`:63`).
+  - Regras: sem prescrições ("deve", "recomendado"); sem 0 %/100 % nem probabilidades. Rever o texto "A melhor
+    aqui: {weeks} semana(s) a −{drop}%" do taper (`season-planner.tsx:322`), que soa a prescrição. Capturas só
+    sintéticas.
+
+## Handoff (para uma conversa nova)
+
+- Branch `release/hardening` (PR #15, pronto, CI verde, **sem merge em main** até autorização). O deploy é sempre
+  feito a partir do worktree limpo `../app-deploy` (`git -C ../app-deploy checkout --detach origin/main`).
+- Fase G: passo 1 feito (ver abaixo). Os passos 2–9 só com "autorizo o passo N" (`fase-g-plano.md`).
+- Item 5 bloqueado: falta a regra de permissão para `apply_role_passwords.py`; depois, trocar o `DATABASE_URL` de
+  `apps/api/.env` para staging.
+- Ambiente local:
+  - Postgres pgserver em 127.0.0.1:5544 (`aquastats_prodmirror`, seed 9001 corrigido).
+  - API: `bash .local/run-api.sh`; carga: `apps/api/scripts/load_test.py`.
+  - Worker local: launch "web-worker-local" (parar antes de `opennextjs-cloudflare build`).
+  - axe e Lighthouse: scripts na scratchpad (`lh/axe.mjs`, `lh/auth.mjs`); refazer se a scratchpad se perder.
+- Próximo: Fase E (lista acima), depois Fase G passo 2 quando autorizado.
 
 ## Fase F — Repositório e README
 
@@ -123,4 +150,12 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 
 ## Fase G — Produção (só com "autorizo o passo N")
 
-- [ ] (nada executado)
+- [x] **Passo 1 (10/10/2026):** o PR #14 entrou em `main` (`be634b0`, só dependências, CI e 2 ajustes de testes,
+      verificado com `git diff --stat`). O deploy foi feito de um worktree limpo (`../app-deploy`, HEAD = origin/main).
+  - API: revisão `aquastats-api-00028-f2t` (13:33Z, 100 %); `/health` e `/health/ready` com 200; arranque sem erros.
+    Os únicos WARNING são 404 de bots em `/` e `/favicon.ico` no URL direto.
+  - Web: Worker `a45fc381` (13:35Z); chunk com Next **16.3.8**; `/entrar`, `/termos` e `/privacidade` com 200;
+    `wrangler tail` sem exceções.
+  - Latências (15 pedidos): `/health` p50 211 → 208 ms, máximo 6 782 → 312 ms; `/entrar` p50 164 → 159 ms.
+  - Reversão disponível: revisão `aquastats-api-00027-hm7` e Worker `fa90118b`.
+  - Vigilância: tarefa agendada só de leitura para 11/10 às 14:40 (`aquastats-step1-watch-24h`).

@@ -1,6 +1,6 @@
 # Fase G — Plano de produção (cada passo só com "autorizo o passo N")
 
-Estado em 06/10/2026: **nada executado em produção.** Cada passo tem o comando exato, o impacto, a verificação e
+Estado em 10/10/2026: **passo 1 executado e verificado**; passos 2–9 por autorizar. Cada passo tem o comando exato, o impacto, a verificação e
 a reversão. Um passo só começa depois de o anterior estar verificado. Custo previsto: 0 € (tudo dentro dos
 escalões gratuitos; se algo exigir pagamento, paro e pergunto).
 
@@ -16,7 +16,7 @@ que toca na base, e qualquer reversão de dados tem de acontecer dentro dessa ja
 - [ ] Fases A–F concluídas (`docs/release/checklist.md`).
 - [ ] Hora e LSN anotados (ponto de restauro) antes dos passos 2–4.
 
-## Passo 1 — Hotfix de segurança (independente do resto) — autorizado a 09/10/2026
+## Passo 1 — Hotfix de segurança (independente do resto) — **feito a 10/10/2026** (ver checklist)
 
 O quê: merge do PR #14 em `main` (squash não; merge normal) e deploy de `main` a partir de um checkout limpo.
 ```
