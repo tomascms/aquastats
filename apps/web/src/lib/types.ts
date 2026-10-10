@@ -373,6 +373,8 @@ export type AppState = {
   swimmerId: string;
   online: boolean;
   syncing: boolean;
+  /** Older workouts (beyond the recent window) are loaded too: the model may now use the whole history. */
+  historyLoaded: boolean;
   teamName: string;
   joinCode: string;
   athletes: Athlete[];

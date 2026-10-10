@@ -183,6 +183,7 @@ create table if not exists time_logs (
   stroke text not null default 'free',
   recorded_by uuid not null references users(id),
   recorded_at timestamptz not null default now(),
+  client_updated_at timestamptz,
   unique (workout_id, block_id, athlete_id, rep_number)
 );
 create index if not exists time_logs_athlete_recorded_idx on time_logs (athlete_id, recorded_at);
@@ -442,3 +443,30 @@ create table if not exists polar_links (
   deleted_at timestamptz
 );
 create index if not exists polar_links_team_idx on polar_links (team_id) where deleted_at is null;
+
+-- Migration 010: append-only ledger of training predictions (RLS, grants and the immutability trigger live in the migration).
+create table if not exists prediction_ledger (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  athlete_id uuid not null references athletes(id) on delete cascade,
+  workout_id uuid not null references workouts(id) on delete cascade,
+  block_id text not null,
+  rep_number smallint not null,
+  target_date date not null,
+  model text not null,
+  model_version text not null,
+  role text not null check (role in ('champion', 'challenger')),
+  horizon text not null default 'day' check (horizon in ('rep', 'day', 'week', 'month', 'year')),
+  mean_s double precision not null check (mean_s > 0),
+  lo_s double precision,
+  hi_s double precision,
+  nominal double precision,
+  sd_s double precision,
+  confidence text,
+  details jsonb not null default '{}',
+  predicted_by uuid references users(id) on delete set null,
+  predicted_at timestamptz not null default now(),
+  unique (model, model_version, horizon, workout_id, block_id, athlete_id, rep_number)
+);
+create index if not exists prediction_ledger_team_athlete_idx on prediction_ledger (team_id, athlete_id, target_date desc);
+create index if not exists prediction_ledger_rep_idx on prediction_ledger (workout_id, block_id, athlete_id, rep_number);

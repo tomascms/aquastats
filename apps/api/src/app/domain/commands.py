@@ -4,10 +4,12 @@ from datetime import date, datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
+from ..core.client import stored_ip
 from ..core.passwords import clean_text
 from .models import (
     Athlete,
@@ -83,7 +85,7 @@ def _audit(session: Session, payload: dict, action: str, resource_type: str, res
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
-            ip_address=request.client.host if request.client else None,
+            ip_address=stored_ip(request),
             user_agent=(request.headers.get("user-agent") or "")[:300],
             request_id=getattr(request.state, "request_id", None),
             created_at=_now(),
@@ -582,50 +584,54 @@ def save_time(session: Session, payload: dict, body: dict, request) -> dict:
     skipped = bool(body.get("skipped"))
     if skipped:
         splits = [{"skipped": True}]
-    existing = session.scalar(
-        select(TimeLog).where(
-            TimeLog.workout_id == workout.id,
-            TimeLog.block_id == block_id,
-            TimeLog.athlete_id == athlete.id,
-            TimeLog.rep_number == rep_number,
-        )
-    )
-    if body.get("stroke"):
-        stroke = _stroke(str(body.get("stroke")))
-    elif existing and existing.stroke:
-        stroke = existing.stroke
-    else:
-        stroke = ""
+    stroke = _stroke(str(body.get("stroke"))) if body.get("stroke") else ""
     now = _now()
+    edited_at = _client_time(body.get("clientUpdatedAt"), now)
+    key = (
+        (TimeLog.workout_id == workout.id)
+        & (TimeLog.block_id == block_id)
+        & (TimeLog.athlete_id == athlete.id)
+        & (TimeLog.rep_number == rep_number)
+    )
+    newer_or_unversioned = TimeLog.client_updated_at.is_(None) | (TimeLog.client_updated_at <= edited_at)
     if mm == 0 and ss == 0 and cc == 0 and not splits and not skipped:
-        if existing:
-            session.delete(existing)
-        return {"deleted": True}
-    if existing:
-        existing.mm, existing.ss, existing.cc = mm, ss, cc
-        existing.splits = splits
-        existing.stroke = stroke
-        existing.recorded_by = payload["user_id"]
-        existing.recorded_at = now
-        row = existing
-    else:
-        row = TimeLog(
-            id=uuid4(),
-            workout_id=workout.id,
-            block_id=block_id,
-            athlete_id=athlete.id,
-            rep_number=rep_number,
-            mm=mm,
-            ss=ss,
-            cc=cc,
-            splits=splits,
-            stroke=stroke,
-            recorded_by=payload["user_id"],
-            recorded_at=now,
-        )
-        session.add(row)
-        session.flush()
-    return time_log_out(row)
+        gone = session.execute(delete(TimeLog).where(key & newer_or_unversioned).returning(TimeLog.id)).first()
+        current = None if gone else session.scalar(select(TimeLog).where(key))
+        return {"deleted": True} if current is None else {**time_log_out(current), "stale": True}
+    # One statement whatever the timing: two coaches on the same cell, a double tap or an offline replay
+    # never hit the unique key, and an older edit arriving late does not overwrite a newer one.
+    insert = pg_insert(TimeLog).values(
+        id=uuid4(), workout_id=workout.id, block_id=block_id, athlete_id=athlete.id, rep_number=rep_number,
+        mm=mm, ss=ss, cc=cc, splits=splits, stroke=stroke, recorded_by=payload["user_id"], recorded_at=now,
+        client_updated_at=edited_at,
+    )
+    written = session.execute(
+        insert.on_conflict_do_update(
+            index_elements=[TimeLog.workout_id, TimeLog.block_id, TimeLog.athlete_id, TimeLog.rep_number],
+            set_={
+                "mm": insert.excluded.mm, "ss": insert.excluded.ss, "cc": insert.excluded.cc,
+                "splits": insert.excluded.splits,
+                "stroke": func.coalesce(func.nullif(insert.excluded.stroke, ""), TimeLog.stroke),
+                "recorded_by": insert.excluded.recorded_by, "recorded_at": insert.excluded.recorded_at,
+                "client_updated_at": insert.excluded.client_updated_at,
+            },
+            where=newer_or_unversioned,
+        ).returning(TimeLog.id)
+    ).first()
+    row = session.scalar(select(TimeLog).where(key).execution_options(populate_existing=True))
+    out = time_log_out(row)
+    return out if written else {**out, "stale": True}
+
+
+def _client_time(value, now: datetime) -> datetime:
+    """The device's edit time; missing, unreadable or in the future (clock skew) means now."""
+    try:
+        stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00")) if value else None
+    except ValueError:
+        stamp = None
+    if stamp is None or stamp.tzinfo is None or stamp > now:
+        return now
+    return stamp
 
 
 def create_competition(session: Session, payload: dict, body: dict, request) -> dict:

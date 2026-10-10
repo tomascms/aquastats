@@ -59,7 +59,7 @@ export default function SwimmerHomePage() {
         </p>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-ink-2 px-3 py-3">
-            <p className="text-xs tracking-[0.16em] text-mute">{t("Volume")}</p>
+            <p className="text-xs tracking-[0.16em] text-mute">{t("Volume total")}</p>
             <p className="font-mono text-xl text-aqua">{formatMeters(me ? athleteVolumeM(workouts, me.id) : 0)}</p>
           </div>
           <div className="rounded-2xl bg-ink-2 px-3 py-3">
@@ -85,6 +85,13 @@ export default function SwimmerHomePage() {
       {me ? <WellnessCalendar athlete={me} editable /> : null}
 
       {me ? <GoalsPanel athleteId={me.id} role="swimmer" /> : null}
+
+      <section className="rounded-2xl border border-line bg-panel px-4 py-3 text-sm" aria-labelledby="privacidade-atleta">
+        <h2 id="privacidade-atleta" className="font-semibold">{t("O que o teu treinador vê")}</h2>
+        <p className="mt-1 text-mute">
+          {t("Os teus tempos de treino e de prova, objetivos, sono e recuperação, ginásio e frequência cardíaca que juntares. Os teus colegas não veem nada disto. Ao sair da equipa podes apagar tudo.")}
+        </p>
+      </section>
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">{t("Blocos de hoje")}</h2>

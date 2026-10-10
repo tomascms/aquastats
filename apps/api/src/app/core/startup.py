@@ -3,18 +3,66 @@ from __future__ import annotations
 import logging
 from urllib.parse import urlparse
 
+from sqlalchemy import text
+
 from .config import Settings, get_settings
 
 _logger = logging.getLogger("aquastats.startup")
+
+# The API's database roles: no BYPASSRLS, no CREATEROLE/CREATEDB, not superusers. aquastats_api serves every
+# team request (migration 011); aquastats_auth only the auth flows, the one role allowed to cross tenants (012).
+API_ROLE = "aquastats_api"
+AUTH_ROLE = "aquastats_auth"
+_ROLE_CHECK = text(
+    "SELECT rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb FROM pg_roles WHERE rolname = current_user"
+)
+_CAN_BECOME_AUTH = text("SELECT pg_has_role(current_user, :auth, 'MEMBER')")
+
+
+def _check(engine, query, params=None):
+    with engine.connect() as conn:
+        return bool(conn.execute(query, params or {}).scalar())
+
+
+def verify_database_role(engine, settings: Settings | None = None, auth_engine=None) -> None:
+    """In production, refuse to start with a role that skips row-level security, or with an API role that
+    could act as the auth role.
+
+    The name check in validate_settings is not enough: a role can be altered by hand (as aquastats_app was).
+    If the database cannot be reached the check is logged and skipped, so a database blip never stops new
+    instances from starting; a role that bypasses RLS always does.
+    """
+    settings = settings or get_settings()
+    if engine is None or not settings.is_production:
+        return
+    try:
+        privileged = _check(engine, _ROLE_CHECK) or (auth_engine is not None and _check(auth_engine, _ROLE_CHECK))
+        api_is_auth = _check(engine, _CAN_BECOME_AUTH, {"auth": AUTH_ROLE})
+    except Exception as exc:  # connectivity, not a verdict on the roles
+        _logger.warning("Database role check skipped: %s", type(exc).__name__)
+        return
+    if privileged:
+        raise RuntimeError(
+            "Uma role da base de dados contorna a RLS (superuser, BYPASSRLS, CREATEROLE ou CREATEDB). "
+            f"Usa {API_ROLE} e {AUTH_ROLE} (migrações 011 e 012)."
+        )
+    if api_is_auth:
+        raise RuntimeError(f"A role da API não pode pertencer a {AUTH_ROLE}: os pedidos normais passariam a ignorar a RLS.")
 
 
 def validate_settings(settings: Settings | None = None) -> None:
     settings = settings or get_settings()
     errors: list[str] = []
 
+    if not settings.is_production and settings.database_is_production:
+        # Local and test runs apply DDL and migrations at startup: against production that is an unreviewed schema change.
+        errors.append("DATABASE_URL aponta para a base de produção fora de APP_ENV=production. Usa a base local ou de staging.")
+
     if settings.is_production:
         if not settings.database_url.strip():
             errors.append("DATABASE_URL em falta em produção.")
+        if not settings.auth_database_url.strip():
+            errors.append(f"AUTH_DATABASE_URL em falta em produção (role {AUTH_ROLE}, migração 012).")
         if len(settings.session_secret.strip()) < 32:
             errors.append("SESSION_SECRET deve ter >=32 caracteres em produção.")
         if not settings.app_url.startswith("https://"):
@@ -28,8 +76,13 @@ def validate_settings(settings: Settings | None = None) -> None:
         if db:
             parsed = urlparse(db.replace("postgresql+psycopg://", "postgresql://", 1))
             user = (parsed.username or "").lower()
-            if user != "aquastats_app":
-                errors.append("DATABASE_URL deve usar a role aquastats_app em produção.")
+            if user != API_ROLE:
+                errors.append(f"DATABASE_URL deve usar a role {API_ROLE} em produção (migração 011).")
+        auth_db = settings.auth_database_url.strip()
+        if auth_db:
+            auth_user = (urlparse(auth_db.replace("postgresql+psycopg://", "postgresql://", 1)).username or "").lower()
+            if auth_user != AUTH_ROLE:
+                errors.append(f"AUTH_DATABASE_URL deve usar a role {AUTH_ROLE} em produção (migração 012).")
 
     if errors:
         raise RuntimeError("Configuração inválida: " + "; ".join(errors))

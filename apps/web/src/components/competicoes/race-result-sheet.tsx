@@ -64,10 +64,12 @@ function focusNext(from: HTMLInputElement) {
 }
 
 function Count({
+  label,
   value,
   onChange,
   readOnly,
 }: {
+  label: string;
   value: number;
   onChange?: (raw: string) => void;
   readOnly?: boolean;
@@ -79,6 +81,7 @@ function Count({
     <input
       data-race-input
       inputMode="decimal"
+      aria-label={label}
       className="h-8 w-12 rounded-md border border-line bg-white px-1 text-center font-mono text-xs outline-none focus:border-aqua"
       value={value ? String(value) : ""}
       onChange={(event) => onChange?.(event.target.value)}
@@ -514,11 +517,11 @@ export function RaceResultSheet({
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-lg border border-line">
+      <div className="overflow-x-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label={t("Parciais")}>
         <table className="w-full min-w-[760px] border-collapse text-xs">
           <thead>
             <tr>
-              <th className={th} />
+              <th className={th}><span className="sr-only">{t("Distância")}</span></th>
               <th className={th}>React</th>
               <th className={th}>Fly</th>
               <th className={th}>UWk</th>
@@ -571,14 +574,14 @@ export function RaceResultSheet({
                   </td>
                   <td className={td}>
                     {row.showUw ? (
-                      <Count readOnly={readOnly} value={row.uwKicks} onChange={(value) => patchCount(row.atM, "uwKicks", value)} />
+                      <Count label={`UWk ${row.atM}m`} readOnly={readOnly} value={row.uwKicks} onChange={(value) => patchCount(row.atM, "uwKicks", value)} />
                     ) : (
                       <span className="text-mute">—</span>
                     )}
                   </td>
                   <td className={td}>
                     {row.showUw ? (
-                      <Count readOnly={readOnly} value={row.uwd} onChange={(value) => patchCount(row.atM, "uwd", value)} />
+                      <Count label={`UWd ${row.atM}m`} readOnly={readOnly} value={row.uwd} onChange={(value) => patchCount(row.atM, "uwd", value)} />
                     ) : (
                       <span className="text-mute">—</span>
                     )}
@@ -636,7 +639,7 @@ export function RaceResultSheet({
                   </td>
                   <td className={td}>
                     {row.showScSr ? (
-                      <Count readOnly={readOnly} value={row.sc} onChange={(value) => patchCount(row.atM, "sc", value)} />
+                      <Count label={`SC ${row.atM}m`} readOnly={readOnly} value={row.sc} onChange={(value) => patchCount(row.atM, "sc", value)} />
                     ) : (
                       <span className="text-mute">—</span>
                     )}

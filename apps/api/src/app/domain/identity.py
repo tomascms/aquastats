@@ -9,6 +9,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
+from ..core.client import stored_ip
 from ..core.config import get_settings
 from ..core.sessions import issue_refresh, set_auth_cookies, sign_access
 from .models import (
@@ -99,6 +100,9 @@ def remember_invite(response: Response, code: str | None) -> str:
 
 def safe_app_path(path: str, fallback: str = "/") -> str:
     value = (path or "").strip()
+    # Browsers drop tabs/newlines inside URLs, so "/\t/evil.com" would become "//evil.com".
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
+        return fallback
     if not value.startswith("/") or value.startswith("//") or "\\" in value or "://" in value:
         return fallback
     return value
@@ -263,7 +267,7 @@ def join_team(session: Session, user: User, code: str, request: Request) -> str:
             action="team.join",
             resource_type="team",
             resource_id=team.id,
-            ip_address=request.client.host if request.client else None,
+            ip_address=stored_ip(request),
             request_id=getattr(request.state, "request_id", None),
             created_at=stamp,
         )
@@ -304,7 +308,7 @@ def leave_team(session: Session, user: User, request: Request, purge: bool = Fal
             action="team.leave",
             resource_type="team",
             resource_id=member.team_id,
-            ip_address=request.client.host if request.client else None,
+            ip_address=stored_ip(request),
             request_id=getattr(request.state, "request_id", None),
             created_at=stamp,
         )
@@ -525,7 +529,7 @@ def provision_role(
             action="auth.choose_role",
             resource_type="user",
             resource_id=user.id,
-            ip_address=request.client.host if request.client else None,
+            ip_address=stored_ip(request),
             request_id=getattr(request.state, "request_id", None),
             created_at=stamp,
         )
@@ -535,14 +539,16 @@ def provision_role(
     return user
 
 
+# One message for every failed sign-in: it never tells whether an email has an account.
+LOGIN_FAILED = "Email ou palavra-passe incorrectos. Depois de várias tentativas, espera 15 minutos."
+
+
 def lock_or_fail(user: User) -> None:
     stamp = now()
-    if user.locked_until and user.locked_until > stamp:
-        raise HTTPException(status_code=423, detail="Conta temporariamente bloqueada. Tenta mais tarde.")
     user.failed_login_count = int(user.failed_login_count or 0) + 1
     if user.failed_login_count >= 8:
         from datetime import timedelta
 
         user.locked_until = stamp + timedelta(minutes=15)
         user.failed_login_count = 0
-    raise HTTPException(status_code=401, detail="Email ou palavra-passe incorrectos.")
+    raise HTTPException(status_code=401, detail=LOGIN_FAILED)

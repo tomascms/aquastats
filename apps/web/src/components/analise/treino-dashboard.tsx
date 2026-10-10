@@ -32,13 +32,18 @@ import {
   type LearnedEffect,
   type TrainingTarget,
 } from "@/lib/training-prediction";
-import type { TimeLog, WellnessEntry, Workout } from "@/lib/types";
+import { appTeam, asTrainingTargets, statePredictions } from "@/lib/ml/production";
+import { useMlRoles } from "@/lib/ml/ml-config";
+import { findSuspects, type Suspect } from "@/lib/ml/quality";
+import type { Athlete, TimeLog, WellnessEntry, Workout } from "@/lib/types";
+import type { RaceResult } from "@/lib/ml/backtest";
+import { TrackRecordPanel } from "@/components/analise/track-record-panel";
 import { useT } from "@/i18n/provider";
 
 const INK = "#0b1d33";
 const POOL = "#1668b8";
-const GOOD = "#138a64";
-const LANE = "#c93a2e";
+const GOOD = "#117a59";
+const LANE = "#c03528";
 const GRID = "#e3eaf1";
 const MUTE = "#56697f";
 
@@ -120,16 +125,24 @@ function Toggle({
 
 export function TreinoDashboard({
   athleteId,
+  athletes,
   workouts,
   timeLogs,
+  races = [],
   wellness,
   groupName,
+  canReadLedger = false,
 }: {
   athleteId: string;
+  /** The whole team: the state model learns from teammates too. */
+  athletes: Athlete[];
   workouts: Workout[];
   timeLogs: TimeLog[];
+  /** Competition results and personal bests (the state model learns from races too). */
+  races?: RaceResult[];
   wellness?: WellnessEntry[];
   groupName?: string;
+  canReadLedger?: boolean;
 }) {
   const t = useT();
   const allRows = useMemo(
@@ -155,7 +168,14 @@ export function TreinoDashboard({
   const [moreFilters, setMoreFilters] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
 
-  const predictions = useMemo(() => predictTrainingTargets(rows), [rows]);
+  const { champion } = useMlRoles();
+  const championEstimates = useMemo(
+    () => (champion === "estado" ? asTrainingTargets(statePredictions(appTeam(athletes, workouts, timeLogs, [], races).team)) : null),
+    [athletes, champion, races, timeLogs, workouts],
+  );
+  const predictions = useMemo(() => championEstimates ?? predictTrainingTargets(rows), [championEstimates, rows]);
+  // Times that look like typing errors: shown to the coach, kept out of what the state model learns.
+  const suspects = useMemo(() => findSuspects(allRows), [allRows]);
   const patterns = useMemo(() => learnedPatterns(rows), [rows]);
   const form = useMemo(() => formTimeline(rows), [rows]);
   const atDistance = useMemo(() => rows.filter((row) => row.distanceM === activeDistance), [activeDistance, rows]);
@@ -320,7 +340,7 @@ export function TreinoDashboard({
         <section className="rounded-2xl border border-line bg-panel p-5">
           <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
             <div>
-              <h3 className="font-display text-2xl font-bold">{t("Repetição a repetição")}</h3>
+              <h2 className="font-display text-2xl font-bold">{t("Repetição a repetição")}</h2>
               <p className="text-sm text-mute">{t("Tempo real contra o estimado pelo histórico do atleta. Mais rápido fica em cima.")}</p>
             </div>
             <Legend
@@ -334,10 +354,12 @@ export function TreinoDashboard({
           <RepTimeline items={visible.slice(-60)} predictions={predictions} />
         </section>
 
+        <TrackRecordPanel athleteId={athleteId} athletes={athletes} workouts={workouts} timeLogs={timeLogs} races={races} canReadLedger={canReadLedger} />
+
         <section className="rounded-2xl border border-line bg-panel p-5">
           <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
             <div>
-              <h3 className="font-display text-2xl font-bold">{t("Distribuição dos tempos")}</h3>
+              <h2 className="font-display text-2xl font-bold">{t("Distribuição dos tempos")}</h2>
               <p className="text-sm text-mute">{t("Onde se concentram os tempos reais e os estimados. Passa o cursor para ler cada ponto.")}</p>
             </div>
             <Legend
@@ -359,7 +381,7 @@ export function TreinoDashboard({
         <section className="rounded-2xl border border-line bg-panel p-5">
           <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h3 className="font-display text-2xl font-bold">{t("Onde nada mais rápido")}</h3>
+              <h2 className="font-display text-2xl font-bold">{t("Onde nada mais rápido")}</h2>
               <p className="text-sm text-mute">{t("Tempo médio por contexto, do mais rápido para o mais lento.")}</p>
             </div>
             <label className="text-sm text-mute">
@@ -376,12 +398,12 @@ export function TreinoDashboard({
           <GroupBars rows={visible} groupBy={groupBy} />
         </section>
 
-        <RepTable rows={visible} predictions={predictions} picked={picked} setPicked={setPicked} />
+        <RepTable rows={visible} predictions={predictions} suspects={suspects} picked={picked} setPicked={setPicked} />
       </div>
 
       <aside className="rounded-2xl border border-line bg-panel p-5 xl:sticky xl:top-6" aria-label={t("Filtros")}>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-display text-2xl font-bold">{t("Filtros")}</h3>
+          <h2 className="font-display text-2xl font-bold">{t("Filtros")}</h2>
           {activeFilterCount ? (
             <button
               type="button"
@@ -871,11 +893,13 @@ function EmptyChart({ text }: { text: string }) {
 function RepTable({
   rows,
   predictions,
+  suspects,
   picked,
   setPicked,
 }: {
   rows: TrainingRep[];
   predictions: Map<string, TrainingTarget>;
+  suspects: Map<string, Suspect>;
   picked: string[];
   setPicked: React.Dispatch<React.SetStateAction<string[]>>;
 }) {
@@ -886,7 +910,7 @@ function RepTable({
     <section className="overflow-hidden rounded-2xl border border-line bg-panel">
       <header className="flex flex-wrap items-end justify-between gap-2 border-b border-line px-5 py-4">
         <div>
-          <h3 className="font-display text-2xl font-bold">{t("Repetições")}</h3>
+          <h2 className="font-display text-2xl font-bold">{t("Repetições")}</h2>
           <p className="text-sm text-mute">{t("Seleciona duas linhas para as comparar.")}</p>
         </div>
         {a && b ? (
@@ -900,7 +924,7 @@ function RepTable({
           </p>
         ) : null}
       </header>
-      <div className="max-h-[520px] overflow-auto">
+      <div className="max-h-[520px] overflow-auto" tabIndex={0} role="region" aria-label={t("Repetições")}>
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="sticky top-0 bg-panel-2 text-xs font-semibold text-mute">
             <tr>
@@ -962,7 +986,10 @@ function RepTable({
                         {row.round > 1 ? `S${row.round} · ` : ""}
                         {row.repInSegment}/{row.segmentReps}
                       </td>
-                      <td className="px-3 py-2.5 text-right font-display text-lg font-bold tabular text-mist">{clock(row.timeS)}</td>
+                      <td className="px-3 py-2.5 text-right font-display text-lg font-bold tabular text-mist">
+                        {clock(row.timeS)}
+                        {suspects.has(row.log.id) ? <SuspectNote suspect={suspects.get(row.log.id)!} /> : null}
+                      </td>
                       <td className="px-3 py-2.5 text-right tabular text-sand">
                         {target ? clock(target.targetS) : "—"}
                         {target ? <span className="block text-[11px] text-mute">{t("confiança {level}", { level: t(target.confidence) })}</span> : null}
@@ -992,13 +1019,31 @@ function RepTable({
   );
 }
 
+const SUSPECT_REASON: Record<Suspect["reason"], "Parece +/− 1 minuto" | "Parece dígitos trocados" | "Parece um parcial" | "Parece o tempo de outro atleta" | "Muito longe das outras reps"> = {
+  minute: "Parece +/− 1 minuto",
+  digits: "Parece dígitos trocados",
+  split: "Parece um parcial",
+  swap: "Parece o tempo de outro atleta",
+  outlier: "Muito longe das outras reps",
+};
+
+function SuspectNote({ suspect }: { suspect: Suspect }) {
+  const t = useT();
+  const hint = suspect.suggestedS != null ? t("{reason}: talvez {time}?", { reason: t(SUSPECT_REASON[suspect.reason]), time: clock(suspect.suggestedS) }) : t(SUSPECT_REASON[suspect.reason]);
+  return (
+    <span className="block text-[11px] font-semibold text-coral" title={t("{hint} O modelo não aprende com este tempo até ser corrigido.", { hint })}>
+      {t("suspeito")}
+    </span>
+  );
+}
+
 function LearnedPanel({ effects, n }: { effects: LearnedEffect[]; n: number }) {
   const t = useT();
   const shown = [...effects].sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 12);
   const scale = Math.max(1, ...shown.map((effect) => Math.abs(effect.pct)));
   return (
     <section className="rounded-2xl border border-line bg-panel p-5">
-      <h3 className="font-display text-2xl font-bold">{t("O que o modelo aprendeu")}</h3>
+      <h2 className="font-display text-2xl font-bold">{t("O que o modelo aprendeu")}</h2>
       <p className="text-sm text-mute">
         {t("Efeitos estimados só com os tempos deste atleta ({count} repetições comparáveis). Com poucos dados ficam perto de zero.", { count: n })}
       </p>
@@ -1043,7 +1088,7 @@ function FormPanel({ points, breaks }: { points: FormPoint[]; breaks: FormBreak[
   if (points.length < 2) {
     return (
       <section className="rounded-2xl border border-line bg-panel p-5">
-        <h3 className="font-display text-2xl font-bold">{t("Forma ao longo do tempo")}</h3>
+        <h2 className="font-display text-2xl font-bold">{t("Forma ao longo do tempo")}</h2>
         <p className="mt-4 rounded-xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-mute">
           {t("Aparece a partir de duas semanas com repetições comparáveis.")}
         </p>
@@ -1065,7 +1110,7 @@ function FormPanel({ points, breaks }: { points: FormPoint[]; breaks: FormBreak[
 
   return (
     <section className="rounded-2xl border border-line bg-panel p-5">
-      <h3 className="font-display text-2xl font-bold">{t("Forma ao longo do tempo")}</h3>
+      <h2 className="font-display text-2xl font-bold">{t("Forma ao longo do tempo")}</h2>
       <p className="text-sm text-mute">{t("Tempo semanal face ao habitual do atleta, nas mesmas séries. Mais rápido fica em cima.")}</p>
       <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 h-auto w-full" role="img" aria-label={t("Índice de forma semanal")}>
         {[-lim / 1.2, 0, lim / 1.2].map((tick) => (
@@ -1102,6 +1147,27 @@ function FormPanel({ points, breaks }: { points: FormPoint[]; breaks: FormBreak[
           {formatDatePt(points[points.length - 1].week).slice(0, 5)}
         </text>
       </svg>
+      <details className="mt-2 text-sm">
+        <summary className="cursor-pointer text-mute">{t("Ver em tabela")}</summary>
+        <table className="mt-2 w-full tabular-nums">
+          <thead>
+            <tr className="text-left text-xs text-mute">
+              <th scope="col" className="font-medium">{t("Semana")}</th>
+              <th scope="col" className="font-medium">{t("Forma vs. habitual")}</th>
+              <th scope="col" className="font-medium">{t("Repetições")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {points.map((point) => (
+              <tr key={point.week}>
+                <td>{formatDatePt(point.week)}</td>
+                <td>{point.indexPct > 0 ? "+" : ""}{point.indexPct.toFixed(1)}%</td>
+                <td>{point.n}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
       {breaks.length ? (
         <ul className="mt-2 space-y-1 text-sm text-mist">
           {breaks.map((item) => (

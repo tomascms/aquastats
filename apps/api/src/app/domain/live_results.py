@@ -9,6 +9,7 @@ the full Lenex (results.lxf) we prefer it. After the meet ends, following stops 
 from __future__ import annotations
 
 import hashlib
+import time
 import re
 from datetime import date, timedelta
 from urllib.parse import urljoin, urlparse
@@ -29,6 +30,8 @@ from .splash_pdf import parse_splash_pdf
 LIVE_HOSTS = frozenset({"live.swimrankings.net"})
 MIN_INTERVAL = timedelta(minutes=4)
 MAX_FILES_PER_RUN = 200
+# ponytail: runs inside the request that opened the app; a background job (Cloud Scheduler) when meets get big.
+RUN_BUDGET_S = 25.0
 MAX_FILE_BYTES = 15 * 1024 * 1024
 LINK_RE = re.compile(r'href="((?:StartList|ResultList)_[0-9A-Za-z]+\.pdf|results\.lxf)"', re.IGNORECASE)
 
@@ -113,7 +116,7 @@ def sync(session: Session, payload: dict, row: Competition, request, force: bool
 
     files: dict = dict(live.get("files") or {})
     body = {"dryRun": False}
-    with httpx.Client(timeout=20.0, follow_redirects=False, headers={"User-Agent": "Aquastats live results follower"}) as client:
+    with httpx.Client(timeout=10.0, follow_redirects=False, headers={"User-Agent": "Aquastats live results follower"}) as client:
         index = _fetch(client, live["url"]).decode("utf-8", "ignore")
         names = list(dict.fromkeys(LINK_RE.findall(index)))
         if "results.lxf" in names:
@@ -125,7 +128,13 @@ def sync(session: Session, payload: dict, row: Competition, request, force: bool
         # swimmers, so the club and our swimmers are found across the whole meet, not file by file.
         meets: list = []
         changed = False
+        deadline = time.monotonic() + RUN_BUDGET_S
         for name in names[:MAX_FILES_PER_RUN]:
+            if time.monotonic() > deadline:
+                # A meet is imported whole or not at all: a slow site is retried on a later visit.
+                live["status"] = live.get("status", "waiting")
+                _store(row, live)
+                return {"imported": 0, "status": "slow"}
             try:
                 data = _fetch(client, urljoin(live["url"], name))
             except (httpx.HTTPError, ValueError):

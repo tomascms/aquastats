@@ -286,7 +286,7 @@ function TimeField({
         invalid ? "border-coral bg-coral/10" : active ? "border-aqua bg-aqua/10" : "border-line bg-panel"
       }`}
     >
-      <span className="block text-xs font-semibold text-mute">{label}</span>
+      <span className={`block text-xs font-semibold ${active ? "text-mist" : "text-mute"}`}>{label}</span>
       <span className={`font-mono font-medium leading-none text-mist ${compact ? "text-xl" : "text-[28px]"}`}>{value}</span>
     </button>
   );

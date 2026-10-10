@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import text
 
 from .config import get_settings
-from .db import engine
+from .db import can_change_schema, engine
 
 _MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "db" / "migrations"
 _logger = logging.getLogger("aquastats.migrations")
@@ -33,7 +33,8 @@ def _applied(conn) -> set[str]:
 def run_migrations() -> None:
     if engine is None:
         return
-    if get_settings().is_production:
+    settings = get_settings()
+    if settings.is_production or settings.database_is_production or not can_change_schema():
         return
     if not _MIGRATIONS_DIR.is_dir():
         return

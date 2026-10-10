@@ -45,7 +45,7 @@ export default function ResetPage() {
             onChange={(event) => setPassword(event.target.value)}
             className="field mt-1.5"
             autoComplete="new-password"
-            minLength={8}
+            minLength={12}
             required
           />
         </label>

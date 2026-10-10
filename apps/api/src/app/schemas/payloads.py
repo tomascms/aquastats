@@ -35,6 +35,7 @@ class SaveTimeBody(StrictModel):
     stroke: str = "free"
     splits: list[Any] = Field(default_factory=list, max_length=64)
     recordedAt: str | None = Field(default=None, max_length=40)
+    clientUpdatedAt: str | None = Field(default=None, max_length=40)
     skipped: bool = False
 
     @field_validator("stroke")
@@ -127,7 +128,7 @@ class ProfilePatchBody(StrictModel):
 
 class ChangePasswordBody(StrictModel):
     currentPassword: str | None = Field(default=None, max_length=128)
-    newPassword: str = Field(min_length=8, max_length=128)
+    newPassword: str = Field(min_length=12, max_length=128)
 
 
 class DeleteAccountBody(StrictModel):

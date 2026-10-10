@@ -7,8 +7,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
-from ..core.db import get_session
-from ..core.rls import set_system_context
+from ..core.db import get_auth_session, get_session
 from ..core.tenant import require_member
 from ..domain import polar
 
@@ -46,12 +45,12 @@ def polar_start(payload: dict = Depends(require_member)):
 
 
 @router.get("/polar/callback")
-def polar_callback(request: Request, session: Session = Depends(get_session)):
+def polar_callback(request: Request, session: Session = Depends(get_auth_session)):
+    """Polar's redirect carries no session cookie of ours: the signed state names the athlete (auth role)."""
     code, state = request.query_params.get("code"), request.query_params.get("state")
     if request.query_params.get("error") or not code or not state:
         response = _back("cancelled")
     else:
-        set_system_context(session)
         try:
             polar.finish(session, code, state, request.cookies.get(NONCE_COOKIE))
             response = _back("ok")

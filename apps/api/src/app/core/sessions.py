@@ -12,7 +12,8 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .http_security import client_ip, compare, new_token, sha256
+from .client import stored_ip
+from .http_security import compare, new_token, sha256
 from ..domain.models import RefreshToken, User
 
 ACCESS_COOKIE = "sa_access"
@@ -102,7 +103,7 @@ def issue_refresh(session: Session, user_id: UUID, family_id: UUID | None, reque
         token_hash=sha256(token),
         family_id=family_id or uuid4(),
         expires_at=now + timedelta(seconds=get_settings().refresh_ttl_seconds),
-        ip_address=client_ip(request),
+        ip_address=stored_ip(request),
         user_agent=(request.headers.get("user-agent") or "")[:300],
         created_at=now,
     )

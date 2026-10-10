@@ -12,6 +12,7 @@ import { formatMeters, meetEnd, workoutMeters } from "@/lib/rankings";
 import { actions, useAppState } from "@/lib/store";
 import { toast } from "@/lib/toast";
 import { ConfirmButton } from "@/components/ui/confirm-button";
+import { acwrBand, dailyLoadPerAthlete, ewmaAcwr, taperOptions, type AcwrBand } from "@/lib/ml/load-risk";
 import type { Competition, SeasonCycle, SeasonPlan, Workout } from "@/lib/types";
 
 /** Colours the coach picks per macrocycle (stored in the cycle's `type`). */
@@ -112,6 +113,7 @@ export function SeasonPlanner() {
 
       <MacroEditor plan={plan} onChange={(macros) => edit({ macros })} />
       <SeasonWeeks plan={plan} workouts={workouts} competitions={competitions} />
+      <TaperCard workouts={workouts} competitions={competitions} />
     </div>
   );
 }
@@ -205,6 +207,7 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
   useEffect(() => {
     currentRef.current?.scrollIntoView({ block: "center" });
   }, []);
+  const acwr = useMemo(() => ewmaAcwr(dailyLoadPerAthlete(workouts), plan.end), [plan.end, workouts]);
 
   return (
     <section className="overflow-hidden rounded-xl border border-line bg-panel">
@@ -220,6 +223,9 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
                 </th>
               ))}
               <th className="w-20 px-3 py-2 text-right">{t("Volume")}</th>
+              <th className="w-20 px-3 py-2 text-right" title={t(ACWR_NOTE)}>
+                {t("Carga A:C")}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -274,12 +280,80 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
                   <td className="px-3 py-2 text-right font-semibold tabular text-mist">
                     {weekWorkouts.length ? formatMeters(parallelVolume(weekWorkouts, workoutMeters)) : "—"}
                   </td>
+                  <AcwrCell value={end <= today ? acwr.get(end)?.ratio ?? null : null} />
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+    </section>
+  );
+}
+
+const ACWR_NOTE = "Carga dos últimos 7 dias face às últimas 4 semanas (médias exponenciais). Só descreve a variação da carga: a evidência de que prevê lesões é fraca e contestada.";
+
+const ACWR_TONE: Record<AcwrBand, string> = {
+  abaixo: "text-mute",
+  habitual: "text-good",
+  acima: "text-[#9a6200]",
+  pico: "text-coral",
+};
+
+const ACWR_LABEL: Record<AcwrBand, "abaixo do habitual" | "habitual" | "acima do habitual" | "pico de carga"> = {
+  abaixo: "abaixo do habitual",
+  habitual: "habitual",
+  acima: "acima do habitual",
+  pico: "pico de carga",
+};
+
+function AcwrCell({ value }: { value: number | null }) {
+  const t = useT();
+  if (value == null) return <td className="px-3 py-2 text-right text-mute">—</td>;
+  const band = acwrBand(value);
+  return (
+    <td className={`px-3 py-2 text-right font-semibold tabular ${ACWR_TONE[band]}`} title={`${t(ACWR_LABEL[band])} · ${t(ACWR_NOTE)}`}>
+      {value.toFixed(2)}
+    </td>
+  );
+}
+
+/** Taper options for the next competition: freshness on race day from a fitness–fatigue model with typical parameters. */
+function TaperCard({ workouts, competitions }: { workouts: Workout[]; competitions: Competition[] }) {
+  const t = useT();
+  const today = todayIso();
+  const meet = useMemo(() => [...competitions].filter((item) => item.date > today).sort((a, b) => a.date.localeCompare(b.date))[0], [competitions, today]);
+  const options = useMemo(() => (meet ? taperOptions(dailyLoadPerAthlete(workouts), today, meet.date) : []), [meet, today, workouts]);
+  if (!meet || options.length < 2) return null;
+  const none = options[0].freshness;
+  const ranked = options.slice(1).sort((a, b) => b.freshness - a.freshness);
+  const best = ranked[0];
+  const scale = Math.max(...ranked.map((option) => Math.abs(option.freshness - none)), 0.01);
+  return (
+    <section className="rounded-xl border border-line bg-panel p-4">
+      <h2 className="text-[11px] font-semibold uppercase tracking-wide text-mute">{t("Taper antes de {meet}", { meet: meet.title })}</h2>
+      <p className="mt-1 text-sm text-mist">
+        {t("Frescura prevista no dia da prova (forma − fadiga) para cada opção, face a manter a carga habitual. A melhor aqui: {weeks} semana(s) a −{drop}%.", {
+          weeks: best.weeks,
+          drop: Math.round(best.dropPct),
+        })}
+      </p>
+      <ul className="mt-3 space-y-1">
+        {ranked.slice(0, 6).map((option) => {
+          const gain = option.freshness - none;
+          return (
+            <li key={`${option.weeks}-${option.dropPct}`} className="grid grid-cols-[9rem_minmax(0,1fr)] items-center gap-3 text-xs">
+              <span className="text-mist">{t("{weeks} sem. a −{drop}%", { weeks: option.weeks, drop: Math.round(option.dropPct) })}</span>
+              <span className="h-3 rounded bg-panel-2">
+                <span className={`block h-3 rounded ${option === best ? "bg-good" : "bg-pool/60"}`} style={{ width: `${Math.max(2, (Math.abs(gain) / scale) * 100)}%` }} />
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-3 text-xs text-mute">
+        {t("Modelo fitness–fadiga com parâmetros típicos (não ajustados aos teus atletas: o ajuste individual não melhorou as previsões nos testes). Serve para comparar opções, não para prever tempos.")}
+      </p>
     </section>
   );
 }

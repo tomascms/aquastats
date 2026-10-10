@@ -50,6 +50,7 @@ from ..domain.identity import (
     invite_next_path,
     issue_session,
     join_team,
+    LOGIN_FAILED,
     lock_or_fail,
     membership,
     normalize_email,
@@ -294,7 +295,7 @@ def register(body: dict, request: Request, response: Response, session: Session 
     password = str(body.get("password") or "")
     name = clean_text(str(body.get("name") or ""), 80) or (email.split("@")[0] if email else "")
     if not email or not valid_email(email) or not valid_password(password):
-        raise HTTPException(status_code=400, detail="Email inválido ou palavra-passe fraca (mínimo 8, letras e números).")
+        raise HTTPException(status_code=400, detail="Email inválido ou palavra-passe fraca (mínimo 12, letras e números).")
     existing = find_user_by_email(session, email)
     if existing:
         if existing.password_hash:
@@ -332,14 +333,14 @@ def login(body: dict, request: Request, response: Response, session: Session = D
     password = str(body.get("password") or "")
     user = find_user_by_email(session, email)
     stamp = now()
-    if not user:
+    # One answer for "no account", "Google-only account", "locked" and "wrong password": the response must not
+    # tell whether an email has an account. The same argon2 work runs in every case (timing).
+    if not user or not user.password_hash:
         verify_password(password, None)
-        raise HTTPException(status_code=401, detail="Email ou palavra-passe incorrectos.")
+        raise HTTPException(status_code=401, detail=LOGIN_FAILED)
     if user.locked_until and user.locked_until > stamp:
-        raise HTTPException(status_code=423, detail="Conta temporariamente bloqueada. Tenta mais tarde.")
-    if not user.password_hash:
         verify_password(password, None)
-        raise HTTPException(status_code=401, detail="Esta conta entra com Google.")
+        raise HTTPException(status_code=401, detail=LOGIN_FAILED)
     if not verify_password(password, user.password_hash):
         lock_or_fail(user)
     if not user.is_verified:
@@ -388,7 +389,7 @@ def reset_password(body: dict, response: Response, session: Session = Depends(ge
     token = clean_text(str(body.get("token") or ""), 200)
     password = str(body.get("password") or "")
     if not token or not valid_password(password):
-        raise HTTPException(status_code=400, detail="Link inválido ou palavra-passe fraca (mínimo 8, letras e números).")
+        raise HTTPException(status_code=400, detail="Link inválido ou palavra-passe fraca (mínimo 12, letras e números).")
     row = session.scalar(select(PasswordResetToken).where(PasswordResetToken.token_hash == sha256(token)))
     stamp = now()
     if not row or row.used_at or row.expires_at < stamp:
@@ -502,7 +503,7 @@ def change_password(body: dict, request: Request, response: Response, session: S
     if not user or not user.is_active or user.deleted_at:
         raise HTTPException(status_code=401, detail="Sessão inválida.")
     if not valid_password(form.newPassword):
-        raise HTTPException(status_code=400, detail="Palavra-passe fraca (mínimo 8, letras e números).")
+        raise HTTPException(status_code=400, detail="Palavra-passe fraca (mínimo 12, letras e números).")
     if user.password_hash:
         if not form.currentPassword or not verify_password(form.currentPassword, user.password_hash):
             raise HTTPException(status_code=401, detail="Palavra-passe actual incorrecta.")

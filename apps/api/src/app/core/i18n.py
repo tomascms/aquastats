@@ -84,7 +84,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         # Errors
         'error.invalid_email': 'Email inválido',
         'error.password_required': 'Palavra-passe obrigatória',
-        'error.password_short': 'Palavra-passe deve ter pelo menos 8 caracteres',
+        'error.password_short': 'Palavra-passe deve ter pelo menos 12 caracteres',
         'error.password_mismatch': 'Palavras-passe não coincidem',
         'error.email_taken': 'Este email já está em uso',
         'error.user_not_found': 'Utilizador não encontrado',
@@ -174,7 +174,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         # Errors
         'error.invalid_email': 'Invalid email',
         'error.password_required': 'Password is required',
-        'error.password_short': 'Password must be at least 8 characters',
+        'error.password_short': 'Password must be at least 12 characters',
         'error.password_mismatch': 'Passwords do not match',
         'error.email_taken': 'This email is already in use',
         'error.user_not_found': 'User not found',

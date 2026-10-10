@@ -6,21 +6,26 @@ import { ConfirmHost } from "@/components/ui/confirm-host";
 import { INTL_LOCALE, translate } from "@/i18n";
 import { LocaleProvider } from "@/i18n/provider";
 import { getServerLocale } from "@/i18n/server";
+import { EARLY_SNAPSHOT_SCRIPT } from "@/lib/early-snapshot";
 
 const geist = Geist({
   variable: "--font-geist",
   subsets: ["latin"],
 });
 
+// Not preloaded: 4 font files at high priority competed with the app's JavaScript on phone networks; they
+// still load when used (font-display: swap paints with the fallback first).
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  preload: false,
 });
 
 const barlow = Barlow_Condensed({
   variable: "--font-barlow",
   subsets: ["latin"],
   weight: ["500", "600", "700"],
+  preload: false,
 });
 
 // Render HTML per request: prerendered pages ship `s-maxage=31536000`, which lets browsers keep
@@ -82,6 +87,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang={locale} className={`${geist.variable} ${geistMono.variable} ${barlow.variable} h-full antialiased`}>
       <body className="min-h-full">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <script dangerouslySetInnerHTML={{ __html: EARLY_SNAPSHOT_SCRIPT }} />
         <a
           href="#conteudo"
           className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-aqua focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink"

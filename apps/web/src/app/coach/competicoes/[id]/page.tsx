@@ -265,7 +265,7 @@ function AthleteEvents({
               <th className="px-2 py-1.5 text-right">{t("Resultado")}</th>
               <th className="px-2 py-1.5 text-right">{t("Class.")}</th>
               <th className="px-2 py-1.5 text-right">RP</th>
-              <th className="px-3 py-1.5" />
+              <th className="px-3 py-1.5"><span className="sr-only">{t("Ações")}</span></th>
             </tr>
           </thead>
           <tbody>

@@ -10,6 +10,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # AQUASTATS_ENV_FILE picks another env file; empty means none (tests must not read a developer's .env).
 _ENV = os.environ.get("AQUASTATS_ENV_FILE", str(Path(__file__).resolve().parents[3] / ".env")) or None
 _PRODUCTION_HOSTS = frozenset({"aquastats.net", "www.aquastats.net"})
+# Neon endpoint of the production branch (an id, not a secret). Outside APP_ENV=production the API runs its
+# startup DDL and migrations, so it must never start against this database.
+_PRODUCTION_DB_ENDPOINTS = frozenset({"ep-rough-unit-b1cgm5pl"})
 
 
 class Settings(BaseSettings):
@@ -19,6 +22,8 @@ class Settings(BaseSettings):
     app_url: str = "http://127.0.0.1:3000"
     api_url: str = "http://127.0.0.1:8000"
     database_url: str = ""
+    # aquastats_auth (migration 012): login, signup, tokens and account deletion. Empty = DATABASE_URL.
+    auth_database_url: str = ""
     database_sslmode: str = "auto"
     session_secret: str = ""
     google_client_id: str = ""
@@ -57,6 +62,14 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env.lower() in {"production", "prod"}
+
+    @property
+    def database_is_production(self) -> bool:
+        for url in (self.database_url, self.auth_database_url):
+            host = (urlparse(url.strip().replace("postgresql+psycopg://", "postgresql://", 1)).hostname or "").lower()
+            if any(host.startswith(endpoint) for endpoint in _PRODUCTION_DB_ENDPOINTS):
+                return True
+        return False
 
     @staticmethod
     def _production_origin_allowed(origin: str) -> bool:

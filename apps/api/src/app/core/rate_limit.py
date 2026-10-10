@@ -64,6 +64,19 @@ def _redis_incr(key: str, window_sec: int) -> int | None:
         return None
 
 
+_last_sweep = 0.0
+
+
+def _sweep(now: float, window_sec: int) -> None:
+    """Forget buckets with no hit inside the window, at most once a minute (memory stays bounded)."""
+    global _last_sweep
+    if now - _last_sweep < 60:
+        return
+    _last_sweep = now
+    for key in [key for key, stamps in _hits.items() if not stamps or now - stamps[-1] >= window_sec]:
+        _hits.pop(key, None)
+
+
 def check_rate_limit(request: Request) -> Response | None:
     if not get_settings().is_production:
         return None
@@ -84,6 +97,7 @@ def check_rate_limit(request: Request) -> Response | None:
             return JSONResponse({"detail": "Demasiados pedidos. Espera um pouco."}, status_code=429)
         return None
 
+    _sweep(now, window_sec)
     window = [stamp for stamp in _hits[bucket] if now - stamp < window_sec]
     if len(window) >= limit:
         return JSONResponse({"detail": "Demasiados pedidos. Espera um pouco."}, status_code=429)

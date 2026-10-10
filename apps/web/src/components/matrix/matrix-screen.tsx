@@ -21,6 +21,8 @@ import {
   totalReps,
 } from "@/lib/set";
 import { actions, emptyParts, useAppState } from "@/lib/store";
+import { useRecordPredictions } from "@/lib/ml/use-record-predictions";
+import { siteRaces } from "@/lib/ml/production";
 import { sessionFor } from "@/lib/heart-rate";
 import { isTimeComplete } from "@/lib/time-save";
 import {
@@ -73,7 +75,8 @@ export function MatrixScreen() {
   const t = useT();
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { athletes, workouts, timeLogs, hrSessions } = useAppState();
+  const { athletes, workouts, timeLogs, hrSessions, competitions, meetEntries, meetResults, raceSessions, historyLoaded } = useAppState();
+  const races = useMemo(() => siteRaces(athletes, { competitions, meetEntries, meetResults, raceSessions }), [athletes, competitions, meetEntries, meetResults, raceSessions]);
   const seedWorkout = workouts.find((item) => item.id === params.id);
   const dayWorkouts = useMemo(
     () =>
@@ -110,6 +113,8 @@ export function MatrixScreen() {
   const saveChain = useRef(Promise.resolve());
   const saveErrors = useRef(0);
   workoutIdRef.current = workout?.id;
+  // Before any time of this session exists, store what the models predict for it (prediction ledger).
+  useRecordPredictions(workout, { athletes, workouts, timeLogs, races, historyLoaded });
 
   const present = workout ? athletes.filter((athlete) => workout.athleteIds.includes(athlete.id)) : [];
   const presentIds = present.map((athlete) => athlete.id);
@@ -430,6 +435,11 @@ export function MatrixScreen() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  if (!workout && !historyLoaded) {
+    // An older workout arrives with the history, a moment after the recent weeks.
+    return <div className="px-4 py-16 text-center text-mute" role="status">{t("A carregar…")}</div>;
+  }
+
   if (!workout) {
     return (
       <div className="px-4 py-16 text-center text-mute">
@@ -461,7 +471,7 @@ export function MatrixScreen() {
   );
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-ink no-select">
+    <main className="flex h-dvh flex-col overflow-hidden bg-ink no-select">
       <header className="safe-top flex items-center gap-3 px-3 pb-2 pt-1">
         <button
           type="button"
@@ -475,7 +485,7 @@ export function MatrixScreen() {
           <IconBack />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{displayTitle(workout.title)}</p>
+          <h1 className="truncate text-sm font-medium">{displayTitle(workout.title)}</h1>
           <p className="text-[11px] text-mute">
             {workout.course === "scm" || workout.course === "lcm" ? `${COURSE_LABEL[workout.course]} · ` : ""}
             {t("{count} na água", { count: present.length })} ·{" "}
@@ -586,7 +596,7 @@ export function MatrixScreen() {
             <div key={item.index} className="px-1 py-1 text-center">
               <p className="font-mono text-[11px] text-mute">
                 {item.index + 1}
-                <span className="text-mute/70"> · {formatDistance(item.distanceM)}m</span>
+                <span> · {formatDistance(item.distanceM)}m</span>
               </p>
               {item.parts?.length ? (
                 <p className="text-[9px] font-semibold leading-tight text-sand">{formatParts(item.parts)}</p>
@@ -740,7 +750,7 @@ export function MatrixScreen() {
       )}
 
       {picker && <AthletePicker workoutId={workout.id} onClose={() => setPicker(false)} />}
-    </div>
+    </main>
   );
 }
 

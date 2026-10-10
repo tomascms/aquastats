@@ -114,6 +114,7 @@ def competition_out(row: Competition) -> dict:
 
 
 def entry_out(row: MeetEntry) -> dict:
+    extra = row.extra or {}
     return {
         "id": str(row.id),
         "competitionId": str(row.competition_id),
@@ -121,21 +122,16 @@ def entry_out(row: MeetEntry) -> dict:
         "stroke": row.stroke,
         "distanceM": row.distance_m,
         # Filled from official files: heat/lane once the start list is out, seed time, schedule.
-        "heat": (row.extra or {}).get("heat"),
-        "lane": (row.extra or {}).get("lane"),
-        "entryTimeS": (row.extra or {}).get("entryTimeS"),
-        "eventNumber": (row.extra or {}).get("eventNumber"),
-        "date": (row.extra or {}).get("date"),
-        "sessionTime": (row.extra or {}).get("sessionTime"),
-        "entryCourse": (row.extra or {}).get("entryCourse"),
-        "finalHeat": (row.extra or {}).get("finalHeat"),
-        "finalLane": (row.extra or {}).get("finalLane"),
-        "finalDate": (row.extra or {}).get("finalDate"),
-        "finalTime": (row.extra or {}).get("finalTime"),
+        **{key: extra.get(key) for key in _ENTRY_EXTRA},
     }
 
 
+_ENTRY_EXTRA = ("heat", "lane", "entryTimeS", "eventNumber", "date", "sessionTime", "entryCourse", "finalHeat",
+                "finalLane", "finalDate", "finalTime")
+
+
 def result_out(row: MeetResult) -> dict:
+    extra = row.extra or {}
     return {
         "id": str(row.id),
         "entryId": str(row.entry_id),
@@ -143,10 +139,10 @@ def result_out(row: MeetResult) -> dict:
         "ss": row.ss,
         "cc": row.cc,
         "splits": row.splits or [],
-        "reactionS": (row.extra or {}).get("reactionS"),
-        "source": (row.extra or {}).get("source") or "manual",
+        "reactionS": extra.get("reactionS"),
+        "source": extra.get("source") or "manual",
         # Official swims per round ("heat", "final"): time, reaction, heat, lane.
-        "swims": (row.extra or {}).get("swims") or {},
+        "swims": extra.get("swims") or {},
         "recordedAt": row.recorded_at.isoformat() if row.recorded_at else "",
     }
 

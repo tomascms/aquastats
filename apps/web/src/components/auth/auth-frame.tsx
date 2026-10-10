@@ -19,12 +19,11 @@ export function AuthFrame({ children }: { children: React.ReactNode }) {
         <div className="lane-rope" aria-hidden="true" />
         <div className="flex flex-1 flex-col justify-between px-12 py-12">
           <Image
-            src="/aquastats-logo.png"
+            src="/aquastats-logo.webp"
             alt="Aquastats"
             width={900}
             height={880}
             className="h-40 w-auto self-start brightness-0 invert"
-            priority
           />
           <div>
             <p className="font-display text-7xl font-bold leading-[0.9]">know your swim</p>
@@ -43,7 +42,7 @@ export function AuthFrame({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex flex-col items-center px-6 pb-6 pt-4">
             <Image
-              src="/aquastats-logo.png"
+              src="/aquastats-logo.webp"
               alt="Aquastats"
               width={280}
               height={274}
@@ -54,9 +53,9 @@ export function AuthFrame({ children }: { children: React.ReactNode }) {
           </div>
           <div className="lane-rope" aria-hidden="true" />
         </header>
-        <div className="hidden justify-end px-8 pt-6 lg:flex">
+        <header className="hidden justify-end px-8 pt-6 lg:flex">
           <LanguageSwitch />
-        </div>
+        </header>
         <main id="conteudo" className="flex flex-1 items-center justify-center px-5 py-10 sm:px-8">
           <div className="w-full max-w-[400px] rounded-2xl border border-line bg-panel p-7 shadow-[var(--shadow-raise)] sm:p-9">
             {children}
@@ -65,7 +64,7 @@ export function AuthFrame({ children }: { children: React.ReactNode }) {
         <footer className="safe-bottom px-6 pb-6">
           <nav aria-label={t("Informação legal")} className="flex justify-center gap-5 text-sm text-mute">
             {LINKS.map((item) => (
-              <Link key={item.href} href={item.href} className="hover:text-mist">
+              <Link key={item.href} href={item.href} className="inline-flex min-h-11 items-center hover:text-mist">
                 {t(item.label)}
               </Link>
             ))}

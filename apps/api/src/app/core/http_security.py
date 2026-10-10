@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
+import re
 import secrets
+import time
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -11,17 +14,33 @@ from starlette.responses import JSONResponse, Response
 from .config import get_settings
 from .rate_limit import check_rate_limit
 
+_REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
+_request_log = logging.getLogger("aquastats.request")
+
 # Re-export for existing imports
 from .client import client_ip  # noqa: F401
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        request_id = request.headers.get("x-request-id") or secrets.token_hex(16)
+        # A caller's id is kept only if it is a plain token (it ends up in logs and audit rows).
+        incoming = request.headers.get("x-request-id") or ""
+        request_id = incoming if _REQUEST_ID.fullmatch(incoming) else secrets.token_hex(16)
         request.state.request_id = request_id
-        response = await call_next(request)
-        response.headers["X-Request-Id"] = request_id
-        return response
+        started = time.perf_counter()
+        status = 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            response.headers["X-Request-Id"] = request_id
+            return response
+        finally:
+            # One line per request (no query string: it can carry tokens) -> latency/error metrics and alerts.
+            _request_log.info(
+                "request",
+                extra={"fields": {"method": request.method, "path": request.url.path, "status": status,
+                                  "ms": round((time.perf_counter() - started) * 1000, 1), "requestId": request_id}},
+            )
 
 
 class EdgeAuthMiddleware(BaseHTTPMiddleware):

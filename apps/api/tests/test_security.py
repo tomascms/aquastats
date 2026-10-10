@@ -12,7 +12,7 @@ class SecurityHelpersTest(unittest.TestCase):
         self.assertFalse(valid_password("short"))
         self.assertFalse(valid_password("password123"))
         self.assertFalse(valid_password("abcdefghij"))
-        self.assertTrue(valid_password("NadoForte19"))
+        self.assertTrue(valid_password("NadoForte1900"))
         self.assertTrue(valid_password("treinadorok19"))
 
     def test_email(self):
@@ -23,6 +23,8 @@ class SecurityHelpersTest(unittest.TestCase):
         self.assertEqual(safe_app_path("//evil.com"), "/")
         self.assertEqual(safe_app_path("https://evil.com"), "/")
         self.assertEqual(safe_app_path("/coach"), "/coach")
+        self.assertEqual(safe_app_path("/\t/evil.com"), "/")
+        self.assertEqual(safe_app_path("/\n/evil.com"), "/")
 
     def test_honeypot_and_clean(self):
         self.assertTrue(is_honeypot({"sa_hp": "http://spam"}))
