@@ -41,3 +41,7 @@ cloudflare-env.d.ts
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Local tool configuration (kept out of the repository)
+CLAUDE.md
+.claude/
