@@ -31,6 +31,9 @@ export default function ResultEditPage() {
 
   return (
     <div className="space-y-4">
+      <h1 className="sr-only">
+        {t("Editar")}: {athlete.name}
+      </h1>
       <Link href={`/coach/competicoes/${meet.id}/resultados/${entry.id}`} className="text-sm text-mute">
         ← {formatEvent(entry.distanceM, entry.stroke)}
       </Link>

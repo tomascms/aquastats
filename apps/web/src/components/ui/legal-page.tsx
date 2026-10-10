@@ -25,12 +25,14 @@ export function LegalPage({
         </Link>
         <LanguageSwitch />
       </header>
-      <article className="mt-10 flex-1 space-y-4 text-sm leading-relaxed text-mist">
+      <main className="mt-10 flex-1">
+      <article className="space-y-4 text-sm leading-relaxed text-mist">
         <p className="text-sm text-mute">{t("Informação")}</p>
         <h1 className="text-4xl font-semibold tracking-tight">{title}</h1>
         <p className="text-xs text-mute">{t("Atualizado em {date}", { date: updated })}</p>
         {children}
       </article>
+      </main>
       <SiteFooter />
     </div>
   );

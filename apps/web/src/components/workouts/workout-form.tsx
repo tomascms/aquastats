@@ -169,7 +169,7 @@ export function WorkoutForm({
           return (
             <section key={type} className="overflow-hidden rounded-xl border border-line bg-panel">
               <header className="flex items-center justify-between border-b border-line bg-panel-2 px-4 py-2">
-                <h3 className="text-sm font-bold text-mist">{BLOCK_LABEL[type]}</h3>
+                <h2 className="text-sm font-bold text-mist">{BLOCK_LABEL[type]}</h2>
                 <span className="font-mono text-xs text-mute">
                   {formatMeters(indexes.reduce((sum, item) => sum + blockMeters(item.block), 0))}
                 </span>
@@ -256,7 +256,7 @@ function BlockEditor({
         {label ? <span className="font-semibold text-mist">{label}</span> : null}
         <span className="flex items-center gap-1.5 text-mute">
           {t("Repetir")}
-          <Stepper value={block.rounds} min={1} onChange={(rounds) => onChange({ rounds })} suffix="×" />
+          <Stepper label={t("Séries")} value={block.rounds} min={1} onChange={(rounds) => onChange({ rounds })} suffix="×" />
         </span>
         {!main ? (
           <label className="flex items-center gap-1.5 text-mute">
@@ -355,7 +355,7 @@ function SetLine({
   return (
     <div className="py-1.5">
       <div className="flex flex-wrap items-center gap-2">
-        <Stepper value={segment.reps} min={1} onChange={(reps) => onChange((current) => resizeSegment(current, reps))} />
+        <Stepper label={t("Repetições")} value={segment.reps} min={1} onChange={(reps) => onChange((current) => resizeSegment(current, reps))} />
         <span className="text-mute">×</span>
         <DistanceSelect value={segment.distanceM} onChange={(distanceM) => onChange({ distanceM })} />
         {ready ? (
@@ -642,7 +642,7 @@ function Chip({ active, onClick, children, small = false }: { active: boolean; o
   );
 }
 
-function Stepper({ value, min, onChange, suffix = "" }: { value: number; min: number; onChange: (value: number) => void; suffix?: string }) {
+function Stepper({ label, value, min, onChange, suffix = "" }: { label: string; value: number; min: number; onChange: (value: number) => void; suffix?: string }) {
   return (
     <span className="inline-flex h-9 items-center rounded-lg border border-line bg-panel">
       <button type="button" className="h-full w-7 text-mute hover:text-mist" onClick={() => onChange(Math.max(min, value - 1))} aria-label="−">
@@ -650,6 +650,7 @@ function Stepper({ value, min, onChange, suffix = "" }: { value: number; min: nu
       </button>
       <input
         inputMode="numeric"
+        aria-label={label}
         value={value}
         onChange={(event) => onChange(Math.max(min, Number(event.target.value.replace(/\D/g, "")) || min))}
         className="w-8 bg-transparent text-center font-mono text-sm font-bold text-mist outline-none"
@@ -672,9 +673,11 @@ function SelectShell({ children, compact = false }: { children: React.ReactNode;
 }
 
 function DistanceSelect({ value, onChange, compact = false }: { value: number; onChange: (value: number) => void; compact?: boolean }) {
+  const t = useT();
   return (
     <SelectShell compact={compact}>
       <select
+        aria-label={t("Distância")}
         value={value ? String(value) : ""}
         onChange={(event) => onChange(event.target.value === "" ? 0 : Number(event.target.value))}
         className={`appearance-none rounded-lg border bg-panel pl-2.5 pr-7 font-mono font-bold text-mist outline-none focus:border-aqua ${
@@ -697,6 +700,7 @@ function IntensitySelect({ value, onChange, compact = false }: { value: Intensit
   return (
     <SelectShell compact={compact}>
       <select
+        aria-label={t("Intensidade")}
         value={value}
         onChange={(event) => onChange(event.target.value as Intensity)}
         className={`appearance-none rounded-lg border border-line bg-panel pl-2.5 pr-7 font-semibold text-mist outline-none focus:border-aqua ${compact ? "h-7 text-xs" : "h-9 text-sm"}`}
@@ -721,9 +725,11 @@ function IntensitySelect({ value, onChange, compact = false }: { value: Intensit
 }
 
 function SendOffSelect({ value, onChange, compact = false }: { value: number; onChange: (value: number) => void; compact?: boolean }) {
+  const t = useT();
   return (
     <SelectShell compact={compact}>
       <select
+        aria-label={t("Saída")}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
         className={`appearance-none rounded-lg border border-line bg-panel pl-2.5 pr-7 font-mono text-mist outline-none focus:border-aqua ${compact ? "h-7 text-xs" : "h-9 text-sm"}`}

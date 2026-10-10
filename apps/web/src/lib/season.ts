@@ -13,7 +13,7 @@ export type PhaseKind = "general" | "specific" | "competitive" | "taper" | "tran
 
 export const PHASES: { kind: PhaseKind; label: MessageKey; tone: string }[] = [
   { kind: "general", label: "Preparação geral", tone: "bg-[#dcebfa] text-[#1668b8]" },
-  { kind: "specific", label: "Preparação específica", tone: "bg-[#e3f4ed] text-[#138a64]" },
+  { kind: "specific", label: "Preparação específica", tone: "bg-[#e3f4ed] text-[#117a59]" },
   { kind: "competitive", label: "Competitivo", tone: "bg-[#fff1d6] text-[#9a6200]" },
   { kind: "taper", label: "Taper", tone: "bg-[#fdd9d5] text-[#b3261e]" },
   { kind: "transition", label: "Transição", tone: "bg-panel-2 text-mute" },

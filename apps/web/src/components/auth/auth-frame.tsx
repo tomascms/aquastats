@@ -53,9 +53,9 @@ export function AuthFrame({ children }: { children: React.ReactNode }) {
           </div>
           <div className="lane-rope" aria-hidden="true" />
         </header>
-        <div className="hidden justify-end px-8 pt-6 lg:flex">
+        <header className="hidden justify-end px-8 pt-6 lg:flex">
           <LanguageSwitch />
-        </div>
+        </header>
         <main id="conteudo" className="flex flex-1 items-center justify-center px-5 py-10 sm:px-8">
           <div className="w-full max-w-[400px] rounded-2xl border border-line bg-panel p-7 shadow-[var(--shadow-raise)] sm:p-9">
             {children}

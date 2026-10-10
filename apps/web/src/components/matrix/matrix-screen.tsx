@@ -471,7 +471,7 @@ export function MatrixScreen() {
   );
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-ink no-select">
+    <main className="flex h-dvh flex-col overflow-hidden bg-ink no-select">
       <header className="safe-top flex items-center gap-3 px-3 pb-2 pt-1">
         <button
           type="button"
@@ -485,7 +485,7 @@ export function MatrixScreen() {
           <IconBack />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{displayTitle(workout.title)}</p>
+          <h1 className="truncate text-sm font-medium">{displayTitle(workout.title)}</h1>
           <p className="text-[11px] text-mute">
             {workout.course === "scm" || workout.course === "lcm" ? `${COURSE_LABEL[workout.course]} · ` : ""}
             {t("{count} na água", { count: present.length })} ·{" "}
@@ -596,7 +596,7 @@ export function MatrixScreen() {
             <div key={item.index} className="px-1 py-1 text-center">
               <p className="font-mono text-[11px] text-mute">
                 {item.index + 1}
-                <span className="text-mute/70"> · {formatDistance(item.distanceM)}m</span>
+                <span> · {formatDistance(item.distanceM)}m</span>
               </p>
               {item.parts?.length ? (
                 <p className="text-[9px] font-semibold leading-tight text-sand">{formatParts(item.parts)}</p>
@@ -750,7 +750,7 @@ export function MatrixScreen() {
       )}
 
       {picker && <AthletePicker workoutId={workout.id} onClose={() => setPicker(false)} />}
-    </div>
+    </main>
   );
 }
 

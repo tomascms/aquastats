@@ -1392,5 +1392,7 @@ export const en = {
   "Alerta: nas últimas semanas as estimativas estão sistematicamente mais rápidas do que os tempos reais ({pct}%).": "Alert: in recent weeks the estimates are consistently faster than the real times ({pct}%).",
   "Alerta: o erro das últimas semanas ({recent}%) subiu face às semanas anteriores ({before}%).": "Alert: the error of recent weeks ({recent}%) rose against the weeks before ({before}%).",
   "Se persistir, o modelo mostrado pode voltar de imediato ao anterior (interruptor no servidor, sem nova versão do site).": "If it persists, the shown model can be switched back at once (a server switch, no new site release).",
+  "Ações": "Actions",
+  "Barra lateral": "Sidebar",
   // @@APPEND@@
 } as const;

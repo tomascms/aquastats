@@ -45,7 +45,7 @@ export function AppShell({
 
   return (
     <div className="flex min-h-dvh flex-col bg-ink lg:flex-row">
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-aqua text-white lg:flex">
+      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-aqua text-white lg:flex" aria-label={t("Barra lateral")}>
         <div className="lane-rope" aria-hidden="true" />
         <div className="px-5 pb-6 pt-6">
           <Link href={homeHref} className="inline-block rounded-md">

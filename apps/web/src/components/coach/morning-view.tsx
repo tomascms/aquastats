@@ -85,7 +85,7 @@ export function MorningView() {
         <caption className="sr-only">{t("Esta semana vs. a anterior (mesmos dias)")}</caption>
         <thead>
           <tr className="text-left text-xs text-mute">
-            <th scope="col" className="font-medium" />
+            <th scope="col" className="font-medium"><span className="sr-only">{t("Métrica")}</span></th>
             <th scope="col" className="font-medium">{t("Esta semana")}</th>
             <th scope="col" className="font-medium">{t("Semana anterior")}</th>
           </tr>

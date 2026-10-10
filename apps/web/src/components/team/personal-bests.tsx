@@ -97,7 +97,7 @@ export function PbGrid({
   const find = (course: PoolCourse, stroke: Stroke, distanceM: number) =>
     bests.find((record) => record.course === course && record.stroke === stroke && record.distanceM === distanceM);
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={t("Recordes pessoais")}>
       <table className="w-full min-w-[560px] text-sm tabular">
         <thead>
           <tr className="bg-panel-2 text-[11px] font-semibold uppercase tracking-wide text-mute">
@@ -109,7 +109,7 @@ export function PbGrid({
             ))}
           </tr>
           <tr className="bg-panel-2 text-[10px] font-semibold uppercase tracking-wide text-mute">
-            <th />
+            <th><span className="sr-only">{t("Prova")}</span></th>
             {COURSES.map((course) => (
               <FragmentHeaders key={course} />
             ))}
