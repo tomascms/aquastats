@@ -60,7 +60,7 @@ export function SeasonPlanner() {
     if (!draft) return;
     setBusy(true);
     try {
-      await actions.saveSeasonPlan({ ...draft, mesos: [], competitions: [], tests: [], weeklyVolumes: [] });
+      await actions.saveSeasonPlan({ ...draft, competitions: [], tests: [], weeklyVolumes: [] });
       setDraft(null);
       toast.success(t("Época guardada."));
     } catch (error) {
@@ -111,39 +111,46 @@ export function SeasonPlanner() {
         </div>
       </section>
 
-      <MacroEditor plan={plan} onChange={(macros) => edit({ macros })} />
+      <MacroEditor plan={plan} kind="macros" onChange={(macros) => edit({ macros })} />
+      <MacroEditor plan={plan} kind="mesos" onChange={(mesos) => edit({ mesos })} />
       <SeasonWeeks plan={plan} workouts={workouts} competitions={competitions} />
       <TaperCard workouts={workouts} competitions={competitions} />
     </div>
   );
 }
 
-function MacroEditor({ plan, onChange }: { plan: SeasonPlan; onChange: (macros: SeasonCycle[]) => void }) {
+/** Macrocycles, or mesocycles (same fields; mesos are shorter blocks shown under the macro on the timeline). */
+function MacroEditor({ plan, kind, onChange }: { plan: SeasonPlan; kind: "macros" | "mesos"; onChange: (cycles: SeasonCycle[]) => void }) {
   const t = useT();
-  const macros = [...plan.macros].sort((a, b) => a.start.localeCompare(b.start));
-  const update = (id: string, patch: Partial<SeasonCycle>) => onChange(plan.macros.map((cycle) => (cycle.id === id ? { ...cycle, ...patch } : cycle)));
+  const all = plan[kind];
+  const meso = kind === "mesos";
+  const macros = [...all].sort((a, b) => a.start.localeCompare(b.start));
+  const update = (id: string, patch: Partial<SeasonCycle>) => onChange(all.map((cycle) => (cycle.id === id ? { ...cycle, ...patch } : cycle)));
 
   function add() {
     const last = macros[macros.length - 1];
     const start = last ? addDays(last.end, 1) : plan.start;
-    const end = addDays(start, 27) < plan.end ? addDays(start, 27) : plan.end;
-    onChange([...plan.macros, { id: uid(), type: COLOR_KEYS[plan.macros.length % COLOR_KEYS.length], label: "", focus: "", start, end }]);
+    const length = meso ? 20 : 27;
+    const end = addDays(start, length) < plan.end ? addDays(start, length) : plan.end;
+    onChange([...all, { id: uid(), type: COLOR_KEYS[all.length % COLOR_KEYS.length], label: "", focus: "", start, end }]);
   }
 
   return (
     <section className="overflow-hidden rounded-xl border border-line bg-panel">
       <header className="flex items-center justify-between border-b border-line bg-panel-2 px-4 py-2">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-mute">{t("Macrociclos")}</h2>
-        <button type="button" className="text-xs font-semibold text-pool hover:underline" onClick={add}>
-          + {t("Macrociclo")}
+        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-mute">{meso ? t("Mesociclos") : t("Macrociclos")}</h2>
+        <button type="button" className="min-h-11 text-xs font-semibold text-pool hover:underline" onClick={add}>
+          + {meso ? t("Mesociclo") : t("Macrociclo")}
         </button>
       </header>
-      {macros.length === 0 ? <p className="px-4 py-3 text-sm text-mute">{t("Sem macrociclos. Acrescenta o primeiro (ex.: Preparação geral).")}</p> : null}
-      <datalist id="macro-names">
+      {macros.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-mute">{meso ? t("Sem mesociclos.") : t("Sem macrociclos. Acrescenta o primeiro (ex.: Preparação geral).")}</p>
+      ) : null}
+      {meso ? null : <datalist id="macro-names">
         {MACRO_SUGGESTIONS.map((name) => (
           <option key={name} value={name} />
         ))}
-      </datalist>
+      </datalist>}
       <table className="w-full text-sm">
         <tbody>
           {macros.map((cycle) => (
@@ -152,8 +159,8 @@ function MacroEditor({ plan, onChange }: { plan: SeasonPlan; onChange: (macros: 
               <td className="px-3 py-1.5">
                 <input
                   className="field h-8 py-1 text-sm font-semibold"
-                  list="macro-names"
-                  placeholder={t("Nome (ex.: Preparação geral)")}
+                  list={meso ? undefined : "macro-names"}
+                  placeholder={meso ? t("Nome (ex.: Bloco aeróbio)") : t("Nome (ex.: Preparação geral)")}
                   value={cycle.label ?? ""}
                   onChange={(event) => update(cycle.id, { label: event.target.value })}
                 />
@@ -183,7 +190,7 @@ function MacroEditor({ plan, onChange }: { plan: SeasonPlan; onChange: (macros: 
                 <ConfirmButton
                   label={t("Eliminar")}
                   className="rounded px-1 text-xs font-semibold text-coral"
-                  onConfirm={() => onChange(plan.macros.filter((item) => item.id !== cycle.id))}
+                  onConfirm={() => onChange(all.filter((item) => item.id !== cycle.id))}
                 />
               </td>
             </tr>
@@ -216,7 +223,7 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
           <thead className="sticky top-0 z-10 bg-panel-2 text-[11px] font-semibold uppercase tracking-wide text-mute">
             <tr>
               <th className="w-24 px-3 py-2 text-left">{t("Semana")}</th>
-              <th className="w-36 px-2 py-2 text-left">{t("Macrociclo")}</th>
+              <th className="w-36 px-2 py-2 text-left">{t("Macro / mesociclo")}</th>
               {WEEKDAYS.map((day) => (
                 <th key={day} className="px-2 py-2 text-left">
                   {day}
@@ -233,6 +240,7 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
               const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
               const end = days[6];
               const macro = plan.macros.find((cycle) => cycle.start <= end && cycle.end >= start);
+              const meso = plan.mesos.find((cycle) => cycle.start <= end && cycle.end >= start);
               const weekWorkouts = workouts.filter((workout) => workout.date >= start && workout.date <= end);
               const current = today >= start && today <= end;
               return (
@@ -251,6 +259,15 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
                         title={macro.label}
                       >
                         {macro.label || "—"}
+                      </span>
+                    ) : null}
+                    {meso ? (
+                      <span
+                        className="mt-1 block truncate rounded px-2 py-0.5 text-[11px] font-medium"
+                        style={{ color: colorOf(meso).band, borderLeft: `3px dashed ${colorOf(meso).band}` }}
+                        title={meso.focus ? `${meso.label} · ${meso.focus}` : meso.label}
+                      >
+                        {meso.label || "—"}
                       </span>
                     ) : null}
                   </td>
@@ -291,7 +308,7 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
   );
 }
 
-const ACWR_NOTE = "Carga dos últimos 7 dias face às últimas 4 semanas (médias exponenciais). Só descreve a variação da carga: a evidência de que prevê lesões é fraca e contestada.";
+export const ACWR_NOTE = "Carga dos últimos 7 dias face às últimas 4 semanas (médias exponenciais). Só descreve a variação da carga: a evidência de que prevê lesões é fraca e contestada.";
 
 const ACWR_TONE: Record<AcwrBand, string> = {
   abaixo: "text-mute",
@@ -300,7 +317,7 @@ const ACWR_TONE: Record<AcwrBand, string> = {
   pico: "text-coral",
 };
 
-const ACWR_LABEL: Record<AcwrBand, "abaixo do habitual" | "habitual" | "acima do habitual" | "pico de carga"> = {
+export const ACWR_LABEL: Record<AcwrBand, "abaixo do habitual" | "habitual" | "acima do habitual" | "pico de carga"> = {
   abaixo: "abaixo do habitual",
   habitual: "habitual",
   acima: "acima do habitual",
@@ -333,7 +350,7 @@ function TaperCard({ workouts, competitions }: { workouts: Workout[]; competitio
     <section className="rounded-xl border border-line bg-panel p-4">
       <h2 className="text-[11px] font-semibold uppercase tracking-wide text-mute">{t("Taper antes de {meet}", { meet: meet.title })}</h2>
       <p className="mt-1 text-sm text-mist">
-        {t("Frescura prevista no dia da prova (forma − fadiga) para cada opção, face a manter a carga habitual. A melhor aqui: {weeks} semana(s) a −{drop}%.", {
+        {t("Frescura prevista no dia da prova (forma − fadiga) para cada opção, face a manter a carga habitual. Maior frescura prevista nesta simulação: {weeks} semana(s) de taper, −{drop}% de carga.", {
           weeks: best.weeks,
           drop: Math.round(best.dropPct),
         })}

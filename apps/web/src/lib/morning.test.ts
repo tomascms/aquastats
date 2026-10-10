@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { sinceLastSession, weekComparison, whoNeedsAttention } from "./morning";
+import { periodComparison, periodRanges, sinceLastSession, whoNeedsAttention } from "./morning";
 import type { Athlete, TimeLog, Workout } from "./types";
 
 const athlete = (id: string, extra: Partial<Athlete> = {}): Athlete => ({ id, name: id, isPlaceholder: false, primaryStroke: "free", teamId: "t", ...extra });
@@ -30,9 +30,25 @@ describe("morning view", () => {
 
   it("compares this week with the same days of last week", () => {
     const workouts = [workout("now", "2026-10-06", []), workout("before", "2026-09-29", []), workout("late", "2026-10-03", [])];
-    const { current, previous } = weekComparison(workouts, [log("now", "a"), log("before", "a"), log("before", "b")], today);
+    const { current, previous } = periodComparison(workouts, [log("now", "a"), log("before", "a"), log("before", "b")], [], today, "week");
     assert.deepEqual([current.sessions, current.times], [1, 1]);
     assert.deepEqual([previous.sessions, previous.times], [1, 2]); // 3 Oct is a Saturday: outside Mon-Thu of last week
+  });
+
+  it("compares day, month and year with the same elapsed days of the previous period", () => {
+    assert.deepEqual(periodRanges(today, "day"), { current: [today, today], previous: ["2026-10-08", "2026-10-08"] });
+    assert.deepEqual(periodRanges(today, "month"), { current: ["2026-10-01", today], previous: ["2026-09-01", "2026-09-09"] });
+    assert.deepEqual(periodRanges("2026-03-31", "month").previous, ["2026-02-01", "2026-02-28"]); // shorter month stops at its end
+    assert.deepEqual(periodRanges(today, "year"), { current: ["2026-01-01", today], previous: ["2025-01-01", "2025-10-09"] });
+  });
+
+  it("counts attendance marks, late as present", () => {
+    const session = (date: string, statuses: ("present" | "late" | "absent")[]) => ({
+      id: date, date, groupName: "", createdAt: "", marks: statuses.map((status, i) => ({ athleteId: `a${i}`, status, volumeM: 0 })),
+    });
+    const { current, previous } = periodComparison([], [], [session("2026-10-09", ["present", "late", "absent"]), session("2026-10-08", ["present"])], today, "day");
+    assert.deepEqual(current.attendance, { present: 2, marked: 3 });
+    assert.deepEqual(previous.attendance, { present: 1, marked: 1 });
   });
 
   it("counts times entered since the previous session day", () => {

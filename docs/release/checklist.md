@@ -111,7 +111,7 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 
 ## Fase E — Dashboards
 
-- [x] "Hoje" do treinador (carga A:C, falta de tempos, bem-estar, ação sugerida, desde o último treino, semana vs anterior)
+- [x] "Hoje" do treinador (carga A:C, falta de tempos, bem-estar, só observações, desde o último treino, semana vs anterior)
 - [x] Nota de privacidade do atleta; tabelas alternativas nos gráficos de forma e de acerto
 - [ ] Roadmap: previsão de provas futuras (exige v1.1 do modelo), comparação por escalão, capacidade vs esperado
 - [ ] Por fazer, a partir do mapeamento de 10/10/2026:

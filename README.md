@@ -27,7 +27,7 @@ querem ver a sua evolução e os objetivos sem expor os dados aos colegas.
 - **Competições:** inscrições, resultados, ficheiros oficiais (Lenex/PDF, leitura assistida por IA) e
   resultados ao vivo; análise de prova (parciais, frequência, distância por braçada).
 - **Época e carga:** macrociclos, carga aguda:crónica (EWMA), simulação de taper.
-- **Treinador, "Hoje":** quem merece atenção e porquê (carga, falta de tempos, bem-estar) com a ação sugerida.
+- **Treinador, "Hoje":** quem merece atenção e porquê (carga, falta de tempos, bem-estar), sem prescrições; comparação por dia, semana, mês e ano.
 - **Atleta:** evolução, objetivos com progresso, recordes, bem-estar, e uma nota clara sobre o que o treinador vê.
 - **Modelo de previsão (v1.0, em sombra):** ver abaixo.
 
