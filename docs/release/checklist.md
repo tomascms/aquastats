@@ -133,8 +133,10 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 - Branch `release/hardening` (PR #15, pronto, CI verde, **sem merge em main** até autorização). O deploy é sempre
   feito a partir do worktree limpo `../app-deploy` (`git -C ../app-deploy checkout --detach origin/main`).
 - Fase G: passo 1 feito (ver abaixo). Os passos 2–9 só com "autorizo o passo N" (`fase-g-plano.md`).
-- Item 5 bloqueado: falta a regra de permissão para `apply_role_passwords.py`; depois, trocar o `DATABASE_URL` de
-  `apps/api/.env` para staging.
+- Itens 4 e 5 feitos (10/10): passwords de `aquastats_api` e `aquastats_auth` aplicadas no staging, login
+  verificado (sem BYPASSRLS); `apps/api/.env` aponta para o staging, sem o endpoint de produção.
+- PR #15 **não** fundido: a condição "só acessibilidade e Fase E" falha, porque o #15 é a release inteira (249
+  ficheiros, migrações 010–014, 36 de ML). À espera de decisão do dono.
 - Ambiente local:
   - Postgres pgserver em 127.0.0.1:5544 (`aquastats_prodmirror`, seed 9001 corrigido).
   - API: `bash .local/run-api.sh`; carga: `apps/api/scripts/load_test.py`.
