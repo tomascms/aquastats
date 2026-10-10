@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_ENV = Path(__file__).resolve().parents[3] / ".env"
+# AQUASTATS_ENV_FILE picks another env file; empty means none (tests must not read a developer's .env).
+_ENV = os.environ.get("AQUASTATS_ENV_FILE", str(Path(__file__).resolve().parents[3] / ".env")) or None
 _PRODUCTION_HOSTS = frozenset({"aquastats.net", "www.aquastats.net"})
 
 
