@@ -9,4 +9,4 @@ about: Algo não funciona como devia
 
 **Telemóvel / browser:**
 
-Não incluas dados de atletas nem passwords. Vulnerabilidades: ver SECURITY.md.
+Não incluas dados de atletas nem passwords. Vulnerabilidades: ver .github/SECURITY.md.

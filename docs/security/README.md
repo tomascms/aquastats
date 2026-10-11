@@ -15,4 +15,4 @@
 Estado em 06/10/2026: as correções estão nas branches `release/hardening` e `hotfix/security-deps` (PR #14).
 **Em produção ainda nada mudou** — a role com BYPASSRLS continua ativa até ao passo 5 da Fase G.
 
-Relatar uma vulnerabilidade: ver [`SECURITY.md`](../../SECURITY.md).
+Relatar uma vulnerabilidade: ver [`SECURITY.md`](../../.github/SECURITY.md).

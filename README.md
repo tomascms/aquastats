@@ -44,6 +44,9 @@ flowchart LR
   W -.->|Web Worker no browser| M[Modelo ML v1.0]
 ```
 
+**Stack:** Next.js 16 + React (TypeScript) em Cloudflare Workers via OpenNext · FastAPI (Python 3.12) em Cloud Run ·
+Neon Postgres 18 com RLS · segredos no Secret Manager · Worker de IA (`apps/ai-worker`) · CI no GitHub Actions.
+
 Detalhe, modelo de dados e decisões: [docs/arquitetura.md](docs/arquitetura.md) e [docs/adr/](docs/adr/).
 
 ## Modelo de previsão (resumo honesto)
@@ -117,5 +120,10 @@ Plano de produção desta versão: [docs/release/fase-g-plano.md](docs/release/f
 ## Roadmap
 
 Previsão de provas futuras com intervalo (modelo v1.1), comparação por escalão, resumo semanal, Turnstile no
-login, segredos no Secret Manager, CSP com nonces, tarefa agendada para os resultados ao vivo. Avaliar o modelo
+login, CSP com nonces, tarefa agendada para os resultados ao vivo. Avaliar o modelo
 desafiante com dados reais logo que haja algumas semanas de tempos cronometrados.
+
+## Licença
+
+Código proprietário, todos os direitos reservados ([LICENSE](LICENSE), [ADR 0001](docs/adr/0001-licenca-e-autoria.md)).
+Alterações por versão: [docs/CHANGELOG.md](docs/CHANGELOG.md).

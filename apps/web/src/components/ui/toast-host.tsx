@@ -2,11 +2,13 @@
 
 import { useSyncExternalStore } from "react";
 import { useT } from "@/i18n/provider";
-import { dismissToast, getToasts, subscribeToasts } from "@/lib/toast";
+import { dismissToast, getToasts, subscribeToasts, type Toast } from "@/lib/toast";
+
+const NO_TOASTS: Toast[] = [];
 
 export function ToastHost() {
   const t = useT();
-  const items = useSyncExternalStore(subscribeToasts, getToasts, () => []);
+  const items = useSyncExternalStore(subscribeToasts, getToasts, () => NO_TOASTS);
 
   if (!items.length) return null;
 

@@ -27,7 +27,7 @@ quem o lê. O dono quer o repositório privado até nova ordem e pediu uma decis
 
 ## Consequências
 
-- Contribuições externas não são aceites sem acordo escrito (ver `CONTRIBUTING.md`).
+- Contribuições externas não são aceites sem acordo escrito (ver `.github/CONTRIBUTING.md`).
 - Antes de qualquer mudança para público: `docs/security/` (modelo de ameaças, matriz RLS, relatórios de
   auditoria) e `docs/release/` contêm detalhes operacionais (ids de endpoints, configuração). Têm de ser
   revistos ou movidos para fora do repositório público nesse momento. Enquanto o repositório é privado,
