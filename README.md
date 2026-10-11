@@ -14,6 +14,16 @@ Site: <https://aquastats.net> · [Documentação](docs/README.md) · Código pro
 
 Capturas de um ambiente local com uma **equipa sintética** (nomes "Sintético N"), nunca dados reais.
 
+## Estado do projeto
+
+| Parte | Estado |
+|---|---|
+| Site e API | v1.0.0 em produção (Cloudflare Workers + Cloud Run + Neon) |
+| Isolamento de dados | RLS ativa, duas roles sem `BYPASSRLS`, origem da API fechada ao Worker |
+| Modelo de previsão | v1.0 em **sombra**: grava previsões, o treinador continua a ver o modelo anterior; validado só em dados sintéticos |
+| Testes | API (pytest, incl. suite contra Postgres real) e site (lógica, harness do modelo), tudo no CI |
+| Acessibilidade | auditada com axe-core; o que só um leitor de ecrã valida está em [docs/release/acessibilidade.md](docs/release/acessibilidade.md) |
+
 ## O problema e para quem
 
 Um treinador cronometra dezenas de repetições por treino, com o telemóvel numa mão e o cronómetro na outra, e
@@ -155,7 +165,7 @@ DATABASE_ENABLE_RLS=true APP_ENV=development APP_URL=http://127.0.0.1:3000 API_U
 cd ../web && API_URL=http://127.0.0.1:8000 APP_URL=http://127.0.0.1:3000 npm run dev   # http://127.0.0.1:3000
 ```
 
-Entra com `treinador@demo.aquastats.test` (vista do treinador) ou `atleta@demo.aquastats.test` (vista do atleta).
+Abre `http://127.0.0.1:3000` (não `localhost`) e entra com `treinador@demo.aquastats.test` (vista do treinador) ou `atleta@demo.aquastats.test` (vista do atleta).
 A palavra-passe de demonstração está no topo de [`apps/api/scripts/seed_synthetic.py`](apps/api/scripts/seed_synthetic.py)
 e só funciona em bases locais.
 

@@ -20,6 +20,8 @@ const contentSecurityPolicy = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Dev only: without this the dev server blocks 127.0.0.1 and the pages never hydrate (forms submit as plain GETs).
+  allowedDevOrigins: ["127.0.0.1"],
   // Cloudflare Workers has no image optimiser here (_next/image served originals with no cache):
   // the few images are static, pre-sized WebP files in public/.
   images: { unoptimized: true },
