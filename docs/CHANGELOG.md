@@ -1,6 +1,6 @@
 # Registo de alterações
 
-## [Por publicar] — release/hardening
+## [1.0.0] — 2026-10-11
 
 ### Segurança
 - Roles `aquastats_api` (sem BYPASSRLS) e `aquastats_auth` (só autenticação); RLS por equipa e por papel; o atleta
@@ -21,6 +21,7 @@
 - Etiqueta "Volume total" no atleta: o valor é o de todas as épocas, não o do treino do dia.
 
 ### Produto
+- Fase E: carga A:C ao longo do tempo, mesociclos, comparação de períodos, planeado vs. feito, semana do atleta.
 - "Hoje": quem merece atenção e a ação sugerida; nota de privacidade do atleta; tabelas alternativas aos gráficos;
   alvos de toque de 44 px no login.
 

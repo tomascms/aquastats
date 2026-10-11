@@ -44,4 +44,5 @@ desktop.ini
 
 # Local tool configuration (kept out of the repository)
 CLAUDE.md
+.claudeignore
 .claude/
