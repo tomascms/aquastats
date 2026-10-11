@@ -210,3 +210,15 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
   revisão `aquastats-api-00036-rob` (10 → 50 → 100 %). Origem direta: 403; `aquastats.net`: 200, p50 188 ms, máx. 212 ms.
 - [x] **Passo 7 (11/10):** `ML_CHAMPION=atual`, `ML_SHADOW=on`; `/api/ml-config` → `{"champion":"atual","shadow":true}`.
 - [x] Fase E: capturas sintéticas (`docs/img/fase-e-*.jpg`, equipa "Sintético", BD local `aquastats_demo`).
+
+## Passo 9 — agendado para 18/10/2026 10:00 (tarefa `aquastats-passo9-owner`)
+
+- [ ] Rodar a password de `neondb_owner` (projeto Neon de produção) com `reset_postgres_role_password`; o valor novo
+  não é mostrado nem escrito no repo. Atualizar só onde for usado como owner (migrações manuais; a API usa
+  `aquastats_api`/`aquastats_auth`, segredo `aquastats-api-env` v2, que não muda).
+- [ ] Revogar a role antiga `aquastats_app` (BYPASSRLS, usada pela API antes do segredo v2): confirmar nos logs que
+  nenhuma ligação a usa há 7 dias, `ALTER ROLE aquastats_app NOLOGIN`, depois `REVOKE` e `DROP ROLE` (irreversível,
+  confirmar primeiro).
+- [ ] Verificar `/api/v1/health/ready` (15 pedidos, 200, p50 ~190 ms) e login; apagar `apps/api/.env.owner`.
+- Vigilância (passo 8): tarefas `aquastats-vigilancia-24h` (12/10 21:45) e `aquastats-vigilancia-48h-limpeza`
+  (13/10 21:45, faz a limpeza final se estiver limpa).
