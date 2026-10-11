@@ -6,7 +6,7 @@ Gestão de uma equipa de natação para o treinador e os atletas: construtor de 
 na beira da piscina, competições e análise de prova, época e carga, objetivos, bem-estar, frequência cardíaca,
 recordes e um modelo de previsão de tempos. Feito para o telemóvel, em português europeu com inglês completo.
 
-Site: <https://aquastats.net> · Código proprietário, repositório privado ([ADR 0001](docs/adr/0001-licenca-e-autoria.md)).
+Site: <https://aquastats.net> · [Documentação](docs/README.md) · Código proprietário, repositório privado ([ADR 0001](docs/adr/0001-licenca-e-autoria.md)).
 
 | Treinador: "quem merece atenção hoje" | Cronometragem | Atleta |
 |---|---|---|
@@ -126,4 +126,4 @@ desafiante com dados reais logo que haja algumas semanas de tempos cronometrados
 ## Licença
 
 Código proprietário, todos os direitos reservados ([LICENSE](LICENSE), [ADR 0001](docs/adr/0001-licenca-e-autoria.md)).
-Alterações por versão: [docs/CHANGELOG.md](docs/CHANGELOG.md).
+Alterações por versão: [CHANGELOG.md](CHANGELOG.md).
