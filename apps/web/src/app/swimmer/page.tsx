@@ -8,6 +8,7 @@ import { flattenInner, formatSet, needsClockTime, splitRepNumber } from "@/lib/s
 import { todayIso } from "@/lib/dates";
 import { athleteVolumeM, formatMeters } from "@/lib/rankings";
 import { TeamJoinCode } from "@/components/team/team-join-code";
+import { periodComparison } from "@/lib/morning";
 import { useAppState } from "@/lib/store";
 import { useT } from "@/i18n/provider";
 
@@ -43,6 +44,15 @@ export default function SwimmerHomePage() {
     return inner ? needsClockTime(inner.intensity, block.type) : false;
   };
   const mineTimed = mine.filter(isTimedLog);
+  const week = me
+    ? periodComparison(
+        workouts.filter((workout) => workout.athleteIds.includes(me.id)),
+        timeLogs.filter((log) => log.athleteId === me.id),
+        [],
+        todayIso(),
+        "week",
+      )
+    : null;
 
   return (
     <div className="space-y-5">
@@ -81,6 +91,39 @@ export default function SwimmerHomePage() {
           {t("As minhas provas")}
         </Link>
       </section>
+
+      {week ? (
+        <section className="rounded-2xl border border-line bg-panel px-4 py-3" aria-labelledby="semana-atleta">
+          <h2 id="semana-atleta" className="font-semibold">{t("A tua semana vs. a anterior (mesmos dias)")}</h2>
+          <table className="mt-2 w-full text-sm">
+            <caption className="sr-only">{t("A tua semana vs. a anterior (mesmos dias)")}</caption>
+            <thead>
+              <tr className="text-left text-xs text-mute">
+                <th scope="col" className="font-medium"><span className="sr-only">{t("Métrica")}</span></th>
+                <th scope="col" className="font-medium">{t("Esta semana")}</th>
+                <th scope="col" className="font-medium">{t("Semana anterior")}</th>
+              </tr>
+            </thead>
+            <tbody className="tabular-nums">
+              <tr>
+                <th scope="row" className="py-1 text-left font-normal text-mute">{t("Treinos")}</th>
+                <td>{week.current.sessions}</td>
+                <td>{week.previous.sessions}</td>
+              </tr>
+              <tr>
+                <th scope="row" className="py-1 text-left font-normal text-mute">{t("Volume")}</th>
+                <td>{formatMeters(week.current.meters)}</td>
+                <td>{formatMeters(week.previous.meters)}</td>
+              </tr>
+              <tr>
+                <th scope="row" className="py-1 text-left font-normal text-mute">{t("Tempos registados")}</th>
+                <td>{week.current.times}</td>
+                <td>{week.previous.times}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      ) : null}
 
       {me ? <WellnessCalendar athlete={me} editable /> : null}
 

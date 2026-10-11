@@ -111,7 +111,7 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 
 ## Fase E — Dashboards
 
-- [x] "Hoje" do treinador (carga A:C, falta de tempos, bem-estar, ação sugerida, desde o último treino, semana vs anterior)
+- [x] "Hoje" do treinador (carga A:C, falta de tempos, bem-estar, só observações, desde o último treino, semana vs anterior)
 - [x] Nota de privacidade do atleta; tabelas alternativas nos gráficos de forma e de acerto
 - [ ] Roadmap: previsão de provas futuras (exige v1.1 do modelo), comparação por escalão, capacidade vs esperado
 - [ ] Por fazer, a partir do mapeamento de 10/10/2026:
@@ -161,3 +161,52 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
   - Latências (15 pedidos): `/health` p50 211 → 208 ms, máximo 6 782 → 312 ms; `/entrar` p50 164 → 159 ms.
   - Reversão disponível: revisão `aquastats-api-00027-hm7` e Worker `fa90118b`.
   - Vigilância: tarefa agendada só de leitura para 11/10 às 14:40 (`aquastats-step1-watch-24h`).
+- [x] **PR #15 em `main` (10/10):** merge `2745880`, com o CI verde. `CLAUDE.md` e `.claude/` saíram do repositório.
+- [x] **Passo 2 (10/10):** migrações 005–014 aplicadas na produção.
+  - Ponto de restauro: 14:01:00Z, LSN 0/394ECF0; janela PITR até cerca das 20:01Z.
+  - Antes, o mesmo conjunto de 112 instruções foi ensaiado numa branch tirada da produção
+    (`br-silent-forest-b1cu2mfw`).
+  - Verificado: 14 migrações registadas; RLS forçada em todas as tabelas exceto `schema_migrations`;
+    `aquastats_api` e `aquastats_auth` sem login e sem BYPASSRLS; `aquastats_app` mantém BYPASSRLS, por isso a
+    API atual não é afetada; `/health/ready` com 200; sem erros nos logs.
+- [x] **Passo 3 (11/10):** passwords definidas como `neondb_owner` (ADMIN nas duas roles, sem GRANT temporário),
+  uma role de cada vez, por `.local/prod_role_verifier.py apply` (gerada localmente, parametrizada, TLS,
+  `log_statement = none`). URLs só em `apps/api/.env.production-roles` (ignorado pelo git).
+  - Verificado: `aquastats_api` e `aquastats_auth` entram; `rolbypassrls` e `rolsuper` falsos; 29 tabelas com
+    SELECT cada; 0 linhas visíveis sem contexto RLS.
+  - Histórico do bloqueio:
+- [x] ~~Passo 3:~~ bloqueado pelo classificador ("Permission Grant") no GRANT temporário de ADMIN à
+  `aquastats_app`. O script local `.local/prod_role_passwords.py` está pronto. Faltam as regras de permissão.
+  - 10/10: `reset_postgres_role_password` (API do Neon) recusa as duas roles: "cannot update password for role
+    without password" (HTTP 422), porque foram criadas `NOLOGIN` pela migração 011. Nada foi alterado.
+  - 10/10: `ALTER ROLE aquastats_api LOGIN` e `ALTER ROLE aquastats_auth LOGIN` aplicados (como `neondb_owner`,
+    que tem ADMIN nas duas). A API do Neon continua a recusar o reset (HTTP 422): o painel do Neon trata-as como
+    `no_login` enquanto não tiverem password. Sem password, não há login possível. Reversão: `ALTER ROLE ... NOLOGIN`.
+  - 10/10: o script antigo liga-se como `aquastats_app` (Cloud Run), que não tem ADMIN nas roles, e faz commit das
+    duas roles juntas. Plano novo: gerar a password localmente e aplicar só o verificador SCRAM-SHA-256 por
+    `run_sql` como `neondb_owner`, uma role de cada vez. Bloqueado pelo classificador ("Secret-Store Writes") ao
+    criar `.local/prod_role_verifier.py`.
+  - 11/10: regras adicionadas; script criado. O Neon recusa o verificador SCRAM por `run_sql` (HTTP 400, "Neon only
+    supports being given plaintext passwords"). Nenhuma password aplicada; as roles continuam sem login possível.
+- [x] **Passo 4 (11/10):** API `secretmanager.googleapis.com` ativada; conta de serviço `aquastats-api@…` criada;
+  segredo `aquastats-api-env` (versão 1, 8 chaves: AI_WORKER_KEY, AUTH_DATABASE_URL, DATABASE_URL, GEMINI_API_KEY,
+  GOOGLE_CLIENT_SECRET, POLAR_CLIENT_SECRET, SESSION_SECRET, SMTP_PASSWORD); só essa conta tem `secretAccessor`.
+  `apps/api/.env`: SESSION_SECRET, GOOGLE_CLIENT_SECRET e SMTP_PASSWORD (iguais aos de produção) esvaziados; os URLs
+  da BD apontam para o staging e ficam. Sem EDGE_AUTH_TOKEN.
+- [x] ~~Passo 4:~~ script `.local/prod_secret_bundle.py` pronto. O `EDGE_AUTH_TOKEN` fica para o passo 6, porque a
+  API daria 403 até o Worker o enviar.
+- [!] **Passo 5 (11/10):** linha de base `/api/v1/health/ready` (15 pedidos): 200, p50 211 ms, máx. 346 ms.
+  Deploy sem tráfego a partir de `../app-deploy` (HEAD = origin/main `2745880`) com a conta `aquastats-api`, o segredo
+  montado em `/secrets/api.env` e `AQUASTATS_ENV_FILE`: a revisão `aquastats-api-00029-fow` não arrancou
+  (`validate_settings`: DATABASE_URL, AUTH_DATABASE_URL e SESSION_SECRET em falta), ou seja, o ficheiro não foi lido.
+  O tráfego nunca saiu de `00028-f2t` (100 %). A revisão de diagnóstico foi bloqueada pelo classificador.
+- [x] **Passo 5 (11/10), retomado:** a causa não era permissão. O Git Bash converteu o caminho e a revisão ficou com
+  `AQUASTATS_ENV_FILE=C:/Program Files/Git/secrets/api.env`. Deploy feito em PowerShell a partir de `../app-deploy`
+  (HEAD = origin/main `2745880`): `aquastats-api-00030-nef`, 10 → 50 → 100 %, sem erros; p50 198–206 ms, máx. 212–403 ms
+  (um pico isolado de 6,7 s num arranque a frio a 10 %). `00029-fow` apagada; tags `canary`/`rel5` removidas. A revisão
+  de diagnóstico não foi precisa (e a `diag5` nunca foi criada: bloqueada pelo classificador).
+- [x] **Passo 6 (11/10):** token gerado e enviado sem ser mostrado; primeiro `wrangler secret put EDGE_AUTH_TOKEN` + deploy
+  do web a partir de main limpo (versão `8929f16c`), depois o segredo `aquastats-api-env` v2 (v1 + EDGE_AUTH_TOKEN) e a
+  revisão `aquastats-api-00036-rob` (10 → 50 → 100 %). Origem direta: 403; `aquastats.net`: 200, p50 188 ms, máx. 212 ms.
+- [x] **Passo 7 (11/10):** `ML_CHAMPION=atual`, `ML_SHADOW=on`; `/api/ml-config` → `{"champion":"atual","shadow":true}`.
+- [x] Fase E: capturas sintéticas (`docs/img/fase-e-*.jpg`, equipa "Sintético", BD local `aquastats_demo`).

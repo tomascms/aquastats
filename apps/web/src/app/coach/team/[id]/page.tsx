@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { GoalsPanel } from "@/components/goals/goals-panel";
+import { AcwrChart } from "@/components/season/acwr-chart";
 import { Modal } from "@/components/ui/modal";
 import { SwimRankingsCard } from "@/components/team/swimrankings-card";
 import { WellnessCalendar } from "@/components/wellness/wellness-calendar";
@@ -11,9 +12,12 @@ import { COURSE_LABEL, GENDER_LABEL, ageFromDob, displayTitle, formatDatePt, for
 import { formatRaceClock } from "@/lib/race";
 import { athleteVolumeM, formatMeters, weeklyVolume, workoutMeters } from "@/lib/rankings";
 import { personalRecords } from "@/lib/records";
+import { donePct, plannedVsDone } from "@/lib/planned-done";
+import { todayIso } from "@/lib/dates";
 import { formatSet } from "@/lib/set";
 import { actions, useAppState } from "@/lib/store";
 import { hasClockTime } from "@/lib/swim-time";
+import type { Workout } from "@/lib/types";
 import { useT } from "@/i18n/provider";
 
 export default function AthletePage() {
@@ -32,6 +36,11 @@ export default function AthletePage() {
   const mineWorkouts = workouts
     .filter((workout) => athlete && workout.athleteIds.includes(athlete.id))
     .sort((a, b) => b.date.localeCompare(a.date));
+  // Only this athlete's load: each session counts once for them, whoever else was in it.
+  const ownLoad = useMemo(
+    () => (athlete ? workouts.filter((workout) => workout.athleteIds.includes(athlete.id)).map((workout) => ({ ...workout, athleteIds: [athlete.id] })) : []),
+    [athlete, workouts],
+  );
   const mineResults = meetEntries
     .filter((entry) => entry.athleteId === athlete?.id)
     .map((entry) => {
@@ -180,8 +189,11 @@ export default function AthletePage() {
           <p className="mt-2 text-xs text-mute">{t("Valores em km. A semana atual está destacada.")}</p>
         </section>
 
+        <AcwrChart workouts={ownLoad} title={t("Carga A:C")} />
 
       </div>
+
+      <PlannedDoneTable athleteId={athlete.id} workouts={mineWorkouts.filter((workout) => workout.date <= todayIso()).slice(0, 10)} />
 
       <div className="grid gap-5 lg:grid-cols-2">
         <section className="overflow-hidden rounded-2xl border border-line bg-panel">
@@ -267,6 +279,48 @@ export default function AthletePage() {
         </section>
       </div>
     </div>
+  );
+}
+
+/** Planned metres of each recent session vs the metres this athlete has on record as done. */
+function PlannedDoneTable({ athleteId, workouts }: { athleteId: string; workouts: Workout[] }) {
+  const t = useT();
+  const { timeLogs } = useAppState();
+  if (!workouts.length) return null;
+  return (
+    <section className="overflow-x-auto rounded-2xl border border-line bg-panel p-5">
+      <h2 className="font-display text-2xl font-bold">{t("Planeado vs. feito")}</h2>
+      <p className="text-sm text-mute">{t("Últimos treinos. Feito: metros das repetições com tempo ou parciais registados; repetições saltadas ou sem registo não contam.")}</p>
+      <table className="mt-3 w-full text-sm tabular-nums">
+        <caption className="sr-only">{t("Planeado vs. feito")}</caption>
+        <thead>
+          <tr className="text-left text-xs text-mute">
+            <th scope="col" className="py-1 font-medium">{t("Treino")}</th>
+            <th scope="col" className="py-1 text-right font-medium">{t("Planeado")}</th>
+            <th scope="col" className="py-1 text-right font-medium">{t("Feito")}</th>
+            <th scope="col" className="py-1 text-right font-medium">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {workouts.map((workout) => {
+            const row = plannedVsDone(workout, timeLogs, athleteId);
+            const pct = donePct(row);
+            return (
+              <tr key={workout.id} className="border-t border-line">
+                <th scope="row" className="py-1.5 pr-2 text-left font-normal">
+                  <Link href={`/coach/workouts/${workout.id}`} className="inline-flex min-h-11 items-center text-mist hover:text-pool">
+                    {formatDatePt(workout.date)} · {displayTitle(workout.title)}
+                  </Link>
+                </th>
+                <td className="text-right">{formatMeters(row.planned)}</td>
+                <td className="text-right">{formatMeters(row.done)}</td>
+                <td className="text-right">{pct == null ? "—" : `${pct}%`}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
   );
 }
 
