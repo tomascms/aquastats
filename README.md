@@ -31,6 +31,53 @@ querem ver a sua evolução e os objetivos sem expor os dados aos colegas.
 - **Atleta:** evolução, objetivos com progresso, recordes, bem-estar, e uma nota clara sobre o que o treinador vê.
 - **Modelo de previsão (v1.0, em sombra):** ver abaixo.
 
+## Estrutura do repositório
+
+```
+aquastats/
+├── apps/
+│   ├── web/          Site (Next.js 16): UI do treinador e do atleta, proxy para a API, modelo de previsão
+│   ├── api/          API (FastAPI): regras de negócio, autenticação, RLS, importação de ficheiros oficiais
+│   └── ai-worker/    Worker de IA (Cloudflare): lê regulamentos e listas em PDF
+├── docs/             Arquitetura, decisões (ADR), segurança, runbooks, modelo de ML, histórico da release
+├── .github/          CI (testes, auditorias, gitleaks), Dependabot, modelos de issue e PR
+├── docker-compose.yml  Serviços locais opcionais (Postgres, Redis)
+└── CHANGELOG.md
+```
+
+Cada app tem o seu README com a estrutura interna e os comandos: [web](apps/web/README.md) ·
+[api](apps/api/README.md) · [ai-worker](apps/ai-worker/README.md). O índice da documentação está em
+[docs/README.md](docs/README.md).
+
+## Como funciona, em quatro passos
+
+1. **O treinador monta o treino** no construtor: blocos, séries, repetições, distância, intensidade, tempo de
+   saída, material (barbatanas, palas…), estilo, parciais. O treino pode ser escrito em texto para o grupo.
+2. **À beira da piscina, cronometra na matriz** (atletas em linhas, repetições em colunas). Cada toque grava
+   no telemóvel, entra numa fila offline e sincroniza com a API; duas gravações da mesma célula nunca se
+   sobrepõem (ganha a edição mais recente).
+3. **A app transforma tempos em informação:** forma e carga (aguda:crónica), quem merece atenção hoje,
+   recordes, objetivos, análise de prova (parciais, frequência de braçada, distância por braçada).
+4. **Em competição**, importa inscrições e resultados (Lenex ou PDF, com leitura assistida por IA validada
+   contra o texto do documento), segue os resultados ao vivo e compara com a previsão do modelo.
+
+Quem vê o quê é decidido **na base de dados** (RLS por equipa e papel), não só na interface: um atleta só lê
+os seus dados e o treinador só lê os da sua equipa.
+
+## Glossário
+
+| Termo | Significado |
+|---|---|
+| Série / bloco | Conjunto de repetições; um bloco pode repetir-se ("3×") com material diferente por ronda |
+| Saída | Tempo de partida de cada repetição (ex.: 1'30" ⇒ parte de 1'30" em 1'30") |
+| Parcial (*split*) | Tempo intermédio dentro da repetição ou da prova |
+| Piscina curta / longa | 25 m (*scm*) / 50 m (*lcm*): os tempos de uma e de outra não se misturam |
+| Intensidade | Suave, A1 a A3, PROG, PA, MAX e ritmos de prova (P50…P400) |
+| Carga aguda:crónica | Carga recente (7 dias) dividida pela média das semanas anteriores |
+| Taper | Redução de volume antes da prova principal |
+| Conformal | Método que dá um intervalo com cobertura medida, sem supor a forma do erro |
+| RLS | *Row-Level Security*: o Postgres filtra as linhas por equipa e utilizador |
+
 ## Arquitetura
 
 ```mermaid
@@ -84,22 +131,33 @@ simulado pelo Lighthouse (4G, CPU 4×). Método, ruído e limites: [docs/release
 ¹ Código original ([diagnóstico](docs/release/fase-a-diagnostico.md)), medido com um conjunto sintético que
 incluía uma época futura simulada (mais pesado). ² Código anterior às últimas otimizações, com o conjunto corrigido.
 
-## Correr localmente
+## Correr localmente (com dados sintéticos)
+
+Precisas de Python 3.12, Node 20+ e um Postgres 16+ local (porta à tua escolha, autenticação `trust`).
+Tudo o que se segue é local: a API recusa arrancar contra a base de produção e o gerador só escreve dados
+inventados ("Sintético N", emails `*.test`).
 
 ```bash
-# API (Python 3.12) — usa uma base local; o arranque recusa a base de produção
+# 1. Base local com o esquema completo e as migrações
 cd apps/api
 python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
-cp .env.example .env          # DATABASE_URL de uma base local ou de staging
-PYTHONPATH=src .venv/Scripts/uvicorn app.main:app --reload --port 8000
+.venv/Scripts/python scripts/build_local_db.py postgresql://postgres@127.0.0.1:5432/postgres aquastats_demo
 
-# Dados sintéticos para demonstração
-cd ../web && npx tsx scripts/export-synthetic.ts --athletes 30 --seasons 4 --seed 9001 --out ../../.local/synthetic.json
-cd ../api && DATABASE_URL=postgresql://postgres@127.0.0.1:5432/aquastats .venv/Scripts/python scripts/seed_synthetic.py ../../.local/synthetic.json
+# 2. Equipa sintética: 30 atletas, 4 épocas, ~70 mil tempos e 1 800 provas
+cd ../web && npm ci
+npx tsx scripts/export-synthetic.ts --athletes 30 --seasons 4 --seed 9001 --out ../../.local/synthetic.json
+cd ../api && DATABASE_URL=postgresql://postgres@127.0.0.1:5432/aquastats_demo   .venv/Scripts/python scripts/seed_synthetic.py ../../.local/synthetic.json
 
-# Site (Next.js 16)
-cd ../web && npm ci && npm run dev    # http://localhost:3000
+# 3. API (a RLS tem de estar ligada para as roles aquastats_api e aquastats_auth)
+DATABASE_ENABLE_RLS=true APP_ENV=development APP_URL=http://127.0.0.1:3000 API_URL=http://127.0.0.1:8000   DATABASE_URL=postgresql://aquastats_api@127.0.0.1:5432/aquastats_demo   AUTH_DATABASE_URL=postgresql://aquastats_auth@127.0.0.1:5432/aquastats_demo   SESSION_SECRET=local-demo-secret-0123456789abcdef-0123456789   PYTHONPATH=src .venv/Scripts/uvicorn app.main:app --port 8000
+
+# 4. Site
+cd ../web && API_URL=http://127.0.0.1:8000 APP_URL=http://127.0.0.1:3000 npm run dev   # http://127.0.0.1:3000
 ```
+
+Entra com `treinador@demo.aquastats.test` (vista do treinador) ou `atleta@demo.aquastats.test` (vista do atleta).
+A palavra-passe de demonstração está no topo de [`apps/api/scripts/seed_synthetic.py`](apps/api/scripts/seed_synthetic.py)
+e só funciona em bases locais.
 
 ## Testes
 
