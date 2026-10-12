@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AthleteChips } from "@/components/analise/athlete-chips";
 import { VERDICT_CLASS, signedS, swimClock, useSay } from "@/components/analise/coach-text";
 import { useT } from "@/i18n/provider";
+import { addDays } from "@/lib/dates";
 import { analyzeSession, bestsKey, expectedTimes, verdictOf } from "@/lib/coach-analysis";
 import { personalRecords } from "@/lib/records";
 import { useAppState } from "@/lib/store";
@@ -20,10 +21,16 @@ export function SessionAnalysis({ workout, athletes }: { workout: Workout; athle
   const athlete = athletes.find((a) => a.id === picked) ?? athletes[0];
 
   const workoutId = workout.id;
+  const workoutDate = workout.date;
   const data = useMemo(() => {
     if (!athlete) return null;
     const wellness = athlete.wellness ?? [];
-    const rows = annotateTrainingReps(workouts, timeLogs, athlete.id, wellness).filter(isPlausibleRep);
+    // The 90 days up to this session are enough: targets look back 42 days, and the model's estimate
+    // over the whole season cost seconds per page (measured in the PR).
+    const from = addDays(workoutDate, -90);
+    // Annotation only needs the same week before each rep, so a week of margin is enough.
+    const windowed = workouts.filter((w) => w.date >= addDays(from, -7) && w.date <= workoutDate);
+    const rows = annotateTrainingReps(windowed, timeLogs, athlete.id, wellness).filter((r) => isPlausibleRep(r) && r.date >= from);
     const bests = new Map<string, number>();
     for (const r of personalRecords(competitions, meetEntries, meetResults, athlete.id, athlete.seedRecords)) {
       const s = r.mm * 60 + r.ss + r.cc / 100;
@@ -37,7 +44,7 @@ export function SessionAnalysis({ workout, athletes }: { workout: Workout; athle
     for (const r of mine) sets.set(`${r.blockId}|${r.segmentIndex}|${r.round}`, [...(sets.get(`${r.blockId}|${r.segmentIndex}|${r.round}`) ?? []), r]);
     const notes = analyzeSession(mine, expected, { workouts, wellness, athleteId: athlete.id });
     return { sets: [...sets.values()].map((s) => [...s].sort((a, b) => a.repInSegment - b.repInSegment)), expected, predicted, notes };
-  }, [athlete, workoutId, workouts, timeLogs, competitions, meetEntries, meetResults]);
+  }, [athlete, workoutId, workoutDate, workouts, timeLogs, competitions, meetEntries, meetResults]);
 
   if (!athlete || !data) return null;
 

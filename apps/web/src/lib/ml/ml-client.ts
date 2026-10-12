@@ -11,6 +11,8 @@ type Pending = { resolve: (result: MlJobResult) => void; reject: (error: Error) 
 
 let worker: Worker | null | undefined;
 let sequence = 0;
+/** What the worker already holds: copying 300k+ time logs to it froze the page ~0.3 s on every workout visit. */
+let sent: Pick<MlJob, "athletes" | "workouts" | "timeLogs"> | null = null;
 const pending = new Map<number, Pending>();
 
 function startWorker(): Worker | null {
@@ -29,6 +31,7 @@ function startWorker(): Worker | null {
       for (const [, waiting] of pending) waiting.reject(new Error("ml worker failed"));
       pending.clear();
       worker = null;
+      sent = null;
     };
     return created;
   } catch {
@@ -51,6 +54,11 @@ export function runMlJob(job: MlJob): Promise<MlJobResult> {
   const id = ++sequence;
   return new Promise<MlJobResult>((resolve, reject) => {
     pending.set(id, { resolve, reject });
-    target.postMessage({ id, job });
+    const reuse = sent?.athletes === job.athletes && sent.workouts === job.workouts && sent.timeLogs === job.timeLogs;
+    if (reuse) target.postMessage({ id, job: { ...job, athletes: [], workouts: [], timeLogs: [] }, reuse });
+    else {
+      target.postMessage({ id, job });
+      sent = { athletes: job.athletes, workouts: job.workouts, timeLogs: job.timeLogs };
+    }
   }).catch(() => runInline(job));
 }

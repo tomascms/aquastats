@@ -12,7 +12,6 @@ import { useMemo, useState } from "react";
 import { COURSE_LABEL, GENDER_LABEL, ageFromDob, displayTitle, formatDatePt, formatEvent, initials, strokeLabel } from "@/lib/labels";
 import { formatRaceClock } from "@/lib/race";
 import { athleteVolumeM, formatMeters, weeklyVolume, workoutMeters } from "@/lib/rankings";
-import { personalRecords } from "@/lib/records";
 import { formatSet } from "@/lib/set";
 import { actions, useAppState } from "@/lib/store";
 import { hasClockTime } from "@/lib/swim-time";
@@ -27,10 +26,12 @@ export default function AthletePage() {
   const [openMeet, setOpenMeet] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
 
-  const records = useMemo(
-    () => personalRecords(competitions, meetEntries, meetResults, athlete?.id, athlete?.seedRecords),
-    [athlete?.id, athlete?.seedRecords, competitions, meetEntries, meetResults],
-  );
+  // One pass over the logs instead of one filter of every log per workout in the list.
+  const logsPerWorkout = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const log of timeLogs) if (log.athleteId === athlete?.id) counts.set(log.workoutId, (counts.get(log.workoutId) ?? 0) + 1);
+    return counts;
+  }, [timeLogs, athlete?.id]);
   const mineWorkouts = workouts
     .filter((workout) => athlete && workout.athleteIds.includes(athlete.id))
     .sort((a, b) => b.date.localeCompare(a.date));
@@ -218,7 +219,6 @@ export default function AthletePage() {
           ) : (
             <ul className="max-h-[420px] overflow-auto">
               {mineWorkouts.map((workout) => {
-                const logs = timeLogs.filter((log) => log.workoutId === workout.id && log.athleteId === athlete.id);
                 return (
                   <li key={workout.id} className="border-t border-line">
                     <Link href={`/coach/workouts/${workout.id}`} className="block px-5 py-3 hover:bg-panel-2">
@@ -227,7 +227,7 @@ export default function AthletePage() {
                         <span className="font-display text-lg font-bold tabular">{formatMeters(workoutMeters(workout))}</span>
                       </span>
                       <span className="block text-xs text-mute">
-                        {formatDatePt(workout.date)} · {t("{count} tempos", { count: logs.length })}
+                        {formatDatePt(workout.date)} · {t("{count} tempos", { count: logsPerWorkout.get(workout.id) ?? 0 })}
                       </span>
                       <span className="mt-1 block truncate text-xs text-sand">{workout.blocks.map((block) => formatSet(block)).join(" · ")}</span>
                     </Link>

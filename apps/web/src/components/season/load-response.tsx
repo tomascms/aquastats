@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useSay } from "@/components/analise/coach-text";
 import { useT } from "@/i18n/provider";
 import { bestsKey, expectedTimes, loadConclusion, loadWeeks } from "@/lib/coach-analysis";
-import { todayIso } from "@/lib/dates";
+import { addDays, todayIso } from "@/lib/dates";
 import { formatDatePt } from "@/lib/labels";
 import { personalRecords } from "@/lib/records";
 import { useAppState } from "@/lib/store";
@@ -22,7 +22,10 @@ export function LoadResponse({ athlete }: { athlete: Athlete }) {
 
   const { weeks, conclusion } = useMemo(() => {
     const wellness = athlete.wellness ?? [];
-    const rows = annotateTrainingReps(workouts, timeLogs, athlete.id, wellness).filter(isPlausibleRep);
+    // 12 weeks shown + the 42 days each target looks back.
+    const from = addDays(today, -(12 * 7 + 42));
+    const windowed = workouts.filter((w) => w.date >= addDays(from, -7));
+    const rows = annotateTrainingReps(windowed, timeLogs, athlete.id, wellness).filter((r) => isPlausibleRep(r) && r.date >= from);
     const bests = new Map<string, number>();
     for (const r of personalRecords(competitions, meetEntries, meetResults, athlete.id, athlete.seedRecords)) {
       const s = r.mm * 60 + r.ss + r.cc / 100;
