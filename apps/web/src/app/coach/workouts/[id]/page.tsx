@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { WorkoutAnalysis } from "@/components/workouts/workout-analysis";
+import { SessionAnalysis } from "@/components/workouts/session-analysis";
 import { WorkoutSheet } from "@/components/workouts/workout-sheet";
 import { COURSE_LABEL, SHIFT_LABEL, displayTitle, formatDatePt } from "@/lib/labels";
 import { formatMeters, workoutMeters } from "@/lib/rankings";
@@ -12,7 +12,6 @@ import { HrChart } from "@/components/heart-rate/hr-chart";
 import { TimingHints } from "@/components/workouts/timing-hints";
 import { sessionFor } from "@/lib/heart-rate";
 import { confirmDialog } from "@/lib/confirm";
-import { donePct, plannedVsDone } from "@/lib/planned-done";
 
 export default function ViewWorkoutPage() {
   const t = useT();
@@ -59,38 +58,7 @@ export default function ViewWorkoutPage() {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
         <div className="space-y-4">
           <WorkoutSheet workout={workout} />
-          <WorkoutAnalysis workout={workout} />
-          {present.length ? (
-            <section className="overflow-x-auto rounded-2xl border border-line bg-panel p-5">
-              <h2 className="font-display text-xl font-bold">{t("Planeado vs. feito")}</h2>
-              <p className="text-sm text-mute">{t("Feito: metros das repetições com tempo ou parciais registados; repetições saltadas ou sem registo não contam.")}</p>
-              <table className="mt-3 w-full text-sm tabular-nums">
-                <caption className="sr-only">{t("Planeado vs. feito")}</caption>
-                <thead>
-                  <tr className="text-left text-xs text-mute">
-                    <th scope="col" className="py-1 font-medium">{t("Atleta")}</th>
-                    <th scope="col" className="py-1 text-right font-medium">{t("Planeado")}</th>
-                    <th scope="col" className="py-1 text-right font-medium">{t("Feito")}</th>
-                    <th scope="col" className="py-1 text-right font-medium">%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {present.map((athlete) => {
-                    const row = plannedVsDone(workout, timeLogs, athlete.id);
-                    const pct = donePct(row);
-                    return (
-                      <tr key={athlete.id} className="border-t border-line">
-                        <th scope="row" className="py-1.5 pr-2 text-left font-normal text-mist">{athlete.name}</th>
-                        <td className="text-right">{formatMeters(row.planned)}</td>
-                        <td className="text-right">{formatMeters(row.done)}</td>
-                        <td className="text-right">{pct == null ? "—" : `${pct}%`}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </section>
-          ) : null}
+          <SessionAnalysis workout={workout} athletes={present} />
           {present.map((athlete) => {
             const hr = sessionFor(hrSessions, workout.id, athlete.id);
             return hr ? (

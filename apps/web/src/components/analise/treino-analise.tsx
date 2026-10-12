@@ -203,7 +203,6 @@ export function TreinoAnalise({ role = "coach" }: { role?: "coach" | "swimmer" }
             <TreinoDashboard
               athleteId={athlete.id}
               athletes={athletes}
-              canReadLedger={role === "coach"}
               workouts={workouts}
               timeLogs={timeLogs}
               races={races}

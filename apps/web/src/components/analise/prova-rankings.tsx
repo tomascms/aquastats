@@ -8,7 +8,7 @@ import { AnaliseTabs } from "@/components/analise/analise-tabs";
 import { AthleteChips, NoAthletes } from "@/components/analise/athlete-chips";
 import { EvolutionChart } from "@/components/analise/evolution-chart";
 import { RaceInsights } from "@/components/competicoes/race-insights";
-import { PreparationImpact } from "@/components/analise/preparation-impact";
+import { RaceAnalysisPanel } from "@/components/analise/race-analysis-panel";
 import { COURSE_LABEL, ageFromDob, formatDatePt, formatEvent, initials, strokeLabel } from "@/lib/labels";
 import {
   eventKey,
@@ -23,7 +23,6 @@ import {
 } from "@/lib/rankings";
 import { formatRaceClock } from "@/lib/race";
 import { annotateTrainingReps } from "@/lib/training-context";
-import { formBefore, type RaceForm } from "@/lib/training-prediction";
 import { useAppState } from "@/lib/store";
 import type { Athlete, Gender, PoolCourse, RaceSession, Stroke, WellnessEntry } from "@/lib/types";
 import { useT } from "@/i18n/provider";
@@ -387,7 +386,10 @@ function RecordDetail({
   const other = compareId ? findRecord(records, compareId) : undefined;
   const athleteIdForContext = record?.athleteId ?? "";
   // Every rep the athlete swam (any distance); form is read per group, never converted between them.
-  const reps = athleteIdForContext ? annotateTrainingReps(workouts, timeLogs, athleteIdForContext, wellness) : [];
+  const reps = useMemo(
+    () => (athleteIdForContext ? annotateTrainingReps(workouts, timeLogs, athleteIdForContext, wellness) : []),
+    [workouts, timeLogs, athleteIdForContext, wellness],
+  );
 
   if (!record) {
     return (
@@ -510,102 +512,33 @@ function RecordDetail({
         return (
           <>
             <RaceInsights session={session} others={raceSessions} />
-            <PreparationImpact session={session} sessions={raceSessions} workouts={workouts} wellness={wellness} reps={reps} />
           </>
         );
       })()}
 
-      <TrainingContextPanel
-        recordDate={record.date}
-        form={formBefore(reps, record.date)}
-        previous={previous && previous.date < record.date ? { date: previous.date, timeS: previous.timeS, form: formBefore(reps, previous.date) } : null}
-        timeS={record.timeS}
+      <RaceAnalysisPanel
+        session={
+          raceSessions.find((item) => item.id === (record.sessionId ?? record.id)) ?? {
+            id: record.id,
+            athleteId: record.athleteId,
+            date: record.date,
+            tournament: "",
+            course: record.course,
+            distanceM: record.distanceM,
+            stroke: record.stroke,
+            dayPart: "am",
+            reactionS: 0,
+            flightS: 0,
+            officialTimeS: record.timeS,
+            laps: [],
+            createdAt: "",
+          }
+        }
+        sessions={raceSessions}
+        workouts={workouts}
+        wellness={wellness}
+        reps={reps}
       />
     </div>
-  );
-}
-
-const pctText = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(1)} %`;
-
-function TrainingContextPanel({
-  recordDate,
-  form,
-  previous,
-  timeS,
-}: {
-  recordDate: string;
-  form: RaceForm;
-  previous: { date: string; timeS: number; form: RaceForm } | null;
-  timeS: number;
-}) {
-  const t = useT();
-  const speed = form.speedPct;
-  const cards: { label: string; value: string; note: string; good: boolean | null }[] = [
-    {
-      label: t("Velocidade no treino"),
-      value: speed == null ? "—" : speed < 0 ? t("{pct} mais rápido", { pct: Math.abs(speed).toFixed(1) + " %" }) : speed > 0 ? t("{pct} mais lento", { pct: speed.toFixed(1) + " %" }) : t("Igual"),
-      note: speed == null ? t("Sem histórico anterior comparável") : t("face ao habitual, em {n} reps (todas as distâncias)", { n: form.speedN }),
-      good: speed == null || Math.abs(speed) < 0.3 ? null : speed < 0,
-    },
-    {
-      label: t("Aguentar nas séries fortes"),
-      value: form.holdPct == null ? "—" : form.holdPct < 0 ? t("Quebrou menos") : form.holdPct > 0 ? t("Quebrou mais") : t("Igual"),
-      note: form.holdPct == null ? t("Sem séries fortes comparáveis") : t("{pp} pp do início ao fim da série face ao habitual ({n} séries)", { pp: pctText(form.holdPct).replace(" %", ""), n: form.holdN }),
-      good: form.holdPct == null || Math.abs(form.holdPct) < 0.3 ? null : form.holdPct < 0,
-    },
-    {
-      label: t("Reps fortes ao nível habitual"),
-      value: form.qualityPerWeek == null ? "—" : `${form.qualityPerWeek.toFixed(1)} / ${t("sem.")}`,
-      note: form.usualQualityPerWeek == null ? t("por semana, nas 4 semanas antes") : t("habitual: {n} por semana", { n: form.usualQualityPerWeek.toFixed(1) }),
-      good: form.qualityPerWeek == null || form.usualQualityPerWeek == null ? null : form.qualityPerWeek >= form.usualQualityPerWeek,
-    },
-  ];
-  const hasData = form.reps > 0;
-  const prevDelta = previous ? timeS - previous.timeS : null;
-  return (
-    <section className="data-panel p-4">
-      <p className="metric-label">{t("Forma física antes da prova")}</p>
-      <h3 className="mt-1 text-lg font-semibold text-mist">{t("O que preparou este resultado")}</h3>
-      <p className="mt-1 text-xs text-mute">
-        {t("Todas as repetições dos 28 dias antes de {date}, cada uma comparada com o habitual do atleta no mesmo tipo de série (piscina, distância, estilo, intensidade e material).", { date: formatDatePt(recordDate) })}
-      </p>
-      {hasData ? (
-        <>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {cards.map((card) => (
-              <div key={card.label} className="stat-card p-3">
-                <p className="metric-label">{card.label}</p>
-                <p className={`mt-2 metric-value ${card.good == null ? "" : card.good ? "text-good" : "text-coral"}`}>{card.value}</p>
-                <p className="mt-1 text-xs text-mute">{card.note}</p>
-              </div>
-            ))}
-          </div>
-          {form.weeks.length > 1 ? (
-            <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              {form.weeks.map((week) => (
-                <span key={week.week} className={`rounded-full px-2.5 py-1 font-mono ${week.indexPct < 0 ? "bg-good-soft text-good" : "bg-panel-2 text-mute"}`}>
-                  {formatDatePt(week.week)} {pctText(week.indexPct)}
-                </span>
-              ))}
-            </div>
-          ) : null}
-          {previous && prevDelta != null && previous.form.speedPct != null && speed != null ? (
-            <p className="mt-3 text-sm text-mist">
-              {t("Antes da prova anterior ({date}, {time}) estava {prev} no treino; desta vez {now}. Resultado: {delta}.", {
-                date: formatDatePt(previous.date),
-                time: formatRaceClock(previous.timeS),
-                prev: pctText(previous.form.speedPct),
-                now: pctText(speed),
-                delta: `${prevDelta > 0 ? "+" : ""}${prevDelta.toFixed(2)} s`,
-              })}
-            </p>
-          ) : null}
-        </>
-      ) : (
-        <p className="mt-4 rounded-xl border border-dashed border-line bg-ink-2 px-3 py-4 text-sm text-mute">
-          {t("Sem repetições registadas nas 4 semanas antes desta prova.")}
-        </p>
-      )}
-    </section>
   );
 }

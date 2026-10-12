@@ -13,43 +13,8 @@ export function cssPace(d1: number, t1: number, d2: number, t2: number): number 
   return (100 * (t2 - t1)) / (d2 - d1);
 }
 
-/**
- * Speed of each training zone as a fraction of the CSS speed: referencias.md §4.1 (% column, estimates).
- * Percentages scale with any level; the seconds offsets of the same table disagree with them at fast or slow CSS.
- */
-const ZONE_SPEED: Partial<Record<Intensity, [number, number]>> = {
-  SUAVE: [0.75, 0.84],
-  A1: [0.84, 0.9],
-  A2: [0.92, 0.95],
-  A3: [0.96, 0.99],
-  PA: [1.02, 1.06],
-};
-
-export type ZoneTarget = { intensity: Intensity; fromS100: number; toS100: number };
-
-/** Target pace range (s/100 m, 50 m pool) per zone for an athlete with this CSS. Race pace and MAX come from best times. */
-export function zoneTargets(css: number): ZoneTarget[] {
-  return (Object.entries(ZONE_SPEED) as [Intensity, [number, number]][]).map(([intensity, [slow, fast]]) => ({
-    intensity,
-    fromS100: css / fast,
-    toS100: css / slow,
-  }));
-}
-
-export type Adherence = "dentro" | "rapido" | "lento";
-
-/** Within the zone's range ± 1 s/100 m (below the day-to-day noise of 1–2 %, referencias §4.4). */
-export function intensityAdherence(paceS100: number, target: ZoneTarget, toleranceS = 1): Adherence {
-  if (paceS100 < target.fromS100 - toleranceS) return "rapido";
-  if (paceS100 > target.toS100 + toleranceS) return "lento";
-  return "dentro";
-}
-
-export const paceS100 = (row: Pick<TrainingRep, "timeS" | "distanceM">) => (row.timeS / row.distanceM) * 100;
 /** A 25 m pool is faster through the walls: freestyle 50 m ≈ 25 m × 1.02–1.04 (referencias §2.1, estimate 1.03). */
 export const SCM_TO_LCM = 1.03;
-/** Pace in 50 m pool terms, so zone targets from a long-course CSS apply in both pools. */
-export const lcmPaceS100 = (row: Pick<TrainingRep, "timeS" | "distanceM" | "course">) => paceS100(row) * (row.course === "scm" ? SCM_TO_LCM : 1);
 
 /** Fade within a set (%): mean of the second half over the first half, minus 1. Positive = slowed down. */
 export function fadeIndex(times: number[]): number | null {
@@ -111,7 +76,7 @@ export const BAND_LABEL = new Map(BANDS.map((item) => [item.band, item.label]));
 
 /* ---------- Training signals (docs/natacao/produto-treinador.md §C) ---------- */
 
-export type SignalKind = "base-aerobia" | "intensidade-acima" | "carga-acima" | "queda-ritmo" | "taper" | "sem-dados";
+export type SignalKind = "base-aerobia" | "carga-acima" | "queda-ritmo" | "taper" | "sem-dados";
 export type Signal = {
   kind: SignalKind;
   /** The data that triggers it, already formatted with units. */
@@ -124,9 +89,6 @@ export type SignalInput = {
   reps: TrainingRep[];
   /** Weekly training load, oldest first, last = current week. */
   weeklyLoad: number[];
-  css: number | null;
-  /** Date of the CSS test, when the CSS comes from one: an old test makes the intensity signal less certain. */
-  cssDate?: string;
   phase: PhaseKind | null;
   daysToMeetA: number | null;
   today: string;
@@ -157,22 +119,6 @@ export function trainingSignals(input: SignalInput): Signal[] {
     const min = (range.easy?.[0] ?? 0) + (range.aerobic?.[0] ?? 0);
     const share = (aerobic / meters) * 100;
     if (share < min) out.push({ kind: "base-aerobia", data: `${Math.round(share)} % do volume em Suave/A1/A2 (referência ≥ ${min} %)`, uncertainty: "alta" });
-  }
-
-  if (input.css != null) {
-    const targets = new Map(zoneTargets(input.css).map((item) => [item.intensity, item]));
-    const aerobicReps = recent.filter((row) => (row.intensity === "A1" || row.intensity === "A2") && row.gear.length === 0 && row.stroke === "free");
-    if (aerobicReps.length >= 10) {
-      const fast = aerobicReps.filter((row) => lcmPaceS100(row) < targets.get(row.intensity)!.fromS100 - 2).length;
-      const share = (fast / aerobicReps.length) * 100;
-      const weeks = input.cssDate ? Math.floor(daysBetween(input.cssDate, input.today) / 7) : 0;
-      if (share >= 30)
-        out.push({
-          kind: "intensidade-acima",
-          data: `${Math.round(share)} % das reps A1/A2 mais de 2 s/100 m abaixo do alvo${weeks > 8 ? ` (CSS de um teste com ${weeks} semanas)` : ""}`,
-          uncertainty: weeks > 8 ? "alta" : "média",
-        });
-    }
   }
 
   const fades = (rows: TrainingRep[]) => {

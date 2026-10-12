@@ -37,7 +37,6 @@ import { useMlRoles } from "@/lib/ml/ml-config";
 import { findSuspects, type Suspect } from "@/lib/ml/quality";
 import type { Athlete, TimeLog, WellnessEntry, Workout } from "@/lib/types";
 import type { RaceResult } from "@/lib/ml/backtest";
-import { TrackRecordPanel } from "@/components/analise/track-record-panel";
 import { useT } from "@/i18n/provider";
 
 const INK = "#0b1d33";
@@ -131,7 +130,6 @@ export function TreinoDashboard({
   races = [],
   wellness,
   groupName,
-  canReadLedger = false,
 }: {
   athleteId: string;
   /** The whole team: the state model learns from teammates too. */
@@ -142,7 +140,6 @@ export function TreinoDashboard({
   races?: RaceResult[];
   wellness?: WellnessEntry[];
   groupName?: string;
-  canReadLedger?: boolean;
 }) {
   const t = useT();
   const allRows = useMemo(
@@ -353,14 +350,6 @@ export function TreinoDashboard({
           </header>
           <RepTimeline items={visible.slice(-60)} predictions={predictions} />
         </section>
-
-        {/* Model reliability stays behind "Como se calculou" (ADR 0004): the coach reads swimming, not the model. */}
-        <details className="rounded-2xl border border-line bg-panel p-5">
-          <summary className="cursor-pointer text-sm font-semibold text-mist">{t("Como se calculou: fiabilidade das estimativas")}</summary>
-          <div className="mt-3">
-            <TrackRecordPanel athleteId={athleteId} athletes={athletes} workouts={workouts} timeLogs={timeLogs} races={races} canReadLedger={canReadLedger} />
-          </div>
-        </details>
 
         <section className="rounded-2xl border border-line bg-panel p-5">
           <header className="mb-3 flex flex-wrap items-end justify-between gap-2">

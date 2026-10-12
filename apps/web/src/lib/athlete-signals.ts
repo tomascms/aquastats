@@ -12,8 +12,6 @@ import type { Competition, SeasonPlan, Workout } from "./types";
 export function athleteSignals(input: {
   athleteId: string;
   reps: TrainingRep[];
-  css: number | null;
-  cssDate?: string;
   workouts: Workout[];
   competitions: Competition[];
   seasonPlans: SeasonPlan[];
@@ -37,6 +35,6 @@ export function athleteSignals(input: {
   const daysToMeet = next ? Math.round((Date.parse(next) - Date.parse(today)) / 86_400_000) : null;
   // The current week is partial: compare the last complete week with the four before it.
   const loads = weeks.map((week) => weekly.get(week)!).slice(0, -1);
-  const signals = trainingSignals({ reps: input.reps, weeklyLoad: loads, css: input.css, cssDate: input.cssDate, phase, daysToMeetA: daysToMeet, today });
+  const signals = trainingSignals({ reps: input.reps, weeklyLoad: loads, phase, daysToMeetA: daysToMeet, today });
   return { signals, phase, daysToMeet };
 }
