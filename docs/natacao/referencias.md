@@ -418,8 +418,8 @@ Offsets oficiais do gerador (**estimativa**), a partir da tabela acima:
 
 ### 4.4 Variabilidade (o "ruído" a não sobreinterpretar)
 
-- Pyne, Trewin & Hopkins (2004) [A]: CV intra-nadador de **0.6 % dentro da competição** e **0.8 % entre competições** (olímpicos).
-  - O menor efeito relevante é ~0.4 %, ou seja, metade do CV.
+- Pyne, Trewin & Hopkins (2004) [A]: CV intra-nadador de **0.60 % (IC95 0.56–0.65) dentro da competição** e **0.80 % (0.73–0.86) entre competições** (olímpicos; 676 provas, 51 nadadores).
+  - O artigo conclui que um ganho extra de ~0.4 % (≈ metade do CV) melhora substancialmente as hipóteses de medalha. O "menor efeito relevante" no sentido de Hopkins é 0.3 × CV ≈ **0.25 %** (Hopkins, Hawley & Burke 1999, *Med Sci Sports Exerc* 31:472 [A]). Não confundir os dois.
 - Trewin, Hopkins & Pyne (2004) [A]: CV de 0.8 % (rankings, 407 nadadores).
 - Nadadores paralímpicos: CV de 1.2–3.7 % [A].
 - **estimativa** para jovens e nível regional: 1.0–2.0 %. Faltam dados verificados, mas é coerente com a maior variabilidade em populações menos homogéneas.
