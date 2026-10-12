@@ -1,102 +1,71 @@
 # Produto para o treinador — perguntas e ecrãs
 
-O Aquastats existe para o treinador **perceber o treino**, **perceber cada atleta**, **decidir que treino
-fazer** e **prever resultados**. O modelo de previsão é um meio: a sua fiabilidade fica num "Como se
-calculou", nunca em destaque. Cada indicador tem fórmula e fonte em [`indicadores.md`](indicadores.md);
-o que a ciência suporta e o que não suporta está em [`referencias.md`](referencias.md) §5.
+O Aquastats existe para o treinador **ver, perceber e saber como melhorar o atleta**, de preferência no
+telemóvel à beira da piscina. Teste de cada número, gráfico ou frase: *um treinador sem formação em dados
+percebe isto em 5 segundos e sabe o que fazer a seguir?* Se não passa, sai.
+
+A lógica de natação por trás de cada regra está em [`logica-treinador.md`](logica-treinador.md) (§8 tem as
+regras do produto); as fontes em [`referencias.md`](referencias.md).
 
 ## Princípios
 
-1. **Telemóvel à beira da piscina primeiro**: a resposta mais comum está a ≤ 3 toques de "Hoje".
-2. **Números reais com unidades**: s/100 m, m/s, pontos World Aquatics, % do melhor, km/semana, sempre
-   com a tendência (seta e Δ face às 4 semanas anteriores).
-3. **Cada gráfico responde a uma pergunta escrita no título** ("O treino foi feito ao ritmo pedido?").
-   Cada gráfico tem uma tabela alternativa.
-4. **Cada alerta diz porquê e o que ver a seguir** (ligação ao ecrã que o explica).
-5. **Sinais, não ordens**: uma sugestão de treino traz o dado que a motiva, o raciocínio, a incerteza e
-   uma alternativa. O treinador decide. Nunca 0 % nem 100 %. Nada de aconselhamento médico.
-6. **Ruído antes de sinal**: diferenças abaixo do ruído típico (0,6–0,8 % em elite, 1–2 % em jovens) não
-   geram alertas nem setas (referências §4.4).
-7. **Sem métricas do modelo à vista** (MAPE, cobertura, "track record"), exceto o intervalo de uma
-   previsão, que o treinador precisa para decidir.
+1. **Telemóvel primeiro** (375 px, sem scroll horizontal da página, números legíveis).
+2. **Unidades de piscina**: tempos (0:30,5), segundos, metros, km por semana. **Nada de ritmos /100 m
+   calculados**: um 50 em 30,0 não é "1:00/100 m". Cada distância tem o seu tempo-alvo.
+3. **Um gráfico, uma pergunta**, escrita no título em linguagem de piscina. Preferir tabela de tempos com
+   cores, barras simples, linha com no máximo 2 séries, e frases.
+4. **Cada frase aponta o dado que a sustenta**; sem causa nos dados diz "sem causa clara nos dados".
+5. **Ruído antes de sinal**: nada abaixo do ruído típico do atleta (o seu desvio rep a rep na mesma série,
+   mínimo 0,5 % do tempo; Pyne 2004).
+6. **Sinais, não ordens**, sem diagnóstico médico. Sem métricas do modelo, intervalos estatísticos ou siglas
+   sem explicação.
+7. **Menos é mais**: o que não ajuda a decidir o treino de amanhã sai.
 
-## A. Perceber o treino — ecrã "Análise do treino" (sessão e semana)
+## O "tempo que devia fazer"
 
-| Pergunta | Resposta no ecrã | Indicador |
-|---|---|---|
-| O treino foi feito ao ritmo que pretendia? | Por série: ritmo-alvo da zona de cada atleta vs ritmo nadado, cor por aderência (dentro / rápido / lento) | Aderência de intensidade |
-| Que % do volume caiu em cada zona, e quanto devia para esta fase? | Barras por zona: feito vs intervalo de referência da fase | Distribuição de zonas |
-| Cada série foi nadada à intensidade certa para cada atleta? | Tabela atleta × série com Δ s/100 m ao alvo | Ritmo-alvo por zona (CSS do atleta) |
-| Houve queda de ritmo na série e na sessão? | Índice de queda por série (últimas reps vs primeiras) | Índice de queda |
-| A saída foi cumprida? | % de reps com descanso ≥ 5 s dentro da saída | Aderência à saída |
-| O que mudou face às últimas semanas? | Volume, % por zona e carga vs média das 4 semanas anteriores | Carga e tendência |
-
-## B. Perceber o atleta — página do atleta
-
-| Pergunta | Resposta | Indicador |
-|---|---|---|
-| Qual o nível e onde está forte ou fraco? | Melhores tempos por estilo e distância, em pontos World Aquatics; o maior e o menor destacados | Pontos WA |
-| Que perfil de velocidade tem? | CSS (s/100 m), reserva de velocidade (100 vs CSS), fundo vs velocidade, índice de queda | CSS, perfil |
-| Que zonas de treino lhe correspondem? | Tabela de ritmos-alvo A1…PA em s/100 m e por 50/100/200 | Zonas por atleta |
-| Como está a técnica? | Frequência, distância por braçada, SWOLF, reação, quando registados | DPS, SWOLF |
-| Como estão a forma e a carga? | Carga semanal com tendência, km/semana, assiduidade, bem-estar | Carga e tendência |
-| Como compara consigo e com o grupo? | % do melhor pessoal; posição no grupo de treino | % do melhor |
-| Onde perde tempo em prova? | Parciais vs plano par, 1.º vs 2.º 50, reação | Análise de prova |
-| Que treino a evidência sugere agora? | Sinais de treino (secção C) | Sinais |
-
-## C. Decidir o treino — "Sinais de treino"
-
-Regras ancoradas no que a evidência suporta (referências §4–§5). Cada sinal mostra: **dado**,
-**raciocínio**, **incerteza** (baixa / média / alta) e **alternativa**.
-
-| Sinal | Dado que o dispara | Raciocínio | Fonte |
-|---|---|---|---|
-| Base aeróbia abaixo da fase | % de volume em A1+A2 nas últimas 3 semanas abaixo do intervalo da fase geral/específica | A base aeróbia é o grosso do volume na preparação geral | Periodização, referências §4.2 |
-| Intensidade acima do pedido | ≥ 30 % das reps aeróbias mais rápidas que o alvo da zona (> 2 s/100 m) | Aeróbio nadado rápido deixa de ser aeróbio e acumula fadiga | Zonas, §4.1 |
-| Carga acima do habitual | Carga da semana > média das 4 anteriores em mais de 30 % | Subida brusca de carga; **descritivo, não é risco de lesão** | Foster; críticas ao ACWR, §5 |
-| Queda de ritmo acumulada | Índice de queda médio das séries principais pior que o habitual do atleta em 2 semanas seguidas | Fadiga dentro das séries | Ruído §4.4 |
-| Velocidade parada | Melhor das reps MAX/ritmo de prova sem melhoria em 6 semanas, enquanto a CSS melhora | Perfil a afastar-se da velocidade | Perfil de velocidade |
-| Taper a aproximar-se | Prova A daqui a ≤ 21 dias | Polimento de ~2 semanas com −41–60 % de volume e intensidade mantida | Bosquet 2007, §4.3 |
-| Sem tempos para decidir | < 3 sessões com tempos nas últimas 2 semanas | Sem dados não há sinal | — |
-
-Não se afirma: risco de lesão, zonas "seguras" de ACWR, efeito garantido do taper, previsões de
-carreira. Bem-estar mau mostra-se como dado, nunca como diagnóstico.
-
-## D. Prever resultados
-
-| Pergunta | Resposta |
-|---|---|
-| Que tempo devia fazer (potencial dado o estado)? | Tempo "devia" por rep e prova, com a data da última evidência |
-| Que tempo vai fazer? | Previsão com intervalo a 80 % (o único número do modelo à vista) |
-| Que parciais devo pedir? | Plano de parciais a partir do tempo-alvo e do perfil de queda do atleta |
-| Quanto vale o taper? | Intervalo de 1–3 % (estimativa da literatura), nunca um número único |
-| O que preciso de treinar para chegar a X? | Δ ao alvo em s e em pontos; ritmo-alvo por 100 m; CSS necessária (estimativa) |
-
-## E. Equipa
-
-Quadro por grupo de treino: atletas fora do padrão (carga, assiduidade, queda de ritmo), carga coletiva
-por semana, próximas provas e dias para o taper.
+Para cada rep: a mediana das reps do atleta na mesma piscina, estilo, distância, zona, material e descanso
+nos 42 dias anteriores (≥ 3 reps); sem isso, o mesmo sem o descanso; sem isso, melhor tempo de prova nessa
+distância + 0,8 s (partida de bloco → impulso) ÷ % da zona (A1 79 %, A2 85 %, A3 90 %, ritmo de prova
+97,5 %; estimativas, `logica-treinador.md` §1.2). Material diferente nunca se mistura. Código:
+`apps/web/src/lib/coach-analysis.ts`.
 
 ## Ecrãs
 
-| Ecrã | Pergunta no título | Toques desde "Hoje" |
+A forma de apresentar (conclusão primeiro, "Correu bem / A melhorar", certeza em palavras, cores acessíveis,
+versão do atleta) vem de [`benchmark-visualizacao.md`](benchmark-visualizacao.md).
+
+| Ecrã | Pergunta no título | O que mostra |
 |---|---|---|
-| Hoje | "O que merece atenção hoje e porquê?" | 0 |
-| Atleta › Perfil | "Que nadador é e o que treinar agora?" | 2 (Equipa › atleta) |
-| Análise do treino | "O treino foi feito como pedido?" | 2 (treino › análise) |
-| Época | "A distribuição de zonas está certa para a fase?" | 1 |
-| Preparação de prova | "Que tempo e que parciais pedir?" | 2 |
-| Equipa | "Quem está fora do padrão?" | 1 |
+| Treino | "Como correu o treino?" | Fichas de atleta com o estado do dia; frase de abertura; Correu bem / A melhorar (coincide com…, opção para a próxima); cartão por série (média, devia, regularidade, fim vs início, pontos sobre a faixa normal; reps com Fez / Previsto / Devia fazer / Dif.) |
+| Análise › Treino | Sessão · "Está a melhorar?" | O mesmo relatório para qualquer dia; Evolução por tipo de série (2 últimas semanas vs as 6 anteriores), melhores médias, recuperação depois das paragens |
+| Atleta | "Como está …?" | Cartões Treino / Carga e cansaço / Provas com estado em palavras e ligação ao detalhe; nível (melhor prova e pontos World Aquatics); até 3 sinais de treino |
+| Atleta / Época › Carga | "Carga: como reage este atleta?" | Frase de conclusão sobre a reação a subidas de carga; por semana: km, tempos face ao devido, esforço, sono |
+| Análise › Prova | "Porque correu assim?" | Tempo, MP, Δ ao MP com nome; Correu bem / A melhorar; parciais com Δ e ritmo de prova; preparação (polimento, trabalho rápido, treinos antes, contexto) só para o treinador |
+| Atleta (app) | "O teu último treino" · "Como correu a tua prova?" | Um ponto forte e um foco, comparação só consigo, sem crítica do polimento; histórico com a série principal de cada treino |
+| Hoje | "Hoje" | O que mudou desde o último treino e a comparação do período |
+| Época | "A distribuição de zonas está certa para a fase?" | % do volume por zona contra a referência da fase |
+
+## Removido (e porquê)
+
+- "Quem merece atenção" e os sinais em "Hoje": listas de alertas sem o treino à frente; os sinais ficam no
+  perfil de cada atleta.
+- "Como se calculou": explicações de fórmula não ajudam a decidir o treino.
+- "Que tempo e que parciais pedir?" e "Planeado vs feito".
+- CSS, zonas em s/100 m e a tabela de aderência de intensidade: ritmos /100 m calculados não são a forma
+  como o treinador pensa uma série; substituídos pelo tempo devido por distância.
+- Prova mais forte e mais fraca: o nível mostra só a melhor prova.
+- "Carga A:C": substituída por "Carga", que liga carga, cansaço e tempos.
+- Análise › Treino › "Modelo" (médias que misturavam zonas, histograma, efeitos do modelo em %, fiabilidade
+  das estimativas): substituído por "Evolução" por tipo de série.
 
 ## Recolha de dados (só o que vale o toque)
 
-| Dado | Porquê | Como, com o mínimo de toques |
+| Dado | Porquê | Como |
 |---|---|---|
-| Tempos de todas as reps | Tudo depende disto | Cronómetro por pista já existente; repetir a saída automaticamente |
-| Chamada (presenças) | Separa "faltou" de "não cronometrado" | 1 toque por atleta ausente ao abrir a sessão |
-| RPE da sessão (CR-10) | Carga interna, Foster | Atleta, 1 toque no calendário de sono e recuperação (**feito**); o perfil mostra a média de 7 dias vs as 3 semanas antes |
-| Bem-estar (sono, fadiga, dor) | Medidas subjetivas são sensíveis à carga (Saw 2016) | Atleta, 3 toques de manhã, opcional |
-| Teste CSS (400 + 200) | Âncora das zonas | Sessão-modelo de teste a cada 6–8 semanas |
-| Reação e parciais de prova | Onde se perde tempo | Importação LENEX/PDF já existente |
+| Tempos de todas as reps | Tudo depende disto | Cronómetro por pista |
+| Chamada (presenças) | Separa "faltou" de "não cronometrado" | 1 toque por ausente |
+| Esforço da sessão (0–10) | Carga sentida | Atleta, 1 toque no calendário de sono e recuperação |
+| Sono, recuperação, ginásio | Explicam um dia bom ou mau | Atleta, de manhã, opcional |
+| Reação e parciais de prova | Onde se ganha ou perde tempo ao recorde | Importação LENEX/PDF ou "Adicionar detalhes da prova" |
 
-Não se pedem: lactato (exige material), FC contínua (só se houver sensor), campos livres.
+Não se pedem: lactato, FC contínua (só com sensor), campos livres.

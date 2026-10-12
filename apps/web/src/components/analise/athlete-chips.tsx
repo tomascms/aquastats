@@ -3,14 +3,19 @@
 import { useT } from "@/i18n/provider";
 import { initials } from "@/lib/labels";
 
+export type ChipMark = { icon: string; className: string; label: string };
+
 export function AthleteChips({
   athletes,
   selectedId,
   onSelect,
+  marks,
 }: {
   athletes: { id: string; name: string }[];
   selectedId: string;
   onSelect: (id: string) => void;
+  /** Optional verdict per athlete (icon + colour + a word for screen readers). */
+  marks?: Map<string, ChipMark>;
 }) {
   const t = useT();
   if (athletes.length === 0) return null;
@@ -36,6 +41,12 @@ export function AthleteChips({
               {initials(item.name)}
             </span>
             {item.name}
+            {marks?.get(item.id) ? (
+              <span className={`text-base ${active ? "text-white" : marks.get(item.id)!.className}`} title={marks.get(item.id)!.label}>
+                <span aria-hidden>{marks.get(item.id)!.icon}</span>
+                <span className="sr-only">{marks.get(item.id)!.label}</span>
+              </span>
+            ) : null}
           </button>
         );
       })}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { cssPace, fadeIndex, intensityAdherence, levelOfPoints, lcmPaceS100, pctOfBest, splitDifferential, swolf, distancePerStroke, strokeRate, trainingSignals, trend, zoneTargets } from "./indicators";
-import { cssSpeed, dayOf, generateDataset, SCENARIOS } from "./ml/synthetic";
+import { cssPace, fadeIndex, levelOfPoints, pctOfBest, splitDifferential, swolf, distancePerStroke, strokeRate, trainingSignals, trend } from "./indicators";
+import { generateDataset, SCENARIOS } from "./ml/synthetic";
 import { finaPoints } from "./rankings";
 import { annotateTrainingReps } from "./training-context";
 
@@ -9,21 +9,6 @@ describe("indicadores — fórmulas", () => {
   it("CSS 200/400: (T400 − T200) / 2", () => {
     assert.equal(cssPace(200, 130, 400, 270), 70);
     assert.equal(cssPace(400, 270, 200, 130), null);
-  });
-
-  it("zonas: A1 mais lenta que A2, A2 que A3, A3 que PA; em % da velocidade CSS", () => {
-    const z = new Map(zoneTargets(70).map((t) => [t.intensity, t]));
-    assert.ok(Math.abs(z.get("A2")!.fromS100 - 70 / 0.95) < 1e-9 && Math.abs(z.get("A2")!.toS100 - 70 / 0.92) < 1e-9);
-    assert.ok(z.get("A1")!.fromS100 > z.get("A2")!.toS100);
-    assert.ok(z.get("A3")!.toS100 < z.get("A2")!.fromS100);
-    assert.ok(z.get("PA")!.toS100 < 70);
-  });
-
-  it("aderência com 1 s de tolerância", () => {
-    const a2 = { intensity: "A2" as const, fromS100: 74, toS100: 78 };
-    assert.equal(intensityAdherence(73.5, a2), "dentro");
-    assert.equal(intensityAdherence(72.5, a2), "rapido");
-    assert.equal(intensityAdherence(79.5, a2), "lento");
   });
 
   it("queda, parciais, SWOLF, DPS, frequência, % do melhor, tendência", () => {
@@ -48,34 +33,15 @@ describe("indicadores — fórmulas", () => {
 
 describe("indicadores — coerência com o gerador 4.0", () => {
   const data = generateDataset({ ...SCENARIOS.tipico, athletes: 12 }, 6104);
-  const end = dayOf(data.dataEnd);
-
-  it("o A2 livre sem material cai no alvo da CSS do atleta na maioria das reps", () => {
-    let inside = 0;
-    let total = 0;
-    for (const athlete of data.athletes) {
-      const css = 100 / cssSpeed(athlete.profile, end);
-      const a2 = zoneTargets(css).find((t) => t.intensity === "A2")!;
-      const reps = annotateTrainingReps(data.workouts, data.timeLogs, athlete.id).filter(
-        (row) => row.intensity === "A2" && row.stroke === "free" && !row.gear.length && dayOf(row.date) > end - 60,
-      );
-      for (const row of reps) {
-        total += 1;
-        if (intensityAdherence(lcmPaceS100(row), a2, 2) === "dentro") inside += 1;
-      }
-    }
-    assert.ok(total > 50, `${total} reps`);
-    assert.ok(inside / total > 0.6, `${((inside / total) * 100).toFixed(0)} % dentro`);
-  });
 
   it("os sinais nunca afirmam certeza e pedem dados quando não os há", () => {
     const athlete = data.athletes[3];
     const reps = annotateTrainingReps(data.workouts, data.timeLogs, athlete.id);
-    const signals = trainingSignals({ reps, weeklyLoad: [10, 10, 10, 10, 20], css: 70, phase: "general", daysToMeetA: 10, today: data.dataEnd });
+    const signals = trainingSignals({ reps, weeklyLoad: [10, 10, 10, 10, 20], phase: "general", daysToMeetA: 10, today: data.dataEnd });
     assert.ok(signals.some((s) => s.kind === "taper"));
     assert.ok(signals.some((s) => s.kind === "carga-acima"));
     assert.ok(signals.every((s) => s.data.length > 0 && ["baixa", "média", "alta"].includes(s.uncertainty)));
-    assert.deepEqual(trainingSignals({ reps: [], weeklyLoad: [], css: null, phase: null, daysToMeetA: null, today: data.dataEnd }).map((s) => s.kind), ["sem-dados"]);
+    assert.deepEqual(trainingSignals({ reps: [], weeklyLoad: [], phase: null, daysToMeetA: null, today: data.dataEnd }).map((s) => s.kind), ["sem-dados"]);
   });
 });
 

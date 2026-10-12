@@ -6,7 +6,6 @@ import { Suspense, useMemo, useState } from "react";
 
 import { MonthCalendar } from "@/components/ui/month-calendar";
 import { MorningView } from "@/components/coach/morning-view";
-import { TeamSignals } from "@/components/coach/team-signals";
 import { OnboardingBanner } from "@/components/coach/onboarding-banner";
 import { CalendarSkeleton } from "@/components/ui/skeleton";
 import { intlLocale } from "@/i18n";
@@ -105,7 +104,6 @@ function CoachCalendar() {
     <div className="space-y-6 pb-6">
       <OnboardingBanner />
       <MorningView />
-      <TeamSignals />
 
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>

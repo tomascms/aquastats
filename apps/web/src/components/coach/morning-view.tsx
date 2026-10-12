@@ -1,16 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
-import { INTL_LOCALE, type MessageKey } from "@/i18n";
-import { useLocale, useT } from "@/i18n/provider";
+import { type MessageKey } from "@/i18n";
+import { useT } from "@/i18n/provider";
 import { todayIso } from "@/lib/dates";
 import { formatDatePt } from "@/lib/labels";
-import { periodComparison, sinceLastSession, whoNeedsAttention, type AttentionReason, type Period } from "@/lib/morning";
+import { periodComparison, sinceLastSession, type Period } from "@/lib/morning";
 import { formatMeters } from "@/lib/rankings";
 import { useAppState } from "@/lib/store";
-
-const SHOWN = 5;
 
 const PERIODS = [
   { value: "day", label: "Dia", current: "Hoje", previous: "Ontem", title: "Hoje vs. ontem" },
@@ -19,32 +16,16 @@ const PERIODS = [
   { value: "year", label: "Ano", current: "Este ano", previous: "Ano anterior", title: "Este ano vs. o anterior (mesmos dias)" },
 ] as const satisfies readonly { value: Period; label: MessageKey; current: MessageKey; previous: MessageKey; title: MessageKey }[];
 
-/** "Who needs attention today and why": first thing on the coach's home, answered in a few seconds. */
+/** What happened since the last session and how the period compares: first thing on the coach's home. */
 export function MorningView() {
   const t = useT();
-  const locale = INTL_LOCALE[useLocale()];
   const { athletes, workouts, timeLogs, attendance, historyLoaded } = useAppState();
   const today = todayIso();
   const [period, setPeriod] = useState<Period>("week");
   const shown = PERIODS.find((item) => item.value === period) ?? PERIODS[1];
-  const attention = useMemo(() => whoNeedsAttention(athletes, workouts, timeLogs, today), [athletes, workouts, timeLogs, today]);
   const week = useMemo(() => periodComparison(workouts, timeLogs, attendance, today, period), [workouts, timeLogs, attendance, today, period]);
   const since = useMemo(() => sinceLastSession(workouts, timeLogs, today), [workouts, timeLogs, today]);
   if (!athletes.length) return null;
-
-  // Observations only: the coach decides what, if anything, to do about them.
-  const reason = (item: AttentionReason) => {
-    switch (item.kind) {
-      case "load":
-        return t("Carga A:C {ratio} ({band})", { ratio: item.ratio.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), band: item.band === "pico" ? t("pico") : t("acima do habitual") });
-      case "noTimes":
-        return item.days === null ? t("Treina, mas ainda não tem tempos") : t("Sem tempos há {n} dias", { n: item.days });
-      case "noWellness":
-        return t("Sem registo de bem-estar há {n} dias", { n: item.days });
-      case "lowRecovery":
-        return t("Recuperação baixa ({r}/5)", { r: item.recovery });
-    }
-  };
 
   return (
     <section className="rounded-2xl border border-line bg-panel p-5" aria-labelledby="manha-titulo">
@@ -56,29 +37,6 @@ export function MorningView() {
           ? t("Desde o treino de {date}: {n} tempos registados.", { date: formatDatePt(since.since), n: since.times })
           : t("Ainda não há treinos anteriores.")}
       </p>
-
-      <h3 className="mt-4 text-sm font-semibold text-mist">{t("Quem merece atenção")}</h3>
-      {attention.length ? (
-        <ul className="mt-2 divide-y divide-line">
-          {attention.slice(0, SHOWN).map(({ athlete, reasons }) => (
-            <li key={athlete.id} className="py-2.5">
-              <Link href={`/coach/team/${athlete.id}`} prefetch={false} className="inline-flex min-h-11 items-center font-semibold text-mist hover:text-pool">
-                {athlete.name}
-              </Link>
-              <ul className="space-y-1 text-sm">
-                {reasons.map((item) => (
-                  <li key={item.kind} className="text-mist">
-                    {reason(item)}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-2 text-sm text-mute">{t("Ninguém precisa de atenção especial hoje: cargas no habitual e tempos em dia.")}</p>
-      )}
-      {attention.length > SHOWN ? <p className="mt-2 text-xs text-mute">{t("+{n} atletas na página da equipa.", { n: attention.length - SHOWN })}</p> : null}
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-mist">{t(shown.title)}</h3>

@@ -12,7 +12,7 @@ import { formatMeters, meetEnd, workoutMeters } from "@/lib/rankings";
 import { actions, useAppState } from "@/lib/store";
 import { toast } from "@/lib/toast";
 import { ConfirmButton } from "@/components/ui/confirm-button";
-import { acwrBand, dailyLoadPerAthlete, ewmaAcwr, taperOptions, type AcwrBand } from "@/lib/ml/load-risk";
+import { dailyLoadPerAthlete, taperOptions } from "@/lib/ml/load-risk";
 import type { Competition, SeasonCycle, SeasonPlan, Workout } from "@/lib/types";
 
 /** Colours the coach picks per macrocycle (stored in the cycle's `type`). */
@@ -214,7 +214,6 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
   useEffect(() => {
     currentRef.current?.scrollIntoView({ block: "center" });
   }, []);
-  const acwr = useMemo(() => ewmaAcwr(dailyLoadPerAthlete(workouts), plan.end), [plan.end, workouts]);
 
   return (
     <section className="overflow-hidden rounded-xl border border-line bg-panel">
@@ -230,9 +229,6 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
                 </th>
               ))}
               <th className="w-20 px-3 py-2 text-right">{t("Volume")}</th>
-              <th className="w-20 px-3 py-2 text-right" title={t(ACWR_NOTE)}>
-                {t("Carga A:C")}
-              </th>
             </tr>
           </thead>
           <tbody>
@@ -297,7 +293,6 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
                   <td className="px-3 py-2 text-right font-semibold tabular text-mist">
                     {weekWorkouts.length ? formatMeters(parallelVolume(weekWorkouts, workoutMeters)) : "—"}
                   </td>
-                  <AcwrCell value={end <= today ? acwr.get(end)?.ratio ?? null : null} />
                 </tr>
               );
             })}
@@ -305,33 +300,6 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
         </table>
       </div>
     </section>
-  );
-}
-
-export const ACWR_NOTE = "Carga dos últimos 7 dias face às últimas 4 semanas (médias exponenciais). Só descreve a variação da carga: a evidência de que prevê lesões é fraca e contestada.";
-
-const ACWR_TONE: Record<AcwrBand, string> = {
-  abaixo: "text-mute",
-  habitual: "text-good",
-  acima: "text-[#9a6200]",
-  pico: "text-coral",
-};
-
-export const ACWR_LABEL: Record<AcwrBand, "abaixo do habitual" | "habitual" | "acima do habitual" | "pico de carga"> = {
-  abaixo: "abaixo do habitual",
-  habitual: "habitual",
-  acima: "acima do habitual",
-  pico: "pico de carga",
-};
-
-function AcwrCell({ value }: { value: number | null }) {
-  const t = useT();
-  if (value == null) return <td className="px-3 py-2 text-right text-mute">—</td>;
-  const band = acwrBand(value);
-  return (
-    <td className={`px-3 py-2 text-right font-semibold tabular ${ACWR_TONE[band]}`} title={`${t(ACWR_LABEL[band])} · ${t(ACWR_NOTE)}`}>
-      {value.toFixed(2)}
-    </td>
   );
 }
 

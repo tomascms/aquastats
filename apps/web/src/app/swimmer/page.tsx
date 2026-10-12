@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { GoalsPanel } from "@/components/goals/goals-panel";
+import { LastSessionCard } from "@/components/workouts/last-session-card";
 import { WellnessCalendar } from "@/components/wellness/wellness-calendar";
 import { BLOCK_LABEL, COURSE_LABEL, SHIFT_LABEL, displayTitle, formatDatePt, strokeLabel } from "@/lib/labels";
 import { flattenInner, formatSet, needsClockTime, splitRepNumber } from "@/lib/set";
@@ -91,6 +92,8 @@ export default function SwimmerHomePage() {
           {t("As minhas provas")}
         </Link>
       </section>
+
+      {me ? <LastSessionCard athlete={me} /> : null}
 
       {week ? (
         <section className="rounded-2xl border border-line bg-panel px-4 py-3" aria-labelledby="semana-atleta">

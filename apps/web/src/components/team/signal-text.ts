@@ -23,11 +23,6 @@ export const SIGNAL_TEXT: Record<SignalKind, { title: MessageKey; why: MessageKe
     why: "Na preparação geral e específica o volume aeróbio costuma ser a maior parte; aqui está abaixo da referência indicativa.",
     alt: "Se o atleta é velocista, uma parte menor de aeróbio pode ser intencional.",
   },
-  "intensidade-acima": {
-    title: "Aeróbio nadado rápido demais",
-    why: "Muitas reps A1/A2 saíram mais rápidas que o alvo da CSS; deixam de ser aeróbias e acumulam fadiga.",
-    alt: "Confirmar a CSS com um teste 400/200 antes de mudar os alvos.",
-  },
   "queda-ritmo": {
     title: "Mais queda de ritmo nas séries",
     why: "Nas últimas 2 semanas as séries principais caem mais do que o habitual deste atleta.",

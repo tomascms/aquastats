@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { GoalsPanel } from "@/components/goals/goals-panel";
-import { AcwrChart } from "@/components/season/acwr-chart";
+import { LoadResponse } from "@/components/season/load-response";
 import { Modal } from "@/components/ui/modal";
 import { AthleteProfile } from "@/components/team/athlete-profile";
-import { RacePlan } from "@/components/team/race-plan";
 import { SwimRankingsCard } from "@/components/team/swimrankings-card";
 import { WellnessCalendar } from "@/components/wellness/wellness-calendar";
 import { useParams, useRouter } from "next/navigation";
@@ -13,13 +12,9 @@ import { useMemo, useState } from "react";
 import { COURSE_LABEL, GENDER_LABEL, ageFromDob, displayTitle, formatDatePt, formatEvent, initials, strokeLabel } from "@/lib/labels";
 import { formatRaceClock } from "@/lib/race";
 import { athleteVolumeM, formatMeters, weeklyVolume, workoutMeters } from "@/lib/rankings";
-import { personalRecords } from "@/lib/records";
-import { donePct, plannedVsDone } from "@/lib/planned-done";
-import { todayIso } from "@/lib/dates";
 import { formatSet } from "@/lib/set";
 import { actions, useAppState } from "@/lib/store";
 import { hasClockTime } from "@/lib/swim-time";
-import type { Workout } from "@/lib/types";
 import { useT } from "@/i18n/provider";
 
 export default function AthletePage() {
@@ -31,18 +26,15 @@ export default function AthletePage() {
   const [openMeet, setOpenMeet] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
 
-  const records = useMemo(
-    () => personalRecords(competitions, meetEntries, meetResults, athlete?.id, athlete?.seedRecords),
-    [athlete?.id, athlete?.seedRecords, competitions, meetEntries, meetResults],
-  );
+  // One pass over the logs instead of one filter of every log per workout in the list.
+  const logsPerWorkout = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const log of timeLogs) if (log.athleteId === athlete?.id) counts.set(log.workoutId, (counts.get(log.workoutId) ?? 0) + 1);
+    return counts;
+  }, [timeLogs, athlete?.id]);
   const mineWorkouts = workouts
     .filter((workout) => athlete && workout.athleteIds.includes(athlete.id))
     .sort((a, b) => b.date.localeCompare(a.date));
-  // Only this athlete's load: each session counts once for them, whoever else was in it.
-  const ownLoad = useMemo(
-    () => (athlete ? workouts.filter((workout) => workout.athleteIds.includes(athlete.id)).map((workout) => ({ ...workout, athleteIds: [athlete.id] })) : []),
-    [athlete, workouts],
-  );
   const mineResults = meetEntries
     .filter((entry) => entry.athleteId === athlete?.id)
     .map((entry) => {
@@ -67,7 +59,6 @@ export default function AthletePage() {
   const weeks = weeklyVolume(workouts, athlete.id, 10);
   const thisWeek = weeks[weeks.length - 1]?.meters ?? 0;
   const total = athleteVolumeM(workouts, athlete.id);
-  const maxWeek = Math.max(...weeks.map((week) => week.meters), 1);
   const raceCount = raceSessions.filter((item) => item.athleteId === athlete.id).length + mineResults.filter((item) => item.result).length;
   const age = ageFromDob(athlete.dateOfBirth);
   const seconds = (mm: number, ss: number, cc: number) => mm * 60 + ss + cc / 100;
@@ -157,49 +148,13 @@ export default function AthletePage() {
 
       <AthleteProfile athlete={athlete} />
 
-      <RacePlan athlete={athlete} />
-
       <SwimRankingsCard athlete={athlete} role="coach" />
 
       <WellnessCalendar athlete={athlete} editable={false} />
 
       <GoalsPanel athleteId={athlete.id} role="coach" />
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-        <section className="rounded-2xl border border-line bg-panel p-5">
-          <h2 className="font-display text-2xl font-bold">{t("Volume semanal")}</h2>
-          <p className="text-sm text-mute">{t("Últimas 10 semanas.")}</p>
-          <div className="mt-5 flex h-44 items-end gap-1 sm:gap-2">
-            {weeks.map((week, index) => {
-              const current = index === weeks.length - 1;
-              return (
-                <div key={week.start} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5">
-                  <span className="text-[10px] tabular text-mute sm:text-[11px]">{week.meters ? (week.meters / 1000).toFixed(1) : ""}</span>
-                  <div
-                    className={`w-full rounded-t-md ${current ? "bg-pool" : week.meters ? "bg-aqua" : "bg-line"}`}
-                    style={{ height: `${Math.max(3, (week.meters / maxWeek) * 100)}%` }}
-                    title={`${formatDatePt(week.start)} · ${formatMeters(week.meters)}`}
-                  />
-                  {/* On phones every other date is shown, so the ten weeks fit the width. */}
-                  <span
-                    className={`whitespace-nowrap text-[10px] tabular sm:text-[11px] ${current ? "font-semibold text-pool" : "text-mute"} ${
-                      (weeks.length - 1 - index) % 2 ? "invisible sm:visible" : ""
-                    }`}
-                  >
-                    {formatDatePt(week.start).slice(0, 5)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <p className="mt-2 text-xs text-mute">{t("Valores em km. A semana atual está destacada.")}</p>
-        </section>
-
-        <AcwrChart workouts={ownLoad} title={t("Carga A:C")} />
-
-      </div>
-
-      <PlannedDoneTable athleteId={athlete.id} workouts={mineWorkouts.filter((workout) => workout.date <= todayIso()).slice(0, 10)} />
+      <LoadResponse athlete={athlete} />
 
       <div className="grid gap-5 lg:grid-cols-2">
         <section className="overflow-hidden rounded-2xl border border-line bg-panel">
@@ -264,7 +219,6 @@ export default function AthletePage() {
           ) : (
             <ul className="max-h-[420px] overflow-auto">
               {mineWorkouts.map((workout) => {
-                const logs = timeLogs.filter((log) => log.workoutId === workout.id && log.athleteId === athlete.id);
                 return (
                   <li key={workout.id} className="border-t border-line">
                     <Link href={`/coach/workouts/${workout.id}`} className="block px-5 py-3 hover:bg-panel-2">
@@ -273,7 +227,7 @@ export default function AthletePage() {
                         <span className="font-display text-lg font-bold tabular">{formatMeters(workoutMeters(workout))}</span>
                       </span>
                       <span className="block text-xs text-mute">
-                        {formatDatePt(workout.date)} · {t("{count} tempos", { count: logs.length })}
+                        {formatDatePt(workout.date)} · {t("{count} tempos", { count: logsPerWorkout.get(workout.id) ?? 0 })}
                       </span>
                       <span className="mt-1 block truncate text-xs text-sand">{workout.blocks.map((block) => formatSet(block)).join(" · ")}</span>
                     </Link>
@@ -285,48 +239,6 @@ export default function AthletePage() {
         </section>
       </div>
     </div>
-  );
-}
-
-/** Planned metres of each recent session vs the metres this athlete has on record as done. */
-function PlannedDoneTable({ athleteId, workouts }: { athleteId: string; workouts: Workout[] }) {
-  const t = useT();
-  const { timeLogs } = useAppState();
-  if (!workouts.length) return null;
-  return (
-    <section className="overflow-x-auto rounded-2xl border border-line bg-panel p-5">
-      <h2 className="font-display text-2xl font-bold">{t("Planeado vs. feito")}</h2>
-      <p className="text-sm text-mute">{t("Últimos treinos. Feito: metros das repetições com tempo ou parciais registados; repetições saltadas ou sem registo não contam.")}</p>
-      <table className="mt-3 w-full text-sm tabular-nums">
-        <caption className="sr-only">{t("Planeado vs. feito")}</caption>
-        <thead>
-          <tr className="text-left text-xs text-mute">
-            <th scope="col" className="py-1 font-medium">{t("Treino")}</th>
-            <th scope="col" className="py-1 text-right font-medium">{t("Planeado")}</th>
-            <th scope="col" className="py-1 text-right font-medium">{t("Feito")}</th>
-            <th scope="col" className="py-1 text-right font-medium">%</th>
-          </tr>
-        </thead>
-        <tbody>
-          {workouts.map((workout) => {
-            const row = plannedVsDone(workout, timeLogs, athleteId);
-            const pct = donePct(row);
-            return (
-              <tr key={workout.id} className="border-t border-line">
-                <th scope="row" className="py-1.5 pr-2 text-left font-normal">
-                  <Link href={`/coach/workouts/${workout.id}`} className="inline-flex min-h-11 items-center text-mist hover:text-pool">
-                    {formatDatePt(workout.date)} · {displayTitle(workout.title)}
-                  </Link>
-                </th>
-                <td className="text-right">{formatMeters(row.planned)}</td>
-                <td className="text-right">{formatMeters(row.done)}</td>
-                <td className="text-right">{pct == null ? "—" : `${pct}%`}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </section>
   );
 }
 

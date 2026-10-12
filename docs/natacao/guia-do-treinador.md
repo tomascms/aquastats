@@ -1,53 +1,113 @@
 # Guia do treinador — como ler cada ecrã
 
 Exemplos com a equipa **sintética** de demonstração (semente 9001, atletas "Sintético N"). Nenhum dado real.
+Porque é assim: [`benchmark-visualizacao.md`](benchmark-visualizacao.md).
 
-## Atleta › "Que nadador é e o que treinar agora?"
+## A mesma linguagem em toda a app
 
-- **Nível (melhor prova)**: a prova com mais pontos World Aquatics e o nível correspondente. Ex.: um atleta de
-  nível elite aparece como "Elite mundial" na sua prova principal. *Não concluir*: que o atleta é desse nível em todas as provas;
-  a "prova mais fraca" mostra a distância entre extremos.
-- **CSS**: ritmo por 100 m a partir dos melhores 200 e 400 livres na mesma piscina. *Não concluir*: limiar de lactato
-  exato; com melhores tempos antigos a CSS está desatualizada — fazer um teste 400/200.
-- **"A intensidade foi a certa?"**: por zona, alvo em s/100 m e % de reps dentro, rápidas e lentas (14 dias, livres sem
-  material, tolerância 1 s/100 m). Ex.: muitas reps A2 "rápidas" = aeróbio nadado acima do pedido. *Não concluir*:
-  falta de esforço quando "lento" aparece numa série com saída curta ou depois de ginásio.
-- **Queda de ritmo**: média da 2.ª metade da série face à 1.ª. Ex.: +1,5 % numa série de 10×100 A3.
-  *Não concluir*: fadiga sem comparar séries iguais (mesma saída e distância).
-- **Sinais de treino**: cada um com dado, porquê, incerteza e alternativa. São sinais, não ordens.
+- **Primeiro a conclusão, numa frase.** Depois **✓ Correu bem** e **→ A melhorar** (no máximo 3 pontos,
+  primeiro o que correu bem). Por fim, os números.
+- **Cada atleta é comparado consigo próprio**, com a sua variação normal na mesma série (mesma distância,
+  zona, material e descanso), e nunca com uma regra igual para todos.
+- **Certeza em palavras:**
+  - ▲ **mais rápido** (azul) / ▼ **mais lento** (laranja), com "provavelmente" ou "quase de certeza";
+  - ● **igual ao habitual**;
+  - ○ **ainda não dá para dizer**, sempre com a razão: "poucas vezes feita" ou "os tempos variam muito".
+- **Cada rep** fica ▲ mais rápida, ✓ no tempo ou ▼ mais lenta face ao "devia fazer". A cor nunca aparece sem
+  o ícone e a palavra.
+- **Causas como "coincide com"**, só o que estava fora do normal do atleta (por exemplo "dormiu 5 h
+  (costuma 8 h)"). Nunca um diagnóstico. "Uma sessão não é tendência."
+- **Tempos com vírgula:** treino com décimas (1:13,3) e provas com centésimas (1:04,36).
 
-## Hoje › "Que treino a evidência sugere hoje?"
+## Treino › "Como correu o treino?"
 
-Até 8 atletas com sinais (os restantes na página de cada um) e, uma vez para a equipa, a prova a aproximar-se.
-Ex.: "Aeróbio nadado rápido demais: 64 % das reps A1/A2 mais de 2 s/100 m abaixo do alvo" num nadador de 15 anos
-cuja CSS é de junho: o mais provável é a CSS estar desatualizada (cresceu), não o treino estar errado.
-*Não concluir*: que um atleta sem sinais está bem; só não há nada fora do habitual nos tempos registados.
+![Relatório do treino](../img/natacao-analise-treino-mobile.jpg)
 
-## Treino › "O treino foi feito ao ritmo pedido?"
+- **Fichas de atleta com o estado do dia:**
+  - ✓ ao nível ou acima do habitual;
+  - ● misto;
+  - ▼ abaixo do habitual ou com quebra;
+  - ○ ainda não dá para dizer.
+- **A frase de abertura resume o treino.** Por exemplo: "Quase tudo ao nível habitual: 1 de 4 séries
+  abaixo."
+- **"A melhorar"** diz o quê, com o número; o que coincidiu; e uma opção para a próxima. Exemplos:
+  - "Quebrou a partir da rep 6 nos 8×100 A2: +0,9 s por rep até ao fim. Coincide com: saída com só 3 s de
+    descanso. Para a próxima, pode ajudar: mais 5 s de saída, ou 5 reps em vez de 8."
+  - "Mais lento que o habitual nos 23×100 A2: +0,6 s por rep (provavelmente). Coincide com: semana com
+    26 % mais metros que as 3 anteriores. Uma sessão não é tendência: ver a próxima antes de mudar o
+    plano."
 
-Por série principal e por atleta: ritmo médio, alvo da zona na piscina do treino, veredicto (dentro/rápido/lento e
-% das reps), queda e saída cumprida (reps com ≥ 5 s de descanso). Séries de estilo ou com material mostram ritmo e
-queda mas não alvo. *Não concluir*: falta de empenho por "lento" num PA de 30×50 com pouco descanso: a fadiga da
-série faz parte do treino.
+![Uma série](../img/natacao-serie-mobile.jpg)
 
-## Atleta › "Que tempo e que parciais pedir?"
+- **Série a série**, cada uma num cartão:
+  - média, "devia fazer", regularidade (melhor–pior) e o fim da série face ao início;
+  - uma fila de pontos (uma rep por ponto, mais rápido em cima) sobre a faixa do normal do atleta;
+  - em **"Ver as N reps"**: Fez / Previsto / Devia fazer / Dif.
+- **O aquecimento e a volta à calma (SUAVE)** aparecem, mas não são julgados.
+- *Não concluir* falta de empenho por uma rep laranja solta. Lê-se a série inteira.
 
-Escolher a prova e escrever o tempo-alvo: parciais por 50 m (forma da melhor prova do atleta com parciais, ou de
-referência), pontos e nível do alvo, ritmo médio e distância ao melhor. *Não concluir*: que o tempo-alvo é uma
-previsão; é o plano que o treinador escolhe. O polimento vale 1–3 % em média, com muita variação.
+## Análise › Treino
 
-## Época › "A distribuição de zonas está certa para a fase?"
+- **Sessão:** o mesmo relatório para qualquer dia do calendário.
+- **Evolução — "Está a melhorar?":** por tipo de série, as últimas 2 semanas contra as 6 anteriores.
+  - Mostra a média de cada sessão, a faixa do habitual e o veredito.
+  - ★ marca a melhor média recente numa série.
+  - "Depois das paragens" diz quanto tempo levou a voltar ao nível.
 
-% do volume da equipa nas últimas 4 semanas por zona contra uma referência indicativa da fase do plano.
-*Não concluir*: que fora do intervalo é um erro; os intervalos vêm da prática, não de estudos verificados.
+![Evolução](../img/natacao-evolucao-mobile.jpg)
 
-## Análise do treino
+## Atleta › "Como está …?"
 
-Tempos reais vs estimados, distribuição, séries. A fiabilidade das estimativas está fechada em
-"Como se calculou: fiabilidade das estimativas"; só interessa para saber quanto confiar no intervalo.
+![Resumo do atleta](../img/natacao-perfil-atleta-mobile.jpg)
+
+Três cartões, cada um com uma ligação para o detalhe:
+- **Treino:** a evolução por tipo de série.
+- **Carga e cansaço:** volume, esforço e sono dos últimos 7 dias face às 4 semanas antes, em palavras
+  ("acima do habitual").
+- **Provas:** a última prova face ao recorde pessoal.
+
+Por baixo: o nível (melhor prova e pontos World Aquatics) e, no máximo, 3 sinais de treino.
+
+## Atleta / Época › "Carga: como reage este atleta?"
+
+![Carga por semana](../img/natacao-carga-mobile.jpg)
+
+- **A frase do topo** diz o que costuma acontecer aos tempos quando os km sobem mais de 20 % face às 3
+  semanas anteriores (todas com treino).
+- **A tabela tem uma linha por semana:** km, tempos face ao devido, esforço e sono.
+- **Regressos depois de uma paragem** não contam como subida de carga.
+- *Não concluir* risco de lesão.
+
+## Análise › Prova › "Porque correu assim?"
+
+![Análise de prova](../img/natacao-analise-prova-mobile.jpg)
+
+- **Cabeçalho:** o tempo, a etiqueta MP se for recorde pessoal, e a diferença ao MP com data e competição.
+- **Correu bem / A melhorar.** Exemplos:
+  - "Perdeu 0,72 s na 2.ª metade face ao recorde. Para a próxima: trabalhar a 2.ª metade."
+  - "Passou aos 50 m 0,5 s mais rápido que no recorde e perdeu 1,1 s na 2.ª metade: a prova decidiu-se no
+    ritmo." Neste caso sugere a passagem do recorde como referência.
+- **Reação:** a desta prova e a do MP. Entra em "A melhorar" só se for 0,1 s ou mais lenta.
+- **Parciais:** cada parcial com o do MP e a diferença (▲ ▼, e "=" abaixo de 0,1 s). Por baixo, o ritmo de
+  prova num número: 2.ª metade menos a 1.ª.
+- **Preparação (só o treinador vê):**
+  - polimento adequado (redução de 30–65 % do volume), curto ou excessivo;
+  - proporção de trabalho rápido (só é alerta se cair para menos de metade);
+  - treinos e perfil nas 2 semanas antes;
+  - sono, recuperação e ginásio.
+
+## O que vê o atleta
+
+![Último treino do atleta](../img/natacao-atleta-ultimo-treino-mobile.jpg)
+
+O atleta vê o mesmo, mas escrito para ele:
+- no máximo um ponto forte e um foco ("Foco para a próxima: …");
+- comparação só consigo próprio;
+- sem crítica do polimento nem da carga;
+- o histórico mostra a série principal de cada treino, nunca um "melhor tempo" que mistura distâncias.
 
 ## Regras gerais de leitura
 
-- Diferenças abaixo de ~1 % (jovens 1–2 %, elite 0,6–0,8 %) são ruído (Pyne 2004).
-- A carga "acima do habitual" descreve a semana; não é risco de lesão.
-- O taper vale em média 1–3 %, com grande variação entre atletas; não é uma garantia.
+- Uma diferença dentro da variação normal do atleta não é sinal (Pyne 2004; Hopkins).
+- A carga descreve a semana; não é risco de lesão.
+- O polimento vale em média 1–3 %, com grande variação entre atletas; não é uma garantia.

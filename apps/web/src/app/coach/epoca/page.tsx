@@ -1,6 +1,8 @@
 "use client";
 
-import { AcwrChart } from "@/components/season/acwr-chart";
+import { useState } from "react";
+import { AthleteChips } from "@/components/analise/athlete-chips";
+import { LoadResponse } from "@/components/season/load-response";
 import { SeasonPlanner } from "@/components/season/season-planner";
 import { ZoneDistribution } from "@/components/season/zone-distribution";
 import { useT } from "@/i18n/provider";
@@ -8,7 +10,9 @@ import { useAppState } from "@/lib/store";
 
 export default function SeasonPage() {
   const t = useT();
-  const { workouts } = useAppState();
+  const { athletes } = useAppState();
+  const [picked, setPicked] = useState("");
+  const athlete = athletes.find((item) => item.id === picked) ?? athletes[0];
   return (
     <div className="space-y-5">
       <header>
@@ -19,7 +23,12 @@ export default function SeasonPage() {
       </header>
       <SeasonPlanner />
       <ZoneDistribution />
-      <AcwrChart workouts={workouts} title={t("Carga A:C da equipa (média por atleta)")} />
+      {athlete ? (
+        <div className="space-y-3">
+          <AthleteChips athletes={athletes} selectedId={athlete.id} onSelect={setPicked} />
+          <LoadResponse athlete={athlete} />
+        </div>
+      ) : null}
     </div>
   );
 }
