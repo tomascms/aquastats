@@ -28,7 +28,8 @@ export function swimClock(seconds: number): string {
 
 /** Signed seconds: "+1,2 s" / "−0,4 s". */
 export function signedS(diff: number): string {
-  return `${diff > 0 ? "+" : diff < 0 ? "−" : ""}${Math.abs(diff).toFixed(1).replace(".", ",")} s`;
+  const shown = Math.abs(diff).toFixed(1);
+  return `${shown === "0.0" ? "" : diff > 0 ? "+" : "−"}${shown.replace(".", ",")} s`;
 }
 
 export const VERDICT_CLASS = { alvo: "text-good", rapido: "text-amber-600 dark:text-amber-400", lento: "text-coral" } as const;

@@ -3,31 +3,33 @@
 import { useMemo } from "react";
 import { signedS, swimClock, useSay } from "@/components/analise/coach-text";
 import { useT } from "@/i18n/provider";
-import { analyzeRace, expectedTimes, type TaperVerdict } from "@/lib/coach-analysis";
+import { analyzeRace, expectedTimes } from "@/lib/coach-analysis";
 import { formatDatePt } from "@/lib/labels";
 import type { TrainingRep } from "@/lib/training-context";
 import type { RaceSession, WellnessEntry, Workout } from "@/lib/types";
 
 const one = (x: number) => x.toFixed(1).replace(".", ",");
-const TAPER_LABEL: Record<TaperVerdict, "pouca" | "adequada" | "demasiada"> = { pouca: "pouca", adequada: "adequada", demasiada: "demasiada" };
 
 /** "Porque correu assim?" — race vs personal best, taper, speed in training, profile and context; 3–5 sentences on top. */
 export function RaceAnalysisPanel({
   session,
   sessions,
+  bestBefore,
   workouts,
   wellness,
   reps,
 }: {
   session: RaceSession;
   sessions: RaceSession[];
+  /** Best mark of the same event before this race, from the results list (may have no splits). */
+  bestBefore: { date: string; timeS: number } | null;
   workouts: Workout[];
   wellness: WellnessEntry[];
   reps: TrainingRep[];
 }) {
   const t = useT();
   const say = useSay();
-  const a = useMemo(() => analyzeRace(session, sessions, workouts, wellness, reps, expectedTimes(reps)), [session, sessions, workouts, wellness, reps]);
+  const a = useMemo(() => analyzeRace(session, sessions, workouts, wellness, reps, expectedTimes(reps), bestBefore), [session, sessions, workouts, wellness, reps, bestBefore]);
   const pctWord = (p: number) => (Math.abs(p) <= 0.5 ? t("no devido") : p > 0 ? t("{pct} % mais lento", { pct: one(p) }) : t("{pct} % mais rápido", { pct: one(-p) }));
 
   return (
@@ -79,7 +81,7 @@ export function RaceAnalysisPanel({
           <div>
             <dt className="text-xs text-mute">{t("O polimento resultou?")}</dt>
             <dd>
-              {t("Volume desceu {pct} %: redução {verdict}.", { pct: a.taper.reductionPct, verdict: t(TAPER_LABEL[a.taper.verdict]) })}{" "}
+              {t("Volume desceu {pct} %: redução {verdict}.", { pct: a.taper.reductionPct, verdict: t(a.taper.verdict) })}{" "}
               {t("Velocidade (A3 e ritmo de prova): {now} % do volume, antes {before} %.", { now: a.taper.speedShareNow, before: a.taper.speedShareBefore })}
             </dd>
           </div>
@@ -94,12 +96,6 @@ export function RaceAnalysisPanel({
           <div>
             <dt className="text-xs text-mute">{t("Perfil nas 2 semanas antes")}</dt>
             <dd>{t("25/50: {short}. Séries de 200 ou mais: {long}.", { short: pctWord(a.profile.shortPct), long: pctWord(a.profile.longPct) })}</dd>
-          </div>
-        ) : null}
-        {a.vsDuePct != null ? (
-          <div>
-            <dt className="text-xs text-mute">{t("Nos treinos antes da prova")}</dt>
-            <dd>{pctWord(a.vsDuePct)}</dd>
           </div>
         ) : null}
         <div>

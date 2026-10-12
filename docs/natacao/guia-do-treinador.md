@@ -2,52 +2,61 @@
 
 Exemplos com a equipa **sintética** de demonstração (semente 9001, atletas "Sintético N"). Nenhum dado real.
 
+## Treino › "Como correu o treino?"
+
+![Tabela de tempos de um treino](../img/natacao-analise-treino-mobile.jpg)
+
+- Escolhe o atleta no topo. Cada série tem as reps com **Fez** (o tempo registado), **Previsto** (o que o
+  modelo esperava), **Devia fazer** (o tempo-alvo para aquela distância, zona, material e descanso, a partir
+  das reps do próprio atleta nas últimas 6 semanas) e **Dif.** em segundos.
+- Cores: verde no devido (dentro da variação normal do atleta), âmbar mais rápido, vermelho mais lento.
+- **Leitura do treino**: frases curtas com o porquê. Ex.: "O rendimento caiu a partir da rep 6 nos 100 A2
+  (+0,9 s/rep): a saída deu só 3 s de descanso. Para prevenir: mais 5 s de saída, ou 5 reps em vez de 8."
+  "Mais rápido que o devido em 4 séries (…): está acima do que fez nas últimas 6 semanas: sinal de evolução."
+
+![Leitura do treino](../img/natacao-leitura-treino-mobile.jpg)
+
+*Não concluir*: falta de empenho por uma rep vermelha solta; olhar para a série inteira. O aquecimento e a volta
+à calma (SUAVE) não entram nas frases.
+
 ## Atleta › "Que nadador é e o que treinar agora?"
 
-- **Nível (melhor prova)**: a prova com mais pontos World Aquatics e o nível correspondente. Ex.: um atleta de
-  nível elite aparece como "Elite mundial" na sua prova principal. *Não concluir*: que o atleta é desse nível em todas as provas;
-  a "prova mais fraca" mostra a distância entre extremos.
-- **CSS**: ritmo por 100 m a partir dos melhores 200 e 400 livres na mesma piscina. *Não concluir*: limiar de lactato
-  exato; com melhores tempos antigos a CSS está desatualizada — fazer um teste 400/200.
-- **"A intensidade foi a certa?"**: por zona, alvo em s/100 m e % de reps dentro, rápidas e lentas (14 dias, livres sem
-  material, tolerância 1 s/100 m). Ex.: muitas reps A2 "rápidas" = aeróbio nadado acima do pedido. *Não concluir*:
-  falta de esforço quando "lento" aparece numa série com saída curta ou depois de ginásio.
-- **Queda de ritmo**: média da 2.ª metade da série face à 1.ª. Ex.: +1,5 % numa série de 10×100 A3.
-  *Não concluir*: fadiga sem comparar séries iguais (mesma saída e distância).
+![Perfil do atleta](../img/natacao-perfil-atleta-mobile.jpg)
+
+- **Nível (melhor prova)**: a prova com mais pontos World Aquatics, o tempo e os pontos.
+- **Queda de ritmo**: média da 2.ª metade das séries principais face à 1.ª, nos últimos 14 dias.
+- **Como se sente?**: esforço, recuperação e sono dos últimos 7 dias contra as 3 semanas antes.
 - **Sinais de treino**: cada um com dado, porquê, incerteza e alternativa. São sinais, não ordens.
 
-## Hoje › "Que treino a evidência sugere hoje?"
+## Atleta / Época › "Carga: como reage este atleta?"
 
-Até 8 atletas com sinais (os restantes na página de cada um) e, uma vez para a equipa, a prova a aproximar-se.
-Ex.: "Aeróbio nadado rápido demais: 64 % das reps A1/A2 mais de 2 s/100 m abaixo do alvo" num nadador de 15 anos
-cuja CSS é de junho: o mais provável é a CSS estar desatualizada (cresceu), não o treino estar errado.
-*Não concluir*: que um atleta sem sinais está bem; só não há nada fora do habitual nos tempos registados.
+![Carga por semana](../img/natacao-carga-mobile.jpg)
 
-## Treino › "O treino foi feito ao ritmo pedido?"
+A frase do topo diz como o atleta costuma reagir quando os km da semana sobem mais de 20 % face às 3 semanas
+anteriores (todas com treino): se os tempos pioram na semana seguinte e se recuperam na 2.ª. Por baixo, uma
+linha por semana: km, tempos face ao devido, esforço (0–10) e sono. Com menos de 2 subidas de carga nas últimas
+12 semanas a frase diz que ainda não há dados. *Não concluir*: risco de lesão; descreve a resposta aos tempos.
 
-Por série principal e por atleta: ritmo médio, alvo da zona na piscina do treino, veredicto (dentro/rápido/lento e
-% das reps), queda e saída cumprida (reps com ≥ 5 s de descanso). Séries de estilo ou com material mostram ritmo e
-queda mas não alvo. *Não concluir*: falta de empenho por "lento" num PA de 30×50 com pouco descanso: a fadiga da
-série faz parte do treino.
+## Análise › Prova › "Porque correu assim?"
 
-## Atleta › "Que tempo e que parciais pedir?"
+![Análise de prova](../img/natacao-analise-prova-mobile.jpg)
 
-Escolher a prova e escrever o tempo-alvo: parciais por 50 m (forma da melhor prova do atleta com parciais, ou de
-referência), pontos e nível do alvo, ritmo médio e distância ao melhor. *Não concluir*: que o tempo-alvo é uma
-previsão; é o plano que o treinador escolhe. O polimento vale 1–3 % em média, com muita variação.
+- 3–5 frases no topo: contra o recorde pessoal, o polimento, os treinos antes da prova, o perfil, o sono.
+- **Contra o recorde pessoal**: total e, quando há parciais nas duas provas, reação e cada segmento (verde
+  ganhou tempo, vermelho perdeu). Primeiro parcial mais rápido e último mais lento que no recorde = abertura
+  rápida demais.
+- **O polimento resultou?**: redução do volume das 2 semanas antes face às 4 anteriores — pouca (< 30 %),
+  adequada (30–65 %) ou demasiada (> 65 %; Bosquet 2007: ótimo 41–60 %) — e a parte de A3 e ritmo de prova.
+- **Perfil**: 25/50 melhores e séries longas piores = mais potência, menos resistência; o contrário = falta
+  velocidade.
 
 ## Época › "A distribuição de zonas está certa para a fase?"
 
 % do volume da equipa nas últimas 4 semanas por zona contra uma referência indicativa da fase do plano.
 *Não concluir*: que fora do intervalo é um erro; os intervalos vêm da prática, não de estudos verificados.
 
-## Análise do treino
-
-Tempos reais vs estimados, distribuição, séries. A fiabilidade das estimativas está fechada em
-"Como se calculou: fiabilidade das estimativas"; só interessa para saber quanto confiar no intervalo.
-
 ## Regras gerais de leitura
 
-- Diferenças abaixo de ~1 % (jovens 1–2 %, elite 0,6–0,8 %) são ruído (Pyne 2004).
-- A carga "acima do habitual" descreve a semana; não é risco de lesão.
+- Diferenças abaixo da variação normal do atleta (mínimo 0,5 % do tempo) não aparecem (Pyne 2004).
+- A carga descreve a semana; não é risco de lesão.
 - O taper vale em média 1–3 %, com grande variação entre atletas; não é uma garantia.

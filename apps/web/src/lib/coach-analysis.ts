@@ -130,12 +130,14 @@ export function analyzeSession(rows: TrainingRep[], expected: Map<string, Expect
   const groups = new Map<string, Scored[]>();
   for (const row of rows) {
     const exp = expected.get(row.log.id);
-    if (!exp) continue;
+    // Easy swimming (warm-up, swim-down) is not read: a coach does not judge a 200 easy.
+    if (!exp || row.intensity === "SUAVE") continue;
     const key = `${row.blockId}|${row.segmentIndex}|${row.round}`;
     groups.set(key, [...(groups.get(key) ?? []), { row, exp, diff: row.timeS - exp.targetS }]);
   }
   const notes: SessionNote[] = [];
   const worse = causesWorse(rows, ctx);
+  const faster: { s: number; dist: number; zone: string }[] = [];
   for (const set of groups.values()) {
     set.sort((a, b) => a.row.repInSegment - b.row.repInSegment);
     const head = set[0].row;
@@ -172,8 +174,16 @@ export function analyzeSession(rows: TrainingRep[], expected: Map<string, Expect
     }
     const avg = mean(set.slice(set.length > 2 ? 1 : 0).map((s) => s.diff));
     if (avg > noise) notes.push({ what: { key: "Esteve {s} s mais lento que o devido nos {dist} {zone}", vars: { s: r1(avg), ...label } }, why: worse });
-    else if (avg < -noise) notes.push({ what: { key: "Esteve {s} s mais rápido que o devido nos {dist} {zone}", vars: { s: r1(-avg), ...label } }, why: [] });
+    else if (avg < -noise) faster.push({ s: r1(-avg), ...label });
   }
+  // Faster than the last 6 weeks is read once, not set by set: it is the athlete moving up.
+  const evolving: Msg = { key: "está acima do que fez nas últimas 6 semanas nestas séries: sinal de evolução" };
+  if (faster.length === 1) notes.push({ what: { key: "Esteve {s} s mais rápido que o devido nos {dist} {zone}", vars: faster[0] }, why: [evolving] });
+  else if (faster.length > 1)
+    notes.push({
+      what: { key: "Mais rápido que o devido em {n} séries ({list})", vars: { n: faster.length, list: faster.map((f) => `${f.dist} ${f.zone} −${String(f.s).replace(".", ",")} s`).join(", ") } },
+      why: [evolving],
+    });
   return notes;
 }
 
@@ -209,7 +219,11 @@ export function loadWeeks(workouts: Workout[], wellness: WellnessEntry[], rows: 
     if (e.sleepHours != null) b.sleeps.push(e.sleepHours);
     if (e.recovery != null) b.recs.push(e.recovery);
   }
-  return [...out.values()].map(({ diffs, rpes, sleeps, recs, ...b }) => ({
+  const list = [...out.values()];
+  // Weeks before the athlete's first training are not "0 km": they are not shown.
+  const start = list.findIndex((b) => b.km > 0);
+  if (start < 0) return [];
+  return list.slice(start).map(({ diffs, rpes, sleeps, recs, ...b }) => ({
     ...b,
     km: r1(b.km),
     vsDuePct: diffs.length >= 3 ? r1(mean(diffs)) : null,
@@ -227,7 +241,8 @@ export function loadConclusion(weeks: LoadWeek[]): Msg {
     const base = mean(prev.map((w) => w.km));
     const perf = prev.map((w) => w.vsDuePct).filter((x): x is number => x != null);
     const next = weeks[i + 1].vsDuePct;
-    if (base <= 0 || weeks[i].km <= base * 1.2 || !perf.length || next == null) continue;
+    // Coming back from a break is a ramp, not a load jump: the 3 weeks before must all have training.
+    if (prev.some((w) => w.km <= 0) || weeks[i].km <= base * 1.2 || !perf.length || next == null) continue;
     const ref = mean(perf);
     const after = weeks[i + 2]?.vsDuePct;
     jumps.push({ d1: next - ref, d2: after == null ? null : after - ref });
@@ -271,6 +286,7 @@ export function analyzeRace(
   wellness: WellnessEntry[],
   rows: TrainingRep[],
   expected: Map<string, Expected>,
+  bestBefore: { date: string; timeS: number } | null = null,
 ): RaceAnalysis {
   const date = session.date;
   const summary: Msg[] = [];
@@ -285,10 +301,15 @@ export function analyzeRace(
     const deltaS = Math.round((session.officialTimeS - best.officialTimeS) * 100) / 100;
     const reactionS = session.reactionS > 0 && best.reactionS > 0 ? Math.round((session.reactionS - best.reactionS) * 100) / 100 : null;
     vsBest = { bestDate: best.date, bestS: best.officialTimeS, deltaS, reactionS, gains: cmp.segments.map(({ from, to, delta }) => ({ from, to, delta })), fastStart };
-    summary.push(deltaS <= 0 ? { key: "Melhorou o recorde pessoal em {s} s.", vars: { s: Math.abs(deltaS).toFixed(2) } } : { key: "Ficou {s} s acima do recorde pessoal.", vars: { s: deltaS.toFixed(2) } });
+    summary.push(deltaS <= 0 ? { key: "Melhorou o recorde pessoal em {s} s.", vars: { s: Math.abs(deltaS) } } : { key: "Ficou {s} s acima do recorde pessoal.", vars: { s: deltaS } });
     const worst = [...cmp.segments].sort((a, b) => b.delta - a.delta)[0];
-    if (worst && worst.delta > 0.1) summary.push({ key: "Onde mais perdeu: {from}–{to} m (+{s} s).", vars: { from: worst.from, to: worst.to, s: worst.delta.toFixed(2) } });
+    if (worst && worst.delta > 0.1) summary.push({ key: "Onde mais perdeu: {from}–{to} m (+{s} s).", vars: { from: worst.from, to: worst.to, s: worst.delta } });
     if (fastStart) summary.push({ key: "Saiu mais rápido que no recorde e quebrou no fim: abertura rápida demais." });
+  } else if (bestBefore && bestBefore.timeS > 0) {
+    // A best mark without splits: only the total can be compared.
+    const deltaS = Math.round((session.officialTimeS - bestBefore.timeS) * 100) / 100;
+    vsBest = { bestDate: bestBefore.date, bestS: bestBefore.timeS, deltaS, reactionS: null, gains: [], fastStart: false };
+    summary.push(deltaS <= 0 ? { key: "Melhorou o recorde pessoal em {s} s.", vars: { s: Math.abs(deltaS) } } : { key: "Ficou {s} s acima do recorde pessoal.", vars: { s: deltaS } });
   }
 
   const mine = workouts.filter((w) => w.athleteIds.includes(session.athleteId) && w.date < date);
@@ -329,6 +350,12 @@ export function analyzeRace(
   if (profile && profile.shortPct < -0.5 && profile.longPct > 0.5) summary.push({ key: "Mais forte nos 25/50 e pior nas séries longas: ganhou potência, perdeu resistência." });
   else if (profile && profile.shortPct > 0.5 && profile.longPct < -0.5) summary.push({ key: "Melhor nas séries longas e pior nos 25/50: tem resistência, faltou velocidade." });
   const vsDuePct = pctOf(1, 14);
+  if (vsDuePct != null)
+    summary.push(
+      Math.abs(vsDuePct) <= 0.5
+        ? { key: "Nos treinos das 2 semanas antes andou no tempo que devia." }
+        : { key: vsDuePct < 0 ? "Nos treinos das 2 semanas antes andou {pct} % mais rápido do que devia." : "Nos treinos das 2 semanas antes andou {pct} % mais lento do que devia.", vars: { pct: Math.abs(vsDuePct) } },
+    );
 
   const win = (from: number, to: number) => wellness.filter((w) => { const d = daysBetween(date, w.date); return d >= from && d <= to; });
   const avg = (ws: WellnessEntry[], k: "sleepHours" | "recovery") => avgOrNull(ws.map((w) => w[k]).filter((x): x is number => x != null));

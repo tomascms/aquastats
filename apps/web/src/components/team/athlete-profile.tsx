@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { swimClock } from "@/components/analise/coach-text";
 import { useT } from "@/i18n/provider";
 import { addDays, todayIso } from "@/lib/dates";
 import { fadeIndex } from "@/lib/indicators";
@@ -17,12 +18,6 @@ import type { Athlete } from "@/lib/types";
  * "Que nadador é e o que treinar agora?" — the athlete's performance profile from recorded times only
  * (docs/natacao/produto-treinador.md §B–C). No model output here.
  */
-
-const clock = (s: number) => {
-  const m = Math.floor(s / 60);
-  const rest = s - m * 60;
-  return m ? `${m}:${rest.toFixed(1).padStart(4, "0")}` : rest.toFixed(1);
-};
 
 export function AthleteProfile({ athlete }: { athlete: Athlete }) {
   const t = useT();
@@ -74,13 +69,13 @@ export function AthleteProfile({ athlete }: { athlete: Athlete }) {
       <p className="mt-4">
         <span className="text-xs text-mute">{t("Nível (melhor prova)")}</span>
         <span className="block font-semibold">
-          {best ? `${formatEvent(best.distanceM, best.stroke)} ${best.course === "lcm" ? "PL" : "PC"} · ${clock(best.timeS)} · ${best.points} ${t("pontos World Aquatics")}` : "—"}
+          {best ? `${formatEvent(best.distanceM, best.stroke)} ${best.course === "lcm" ? "PL" : "PC"} · ${swimClock(best.timeS)} · ${best.points} ${t("pontos World Aquatics")}` : "—"}
         </span>
       </p>
 
       <p className="mt-3 text-sm">
         <span className="text-mute">{t("Queda de ritmo média nas séries principais (14 dias):")}</span>{" "}
-        <span className="font-semibold tabular-nums">{profile.fade == null ? "—" : `${profile.fade >= 0 ? "+" : ""}${profile.fade.toFixed(1)} %`}</span>{" "}
+        <span className="font-semibold tabular-nums">{profile.fade == null ? "—" : `${profile.fade >= 0 ? "+" : ""}${profile.fade.toFixed(1).replace(".", ",")} %`}</span>{" "}
         <span className="text-xs text-mute">({t("{n} séries", { n: profile.nFades })})</span>
       </p>
 
@@ -98,10 +93,10 @@ export function AthleteProfile({ athlete }: { athlete: Athlete }) {
             <div key={key}>
               <dt className="text-xs text-mute">{label}</dt>
               <dd className="font-semibold tabular-nums">
-                {item.now ? item.now.mean.toFixed(digits) : "—"}
+                {item.now ? item.now.mean.toFixed(digits).replace(".", ",") : "—"}
                 {item.now && item.before ? (
                   <span className="ml-1 text-xs font-normal text-mute">
-                    ({t("antes")} {item.before.mean.toFixed(digits)})
+                    ({t("antes")} {item.before.mean.toFixed(digits).replace(".", ",")})
                   </span>
                 ) : null}
               </dd>

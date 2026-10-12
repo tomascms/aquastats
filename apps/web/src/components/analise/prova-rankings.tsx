@@ -386,10 +386,7 @@ function RecordDetail({
   const other = compareId ? findRecord(records, compareId) : undefined;
   const athleteIdForContext = record?.athleteId ?? "";
   // Every rep the athlete swam (any distance); form is read per group, never converted between them.
-  const reps = useMemo(
-    () => (athleteIdForContext ? annotateTrainingReps(workouts, timeLogs, athleteIdForContext, wellness) : []),
-    [workouts, timeLogs, athleteIdForContext, wellness],
-  );
+  const reps = athleteIdForContext ? annotateTrainingReps(workouts, timeLogs, athleteIdForContext, wellness) : [];
 
   if (!record) {
     return (
@@ -535,6 +532,7 @@ function RecordDetail({
           }
         }
         sessions={raceSessions}
+        bestBefore={sameEvent.filter((item) => item.date < record.date).sort((a, b) => a.timeS - b.timeS)[0] ?? null}
         workouts={workouts}
         wellness={wellness}
         reps={reps}

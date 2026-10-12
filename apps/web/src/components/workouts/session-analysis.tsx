@@ -110,7 +110,7 @@ export function SessionAnalysis({ workout, athletes }: { workout: Workout; athle
               ))}
             </ul>
           ) : (
-            <p className="mt-1 text-sm text-mute">{t("Tudo dentro do tempo devido, sem quebras.")}</p>
+            <p className="mt-1 text-sm text-mute">{t("Séries dentro do tempo devido, em média, e sem quebras.")}</p>
           )}
         </>
       ) : (
