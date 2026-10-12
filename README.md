@@ -6,13 +6,23 @@ Gestão de uma equipa de natação para o treinador e os atletas: construtor de 
 na beira da piscina, competições e análise de prova, época e carga, objetivos, bem-estar, frequência cardíaca,
 recordes e um modelo de previsão de tempos. Feito para o telemóvel, em português europeu com inglês completo.
 
-Site: <https://aquastats.net> · Código proprietário, repositório privado ([ADR 0001](docs/adr/0001-licenca-e-autoria.md)).
+Site: <https://aquastats.net> · [Documentação](docs/README.md) · Código proprietário, repositório privado ([ADR 0001](docs/adr/0001-licenca-e-autoria.md)).
 
 | Treinador: "quem merece atenção hoje" | Cronometragem | Atleta |
 |---|---|---|
 | ![Vista da manhã do treinador](docs/img/coach-home-360.png) | ![Matriz de cronometragem](docs/img/matrix-360.png) | ![Página do atleta](docs/img/swimmer-360.png) |
 
 Capturas de um ambiente local com uma **equipa sintética** (nomes "Sintético N"), nunca dados reais.
+
+## Estado do projeto
+
+| Parte | Estado |
+|---|---|
+| Site e API | v1.0.0 em produção (Cloudflare Workers + Cloud Run + Neon) |
+| Isolamento de dados | RLS ativa, duas roles sem `BYPASSRLS`, origem da API fechada ao Worker |
+| Modelo de previsão | v1.0 em **sombra**: grava previsões, o treinador continua a ver o modelo anterior; validado só em dados sintéticos |
+| Testes | API (pytest, incl. suite contra Postgres real) e site (lógica, harness do modelo), tudo no CI |
+| Acessibilidade | auditada com axe-core; o que só um leitor de ecrã valida está em [docs/release/acessibilidade.md](docs/release/acessibilidade.md) |
 
 ## O problema e para quem
 
@@ -27,21 +37,56 @@ querem ver a sua evolução e os objetivos sem expor os dados aos colegas.
 - **Competições:** inscrições, resultados, ficheiros oficiais (Lenex/PDF, leitura assistida por IA) e
   resultados ao vivo; análise de prova (parciais, frequência, distância por braçada).
 - **Época e carga:** macrociclos, carga aguda:crónica (EWMA), simulação de taper.
-- **Treinador, "Hoje":** quem merece atenção e porquê (carga, falta de tempos, bem-estar); comparação por dia, semana, mês e ano.
-- **Perfil do atleta — "Que nadador é e o que treinar agora?":** nível por pontos World Aquatics, prova mais forte e
-  mais fraca, CSS (teste 400/200), zonas de treino pessoais, se a intensidade de cada zona foi a pedida, queda de
-  ritmo nas séries e **sinais de treino** com dado, razão, incerteza e alternativa (o treinador decide; sem conselho
-  médico nem risco de lesão). Só de tempos registados; fórmulas e fontes em
-  [docs/natacao/indicadores.md](docs/natacao/indicadores.md), perguntas e ecrãs em
-  [docs/natacao/produto-treinador.md](docs/natacao/produto-treinador.md), leitura em
-  [docs/natacao/guia-do-treinador.md](docs/natacao/guia-do-treinador.md).
-- **Hoje — "Que treino a evidência sugere hoje?":** sinais de treino da equipa, prova a aproximar-se.
-- **Treino — "O treino foi feito ao ritmo pedido?":** por série e atleta, ritmo vs alvo da zona, queda e saída.
-- **Atleta — "Que tempo e que parciais pedir?":** plano de prova com parciais por 50 m e pontos do alvo.
-- **Época — "A distribuição de zonas está certa para a fase?":** volume da equipa por zona contra uma referência
-  indicativa da fase do plano.
+- **Treinador, "Hoje":** quem merece atenção e porquê (carga, falta de tempos, bem-estar), sem prescrições; comparação por dia, semana, mês e ano.
 - **Atleta:** evolução, objetivos com progresso, recordes, bem-estar, e uma nota clara sobre o que o treinador vê.
 - **Modelo de previsão (v1.0, em sombra):** ver abaixo.
+
+## Estrutura do repositório
+
+```
+aquastats/
+├── apps/
+│   ├── web/          Site (Next.js 16): UI do treinador e do atleta, proxy para a API, modelo de previsão
+│   ├── api/          API (FastAPI): regras de negócio, autenticação, RLS, importação de ficheiros oficiais
+│   └── ai-worker/    Worker de IA (Cloudflare): lê regulamentos e listas em PDF
+├── docs/             Arquitetura, decisões (ADR), segurança, runbooks, modelo de ML, histórico da release
+├── .github/          CI (testes, auditorias, gitleaks), Dependabot, modelos de issue e PR
+├── docker-compose.yml  Serviços locais opcionais (Postgres, Redis)
+└── CHANGELOG.md
+```
+
+Cada app tem o seu README com a estrutura interna e os comandos: [web](apps/web/README.md) ·
+[api](apps/api/README.md) · [ai-worker](apps/ai-worker/README.md). O índice da documentação está em
+[docs/README.md](docs/README.md).
+
+## Como funciona, em quatro passos
+
+1. **O treinador monta o treino** no construtor: blocos, séries, repetições, distância, intensidade, tempo de
+   saída, material (barbatanas, palas…), estilo, parciais. O treino pode ser escrito em texto para o grupo.
+2. **À beira da piscina, cronometra na matriz** (atletas em linhas, repetições em colunas). Cada toque grava
+   no telemóvel, entra numa fila offline e sincroniza com a API; duas gravações da mesma célula nunca se
+   sobrepõem (ganha a edição mais recente).
+3. **A app transforma tempos em informação:** forma e carga (aguda:crónica), quem merece atenção hoje,
+   recordes, objetivos, análise de prova (parciais, frequência de braçada, distância por braçada).
+4. **Em competição**, importa inscrições e resultados (Lenex ou PDF, com leitura assistida por IA validada
+   contra o texto do documento), segue os resultados ao vivo e compara com a previsão do modelo.
+
+Quem vê o quê é decidido **na base de dados** (RLS por equipa e papel), não só na interface: um atleta só lê
+os seus dados e o treinador só lê os da sua equipa.
+
+## Glossário
+
+| Termo | Significado |
+|---|---|
+| Série / bloco | Conjunto de repetições; um bloco pode repetir-se ("3×") com material diferente por ronda |
+| Saída | Tempo de partida de cada repetição (ex.: 1'30" ⇒ parte de 1'30" em 1'30") |
+| Parcial (*split*) | Tempo intermédio dentro da repetição ou da prova |
+| Piscina curta / longa | 25 m (*scm*) / 50 m (*lcm*): os tempos de uma e de outra não se misturam |
+| Intensidade | Suave, A1 a A3, PROG, PA, MAX e ritmos de prova (P50…P400) |
+| Carga aguda:crónica | Carga recente (7 dias) dividida pela média das semanas anteriores |
+| Taper | Redução de volume antes da prova principal |
+| Conformal | Método que dá um intervalo com cobertura medida, sem supor a forma do erro |
+| RLS | *Row-Level Security*: o Postgres filtra as linhas por equipa e utilizador |
 
 ## Arquitetura
 
@@ -70,8 +115,6 @@ produção cobre 24–77 %). A produção ainda não tem tempos reais para o con
 **em sombra**: grava previsões num ledger imutável, e o treinador continua a ver o modelo anterior. O motor
 também estima tempos de prova, mas isso só foi validado em sintético e não aparece na app. A app não mostra
 probabilidades de quebra de série nem "saída recomendada".
-A fiabilidade do modelo fica em "Como se calculou"; os ecrãs mostram natação, não o modelo
-([ADR 0004](docs/adr/0004-dashboards-orientados-a-decisao-do-treinador.md)).
 Ficha completa: [docs/ml/README.md](docs/ml/README.md).
 
 ## Segurança e privacidade
@@ -98,23 +141,33 @@ simulado pelo Lighthouse (4G, CPU 4×). Método, ruído e limites: [docs/release
 ¹ Código original ([diagnóstico](docs/release/fase-a-diagnostico.md)), medido com um conjunto sintético que
 incluía uma época futura simulada (mais pesado). ² Código anterior às últimas otimizações, com o conjunto corrigido.
 
-## Correr localmente
+## Correr localmente (com dados sintéticos)
+
+Precisas de Python 3.12, Node 20+ e um Postgres 16+ local (porta à tua escolha, autenticação `trust`).
+Tudo o que se segue é local: a API recusa arrancar contra a base de produção e o gerador só escreve dados
+inventados ("Sintético N", emails `*.test`).
 
 ```bash
-# API (Python 3.12) — usa uma base local; o arranque recusa a base de produção
+# 1. Base local com o esquema completo e as migrações
 cd apps/api
 python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
-cp .env.example .env          # DATABASE_URL de uma base local ou de staging
-PYTHONPATH=src .venv/Scripts/uvicorn app.main:app --reload --port 8000
+.venv/Scripts/python scripts/build_local_db.py postgresql://postgres@127.0.0.1:5432/postgres aquastats_demo
 
-# Dados sintéticos para demonstração
-# Gerador 4.0 (6 níveis, todas as reps cronometradas): docs/natacao/gerador.md; 2 épocas chegam para a demo
-cd ../web && npx tsx scripts/export-synthetic.ts --athletes 30 --seasons 2 --seed 9001 --out ../../.local/synthetic.json
-cd ../api && DATABASE_URL=postgresql://postgres@127.0.0.1:5432/aquastats .venv/Scripts/python scripts/seed_synthetic.py ../../.local/synthetic.json
+# 2. Equipa sintética: 30 atletas, 4 épocas, ~70 mil tempos e 1 800 provas
+cd ../web && npm ci
+npx tsx scripts/export-synthetic.ts --athletes 30 --seasons 4 --seed 9001 --out ../../.local/synthetic.json
+cd ../api && DATABASE_URL=postgresql://postgres@127.0.0.1:5432/aquastats_demo   .venv/Scripts/python scripts/seed_synthetic.py ../../.local/synthetic.json
 
-# Site (Next.js 16)
-cd ../web && npm ci && npm run dev    # http://localhost:3000
+# 3. API (a RLS tem de estar ligada para as roles aquastats_api e aquastats_auth)
+DATABASE_ENABLE_RLS=true APP_ENV=development APP_URL=http://127.0.0.1:3000 API_URL=http://127.0.0.1:8000   DATABASE_URL=postgresql://aquastats_api@127.0.0.1:5432/aquastats_demo   AUTH_DATABASE_URL=postgresql://aquastats_auth@127.0.0.1:5432/aquastats_demo   SESSION_SECRET=local-demo-secret-0123456789abcdef-0123456789   PYTHONPATH=src .venv/Scripts/uvicorn app.main:app --port 8000
+
+# 4. Site
+cd ../web && API_URL=http://127.0.0.1:8000 APP_URL=http://127.0.0.1:3000 npm run dev   # http://127.0.0.1:3000
 ```
+
+Abre `http://127.0.0.1:3000` (não `localhost`) e entra com `treinador@demo.aquastats.test` (vista do treinador) ou `atleta@demo.aquastats.test` (vista do atleta).
+A palavra-passe de demonstração está no topo de [`apps/api/scripts/seed_synthetic.py`](apps/api/scripts/seed_synthetic.py)
+e só funciona em bases locais.
 
 ## Testes
 
@@ -141,4 +194,4 @@ desafiante com dados reais logo que haja algumas semanas de tempos cronometrados
 ## Licença
 
 Código proprietário, todos os direitos reservados ([LICENSE](LICENSE), [ADR 0001](docs/adr/0001-licenca-e-autoria.md)).
-Alterações por versão: [docs/CHANGELOG.md](docs/CHANGELOG.md).
+Alterações por versão: [CHANGELOG.md](CHANGELOG.md).
