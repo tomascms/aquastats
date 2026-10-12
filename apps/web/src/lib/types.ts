@@ -29,6 +29,8 @@ export type WellnessEntry = {
   gym: GymType | null;
   /** How recovered the swimmer feels, 1 (very tired) to 5 (fresh). */
   recovery?: number | null;
+  /** Effort of the day's training, CR-10 session RPE (Foster 2001): 0 rest to 10 maximal. */
+  rpe?: number | null;
 };
 
 export type PoolCourse = "scm" | "lcm";

@@ -222,3 +222,20 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 - [ ] Verificar `/api/v1/health/ready` (15 pedidos, 200, p50 ~190 ms) e login; apagar `apps/api/.env.owner`.
 - Vigilância (passo 8): tarefas `aquastats-vigilancia-24h` (12/10 21:45) e `aquastats-vigilancia-48h-limpeza`
   (13/10 21:45, faz a limpeza final se estiver limpa).
+
+## Natação para o treinador (PR #27, branch `feat/natacao-v2`, 12/10/2026)
+
+- [x] Fase 0: pré-registo do gerador 4.0 (`docs/ml/protocolo.md`)
+- [x] Fase 1: `docs/natacao/referencias.md` (fontes datadas; lacunas marcadas)
+- [x] Fase 2: gerador 4.0 + invariantes G1–G8; tabela de realismo em `docs/natacao/gerador.md`
+- [x] Backtest de confirmação v1.0.1: M1–M3 ✓ (`docs/ml/modelo-atual.md`)
+- [x] Fase 3: `docs/natacao/produto-treinador.md`
+- [x] Fase 4: perfil do atleta, distribuição de zonas, modelo em "Como se calculou"; testes, tsc, eslint, pytest, build
+- [x] Fase 5: indicadores.md, guia-do-treinador.md, ADR 0004, README, CHANGELOG, capturas
+- [x] Sinais de treino no "Hoje" (até 8 atletas; falta medir num telemóvel real)
+- [x] Análise do treino por série e atleta; plano de prova com parciais-alvo
+- [x] Plano de época sintético no seed; bem-estar na demo; conta de atleta ligada a quem treinou por último
+- [x] RPE da sessão: 1 toque no calendário do atleta, validado na API (0–10), média de 7 dias no perfil; na demo derivado do treino de cada dia
+- [ ] Deploy: só com "autorizo o passo N"
+- Demo local: Postgres próprio em 127.0.0.1:5545 (`aquastats_demo`), API 8001, site 127.0.0.1:3002 a partir do
+  worktree `../app-demo` (o `next dev` da 3000 e o Postgres da 5544 pertencem a outra sessão; o da 5544 está avariado).

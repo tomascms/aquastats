@@ -223,10 +223,12 @@ export function runStateModel(
 
   // Individual in-set fatigue (fatigue.ts): one posterior per athlete, started from the team's.
   const fatigue = new Map<string, FatigueProfile>([...(resume?.fatigue ?? [])].map(([id, profile]) => [id, profile.clone()]));
+  // v1.0.1: a newcomer starts from the team as it was at the start of the day, never from teammates' reps of that day.
+  let dayFatiguePrior: ReturnType<typeof teamFatiguePrior> | null = null;
   const fatigueFor = (athleteId: string) => {
     let profile = fatigue.get(athleteId);
     if (!profile) {
-      profile = new FatigueProfile(teamFatiguePrior([...fatigue.values()], fatigueGridOf), fatigueGridOf);
+      profile = new FatigueProfile(dayFatiguePrior ?? teamFatiguePrior([...fatigue.values()], fatigueGridOf), fatigueGridOf);
       fatigue.set(athleteId, profile);
     }
     return profile;
@@ -291,6 +293,7 @@ export function runStateModel(
 
   for (const day of [...days].sort((a, b) => a - b)) {
     if (resume && day <= resume.day) continue;
+    dayFatiguePrior = [...repDays].some(([id, byDay]) => !fatigue.has(id) && byDay.has(day)) ? teamFatiguePrior([...fatigue.values()], fatigueGridOf) : null;
     if (!checkpointTaken && day > hooks.checkpointAt!) {
       hooks.onCheckpoint?.(checkpoint(hooks.checkpointAt!));
       checkpointTaken = true;

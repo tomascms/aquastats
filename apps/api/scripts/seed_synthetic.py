@@ -102,12 +102,19 @@ def main(path: str) -> None:
             conn.execute("insert into team_members (team_id, user_id, status) values (%s, %s, %s)", (team, user_id, status))
 
         athletes = data["athletes"]
+        # The demo swimmer account is the athlete who trained most recently, so the swimmer screens show this season.
+        last_seen = {}
+        for w in data["workouts"]:
+            for aid in w["athleteIds"]:
+                last_seen[aid] = max(last_seen.get(aid, ""), w["date"])
+        demo_athlete = max(data["athletes"], key=lambda a: (last_seen.get(a["id"], ""), -data["athletes"].index(a)))["id"]
         with conn.cursor().copy(
             "copy athletes (id, team_id, user_id, name, date_of_birth, primary_stroke, is_placeholder, extra) from stdin"
         ) as copy:
             for index, a in enumerate(athletes):
                 extra = {"groupName": a["groupName"], "gender": a["gender"], "wellness": a.get("wellness") or [], "synthetic": True}
-                copy.write_row((a["id"], team, swimmer if index == 0 else None, a["name"], a["dateOfBirth"], a["primaryStroke"], index != 0, Jsonb(extra)))
+                linked = a["id"] == demo_athlete
+                copy.write_row((a["id"], team, swimmer if linked else None, a["name"], a["dateOfBirth"], a["primaryStroke"], not linked, Jsonb(extra)))
 
         with conn.cursor().copy(
             "copy workouts (id, team_id, created_by, title, workout_date, shift, athlete_ids, blocks, extra) from stdin"
@@ -125,9 +132,23 @@ def main(path: str) -> None:
                                 Jsonb(splits), t.get("stroke") or "free", coach, t.get("recordedAt") or now))
 
         _seed_competitions(conn, data, team, coach)
+        for plan in data.get("seasonPlans") or []:
+            payload = {"macros": plan["macros"], "mesos": [], "competitions": plan["competitions"], "tests": [], "weeklyVolumes": []}
+            conn.execute(
+                "insert into season_plans (id, team_id, name, start_date, end_date, description, payload, created_by) "
+                "values (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (plan["id"], team, plan["name"], plan["start"], plan["end"], "Plano sintético: fases seguidas pelo gerador.", Jsonb(payload), coach),
+            )
+        for sheet in data.get("attendance") or []:
+            marks = [{**m, "volumeM": 0} for m in sheet["marks"]]
+            conn.execute(
+                "insert into attendance_sessions (id, team_id, workout_id, session_date, group_name, marks, created_by) "
+                "values (%s, %s, %s, %s, %s, %s, %s)",
+                (sheet["id"], team, sheet["workoutId"], sheet["date"], sheet["groupName"], Jsonb(marks), coach),
+            )
         conn.commit()
         counts = {table: conn.execute(f"select count(*) from {table}").fetchone()[0]
-                  for table in ("athletes", "workouts", "time_logs", "competitions", "meet_entries", "meet_results")}
+                  for table in ("athletes", "workouts", "time_logs", "attendance_sessions", "season_plans", "competitions", "meet_entries", "meet_results")}
     print(f"seeded synthetic team (seed {data['seed']}): {counts}")
 
 
@@ -159,8 +180,9 @@ def _seed_competitions(conn: psycopg.Connection, data: dict, team: uuid.UUID, co
             )
             mm, ss, cc = _time_parts(race["timeS"])
             conn.execute(
-                "insert into meet_results (entry_id, mm, ss, cc, recorded_by, extra) values (%s, %s, %s, %s, %s, %s)",
-                (entry, mm, ss, cc, coach, Jsonb({"source": "manual"})),
+                "insert into meet_results (entry_id, mm, ss, cc, splits, recorded_by, extra) values (%s, %s, %s, %s, %s, %s, %s)",
+                (entry, mm, ss, cc, Jsonb(race.get("splits") or []), coach,
+                 Jsonb({"source": "manual", "reactionS": race.get("reactionS")})),
             )
 
 

@@ -27,7 +27,19 @@ querem ver a sua evolução e os objetivos sem expor os dados aos colegas.
 - **Competições:** inscrições, resultados, ficheiros oficiais (Lenex/PDF, leitura assistida por IA) e
   resultados ao vivo; análise de prova (parciais, frequência, distância por braçada).
 - **Época e carga:** macrociclos, carga aguda:crónica (EWMA), simulação de taper.
-- **Treinador, "Hoje":** quem merece atenção e porquê (carga, falta de tempos, bem-estar), sem prescrições; comparação por dia, semana, mês e ano.
+- **Treinador, "Hoje":** quem merece atenção e porquê (carga, falta de tempos, bem-estar); comparação por dia, semana, mês e ano.
+- **Perfil do atleta — "Que nadador é e o que treinar agora?":** nível por pontos World Aquatics, prova mais forte e
+  mais fraca, CSS (teste 400/200), zonas de treino pessoais, se a intensidade de cada zona foi a pedida, queda de
+  ritmo nas séries e **sinais de treino** com dado, razão, incerteza e alternativa (o treinador decide; sem conselho
+  médico nem risco de lesão). Só de tempos registados; fórmulas e fontes em
+  [docs/natacao/indicadores.md](docs/natacao/indicadores.md), perguntas e ecrãs em
+  [docs/natacao/produto-treinador.md](docs/natacao/produto-treinador.md), leitura em
+  [docs/natacao/guia-do-treinador.md](docs/natacao/guia-do-treinador.md).
+- **Hoje — "Que treino a evidência sugere hoje?":** sinais de treino da equipa, prova a aproximar-se.
+- **Treino — "O treino foi feito ao ritmo pedido?":** por série e atleta, ritmo vs alvo da zona, queda e saída.
+- **Atleta — "Que tempo e que parciais pedir?":** plano de prova com parciais por 50 m e pontos do alvo.
+- **Época — "A distribuição de zonas está certa para a fase?":** volume da equipa por zona contra uma referência
+  indicativa da fase do plano.
 - **Atleta:** evolução, objetivos com progresso, recordes, bem-estar, e uma nota clara sobre o que o treinador vê.
 - **Modelo de previsão (v1.0, em sombra):** ver abaixo.
 
@@ -58,6 +70,8 @@ produção cobre 24–77 %). A produção ainda não tem tempos reais para o con
 **em sombra**: grava previsões num ledger imutável, e o treinador continua a ver o modelo anterior. O motor
 também estima tempos de prova, mas isso só foi validado em sintético e não aparece na app. A app não mostra
 probabilidades de quebra de série nem "saída recomendada".
+A fiabilidade do modelo fica em "Como se calculou"; os ecrãs mostram natação, não o modelo
+([ADR 0004](docs/adr/0004-dashboards-orientados-a-decisao-do-treinador.md)).
 Ficha completa: [docs/ml/README.md](docs/ml/README.md).
 
 ## Segurança e privacidade
@@ -94,7 +108,8 @@ cp .env.example .env          # DATABASE_URL de uma base local ou de staging
 PYTHONPATH=src .venv/Scripts/uvicorn app.main:app --reload --port 8000
 
 # Dados sintéticos para demonstração
-cd ../web && npx tsx scripts/export-synthetic.ts --athletes 30 --seasons 4 --seed 9001 --out ../../.local/synthetic.json
+# Gerador 4.0 (6 níveis, todas as reps cronometradas): docs/natacao/gerador.md; 2 épocas chegam para a demo
+cd ../web && npx tsx scripts/export-synthetic.ts --athletes 30 --seasons 2 --seed 9001 --out ../../.local/synthetic.json
 cd ../api && DATABASE_URL=postgresql://postgres@127.0.0.1:5432/aquastats .venv/Scripts/python scripts/seed_synthetic.py ../../.local/synthetic.json
 
 # Site (Next.js 16)

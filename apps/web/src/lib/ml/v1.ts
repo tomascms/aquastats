@@ -7,7 +7,7 @@ import { DEFAULT_OPTIONS, type StateModelOptions } from "./state-model";
  * tails (E6), individual in-set fatigue with a cliff and a recalibrated break probability (E12) — and
  * race-time forecasts (E13, races.ts). Changing anything here is a new version.
  */
-export const V1_VERSION = "1.0";
+export const V1_VERSION = "1.0.1";
 
 export const V1_OPTIONS: StateModelOptions = {
   ...DEFAULT_OPTIONS,

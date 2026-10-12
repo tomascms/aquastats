@@ -235,3 +235,24 @@ npx tsx scripts/ml-races.ts --seeds dev
 npx tsx scripts/ml-error-sources.ts
 node --expose-gc --import tsx scripts/ml-perf.ts
 ```
+
+## Gerador 4.0 — backtest de confirmação (2026-10-12)
+
+Pré-registo: [`protocolo.md`](protocolo.md), adenda gerador 4.0. Uma única execução, sementes 6201–6215, horizonte
+dia, v1.0.1 contra "último valor", gerador congelado (4.ª vez) antes de correr. Resultado completo:
+[`results/confirmacao-gerador4.md`](results/confirmacao-gerador4.md).
+
+| Célula | MAPE último valor | MAPE v1.0.1 | ΔMAPE [IC 95 %] | Cobertura 80 % |
+|---|---|---|---|---|
+| arranque | 1,52 % | 1,34 % | −0,179 [−0,201; −0,157] | 79,0 % |
+| esparso | 1,44 % | 1,22 % | −0,215 [−0,233; −0,195] | 79,5 % |
+| típico | 1,55 % | 1,36 % | −0,192 [−0,211; −0,169] | 79,5 % |
+| denso | 1,56 % | 1,37 % | −0,187 [−0,207; −0,167] | 79,3 % |
+
+- M1 ✓ (IC < 0 nas 4), M2 ✓ (cobertura 79,0–79,5 %), M3 ✓ (fuga 0). Todos os subgrupos (sexo, escalão, estilo) e
+  atípicos melhoram; nenhum atleta piora com IC > 0.
+- O "NÃO MANTER" do ficheiro vem das regras R3/R4 do protocolo de experiências (CRPS e calibração contra o campeão),
+  que não se aplicam a um campeão sem intervalo ("último valor"). Os critérios desta adenda são M1–M3.
+- **Não comparar com o gerador 3.0** (1,56–2,98 %): o MAPE mais baixo vem de dados completos sem erros de digitação
+  e com muitas reps fáceis (aquecimento, A1) agora cronometradas, não de uma melhoria do modelo.
+- Limite: tudo continua a ser sintético; em dados reais o v1.0.1 não foi avaliado (0 tempos reais).

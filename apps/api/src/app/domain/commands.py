@@ -196,7 +196,7 @@ def _upsert_seed_records(session: Session, athlete_id: UUID, records: list[dict]
 
 
 def _parse_wellness(raw) -> list[dict]:
-    """Daily wellness: sleep hours, gym session and how recovered the swimmer feels (1–5)."""
+    """Daily wellness: sleep hours, gym session, how recovered the swimmer feels (1–5) and session RPE (CR-10, 0–10)."""
     by_day: dict[str, dict] = {}
     for item in raw if isinstance(raw, list) else []:
         if not isinstance(item, dict):
@@ -212,13 +212,18 @@ def _parse_wellness(raw) -> list[dict]:
             recovery = int(item["recovery"]) if item.get("recovery") not in (None, "") else None
         except (TypeError, ValueError):
             recovery = None
+        try:
+            rpe = int(item["rpe"]) if item.get("rpe") not in (None, "") else None
+        except (TypeError, ValueError):
+            rpe = None
         entry = {
             "date": day.isoformat(),
             "sleepHours": sleep if sleep is not None and 0 <= sleep <= 24 else None,
             "gym": item.get("gym") if item.get("gym") in {"strength", "mobility", "explosive"} else None,
             "recovery": recovery if recovery is not None and 1 <= recovery <= 5 else None,
+            "rpe": rpe if rpe is not None and 0 <= rpe <= 10 else None,
         }
-        if entry["sleepHours"] is not None or entry["gym"] or entry["recovery"]:
+        if entry["sleepHours"] is not None or entry["gym"] or entry["recovery"] or entry["rpe"] is not None:
             by_day[entry["date"]] = entry
     return sorted(by_day.values(), key=lambda entry: entry["date"])[-400:]
 

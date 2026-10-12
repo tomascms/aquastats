@@ -57,7 +57,7 @@ describe("synthetic generator v2", () => {
   });
 
   it("times race-pace sets more often than aerobic sets when data is missing", () => {
-    const big = generateDataset("tipico", 3);
+    const big = generateDataset("tipico", 3, { ...DEFAULT_VARIANT, data: "em-falta" });
     const rows = [...teamData(big).rows.values()].flat();
     const share = (pred: (intensity: string) => boolean) => rows.filter((row) => pred(row.intensity)).length;
     assert.ok(share((i) => i.startsWith("P") && i !== "PROG" && i !== "PA") > 0);
@@ -67,7 +67,7 @@ describe("synthetic generator v2", () => {
 
   it("keeps less workout content as the context level drops", () => {
     const meters = (context: "nenhum" | "basico" | "carga") =>
-      generateDataset("esparso", 4, { ...DEFAULT_VARIANT, context }).workouts.reduce((sum, workout) => sum + workout.blocks.length, 0);
+      generateDataset("esparso", 4, { ...DEFAULT_VARIANT, data: "em-falta", context }).workouts.reduce((sum, workout) => sum + workout.blocks.length, 0);
     assert.ok(meters("nenhum") < meters("basico"));
     assert.ok(meters("basico") < meters("carga"));
   });
@@ -77,7 +77,10 @@ describe("synthetic generator v2", () => {
       const ratios: number[] = [];
       for (const seed of [1, 2, 3]) {
         const ds = generateDataset(name, seed, { ...DEFAULT_VARIANT, data: "completos" });
+        // Adults only: in growing swimmers a season's growth outweighs three weeks of detraining.
+        const adults = new Set(ds.athletes.filter((a) => (dayNumber(ds.returns[1].team) - dayNumber(a.dateOfBirth)) / 365.25 >= 18).map((a) => a.id));
         for (const [id, rows] of teamData(ds).rows) {
+          if (!adults.has(id)) continue;
           const back = dayNumber(ds.returns[1].athletes[id]);
           const byGroup = new Map<string, { before: number[]; after: number[] }>();
           for (const row of rows) {

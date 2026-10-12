@@ -49,12 +49,13 @@ type Cell = { key: string; scenario: ScenarioName; variant: Variant; seeds: numb
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 const variantKey = (variant: Variant) => `${variant.data}/${variant.meters}/${variant.context}`;
 
-type SeedSet = "tune" | "test" | "dev" | "confirm" | "fatigue";
+type SeedSet = "tune" | "test" | "dev" | "confirm" | "fatigue" | "g4tune" | "g4dev" | "g4confirm";
 /** Seeds per set and kind of cell (protocol §5 and the final-phase addendum: dev decides, confirm is used once). */
-const SEED_BASE: Record<Exclude<SeedSet, "tune">, number> = { test: 1001, dev: 3001, confirm: 4001, fatigue: 2001 };
+const SEED_BASE: Record<Exclude<SeedSet, "tune">, number> = { test: 1001, dev: 3001, confirm: 4001, fatigue: 2001, g4tune: 6001, g4dev: 6101, g4confirm: 6201 };
 function seedsFor(seedSet: SeedSet, kind: Cell["kind"]): number[] {
   if (seedSet === "tune") return kind === "decision" ? range(1, 5) : kind === "regime" ? range(1, 3) : range(1, 2);
   const base = SEED_BASE[seedSet];
+  if (seedSet === "g4tune") return range(base, base + 4);
   return range(base, base + (kind === "decision" ? 14 : kind === "regime" ? 9 : 4));
 }
 
@@ -588,7 +589,7 @@ function main() {
     return;
   }
 
-  const seedSet: SeedSet = (["tune", "test", "dev", "confirm", "fatigue"] as const).find((name) => name === flag("seeds")) ?? "test";
+  const seedSet: SeedSet = (["tune", "test", "dev", "confirm", "fatigue", "g4tune", "g4dev", "g4confirm"] as const).find((name) => name === flag("seeds")) ?? "test";
   const compare = args.indexOf("--compare");
   if (compare >= 0) {
     const [championName, challengerName] = [args[compare + 1], args[compare + 2]];
@@ -650,7 +651,7 @@ function main() {
     const parity = parityRows(parityRuns);
     const rules = { ...base.rules, R9: Number.isFinite(r9.upper) && r9.upper < 0, R10: parityOk(parity) };
     const decision = { keep: Object.values(rules).every(Boolean), rules };
-    const seedLabel: Record<SeedSet, string> = { tune: "sementes de ajuste", test: "sementes de teste antigas", dev: "sementes de desenvolvimento", confirm: "sementes de CONFIRMAÇÃO", fatigue: "sementes da tentativa de fadiga" };
+    const seedLabel: Record<SeedSet, string> = { tune: "sementes de ajuste", test: "sementes de teste antigas", dev: "sementes de desenvolvimento", confirm: "sementes de CONFIRMAÇÃO", fatigue: "sementes da tentativa de fadiga", g4tune: "sementes de sintonia (gerador 4.0)", g4dev: "sementes de desenvolvimento (gerador 4.0)", g4confirm: "sementes de CONFIRMAÇÃO (gerador 4.0, uso único)" };
     const lines = [`# ${challenger.name} vs ${champion.name} (${seedLabel[seedSet]} ${cells[0].seeds[0]}–${cells[0].seeds[cells[0].seeds.length - 1]}, gerador ${GENERATOR_VERSION})`, ""];
     lines.push(`Decide: células "${decideCells}", horizonte ${HORIZON_LABEL[decideOn]}, métrica primária ${primary === "mape" ? "MAPE" : "CRPS"}. Mesmas reps (Δ = desafiante − campeão; IC 95 % bootstrap das sementes):`, "");
     lines.push("| Célula | Reps comuns | MAPE campeão | MAPE desafiante | ΔMAPE (pp) | ΔCRPS (pp) | Δ erro calibração 80 % (pp) | ΔMAPE atípicos (pp) |", "|---|---|---|---|---|---|---|---|");

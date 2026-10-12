@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { WorkoutAnalysis } from "@/components/workouts/workout-analysis";
 import { WorkoutSheet } from "@/components/workouts/workout-sheet";
 import { COURSE_LABEL, SHIFT_LABEL, displayTitle, formatDatePt } from "@/lib/labels";
 import { formatMeters, workoutMeters } from "@/lib/rankings";
@@ -58,6 +59,7 @@ export default function ViewWorkoutPage() {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
         <div className="space-y-4">
           <WorkoutSheet workout={workout} />
+          <WorkoutAnalysis workout={workout} />
           {present.length ? (
             <section className="overflow-x-auto rounded-2xl border border-line bg-panel p-5">
               <h2 className="font-display text-xl font-bold">{t("Planeado vs. feito")}</h2>

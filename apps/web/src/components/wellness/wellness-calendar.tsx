@@ -86,6 +86,7 @@ export function WellnessCalendar({ athlete, editable }: { athlete: Athlete; edit
                   <span className="flex items-center gap-1">
                     {entry.gym ? <span className="rounded bg-aqua px-1 text-[10px] font-bold text-white">{GYM.find((g) => g.value === entry.gym)?.short}</span> : null}
                     {entry.recovery ? <span className={`h-2 w-2 rounded-full ${RECOVERY_TONE[entry.recovery]}`} title={`${entry.recovery}/5`} /> : null}
+                    {entry.rpe != null ? <span className="font-mono text-[10px] text-mist">E{entry.rpe}</span> : null}
                   </span>
                 </>
               ) : gaps ? (
@@ -96,7 +97,7 @@ export function WellnessCalendar({ athlete, editable }: { athlete: Athlete; edit
         })}
       </div>
 
-      <p className="px-4 py-1.5 text-[11px] text-mute">{t("h = horas de sono · F/M/E = ginásio (força, mobilidade, explosão) · ponto = recuperação (vermelho cansado, verde fresco)")}</p>
+      <p className="px-4 py-1.5 text-[11px] text-mute">{t("h = horas de sono · F/M/E = ginásio (força, mobilidade, explosão) · ponto = recuperação (vermelho cansado, verde fresco) · E = esforço do treino (0–10)")}</p>
 
       {editable && selected ? (
         <DayForm key={selected} athlete={athlete} date={selected} entry={byDay.get(selected)} onDone={(next) => setSelected(next)} />
@@ -110,11 +111,12 @@ function DayForm({ athlete, date, entry, onDone }: { athlete: Athlete; date: str
   const [sleep, setSleep] = useState(entry?.sleepHours != null ? String(entry.sleepHours) : "");
   const [gym, setGym] = useState<GymType | null>(entry?.gym ?? null);
   const [recovery, setRecovery] = useState<number | null>(entry?.recovery ?? null);
+  const [rpe, setRpe] = useState<number | null>(entry?.rpe ?? null);
   const [busy, setBusy] = useState(false);
 
   async function save() {
     setBusy(true);
-    const next: WellnessEntry = { date, sleepHours: sleep ? Number(sleep.replace(",", ".")) : null, gym, recovery };
+    const next: WellnessEntry = { date, sleepHours: sleep ? Number(sleep.replace(",", ".")) : null, gym, recovery, rpe };
     try {
       await actions.patchOwnAthlete(athlete.id, { wellness: [...(athlete.wellness ?? []).filter((item) => item.date !== date), next] });
       toast.success(t("Guardado"));
@@ -162,6 +164,22 @@ function DayForm({ athlete, date, entry, onDone }: { athlete: Athlete; date: str
               type="button"
               onClick={() => setRecovery((current) => (current === value ? null : value))}
               className={`h-9 w-9 rounded-lg text-sm font-bold ${recovery === value ? `${RECOVERY_TONE[value]} text-white` : "border border-line bg-panel text-mute"}`}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="text-xs font-semibold text-mute">
+        {t("Esforço do treino (0 descanso – 10 máximo)")}
+        <div className="mt-1 flex flex-wrap gap-1" role="group" aria-label={t("Esforço do treino (0 descanso – 10 máximo)")}>
+          {Array.from({ length: 11 }, (_, value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={rpe === value}
+              onClick={() => setRpe((current) => (current === value ? null : value))}
+              className={`h-9 w-8 rounded-lg text-sm font-bold ${rpe === value ? "bg-pool text-white" : "border border-line bg-panel text-mute"}`}
             >
               {value}
             </button>

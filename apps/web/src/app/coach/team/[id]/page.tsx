@@ -4,6 +4,8 @@ import Link from "next/link";
 import { GoalsPanel } from "@/components/goals/goals-panel";
 import { AcwrChart } from "@/components/season/acwr-chart";
 import { Modal } from "@/components/ui/modal";
+import { AthleteProfile } from "@/components/team/athlete-profile";
+import { RacePlan } from "@/components/team/race-plan";
 import { SwimRankingsCard } from "@/components/team/swimrankings-card";
 import { WellnessCalendar } from "@/components/wellness/wellness-calendar";
 import { useParams, useRouter } from "next/navigation";
@@ -152,6 +154,10 @@ export default function AthletePage() {
           router.push("/coach/team");
         }}
       />
+
+      <AthleteProfile athlete={athlete} />
+
+      <RacePlan athlete={athlete} />
 
       <SwimRankingsCard athlete={athlete} role="coach" />
 

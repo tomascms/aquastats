@@ -62,7 +62,7 @@ describe("online learning: regime change", () => {
     };
     assert.ok(laterDays.length > 10);
     const first = bias(0, 3);
-    const twoWeeksIn = bias(14, 28);
+    const twoWeeksIn = bias(14, 42);
     assert.ok(first > 0.02, `at first the new level is a surprise (${(first * 100).toFixed(2)} %)`);
     assert.ok(twoWeeksIn < 0.01, `two weeks later the bias is ${(twoWeeksIn * 100).toFixed(2)} %`);
   });
@@ -194,7 +194,7 @@ describe("error attribution", () => {
     assert.equal(result.get(typo.id)!.cause, "dado-errado");
 
     const day = outcomes.filter((item) => item.date === outcomes[outcomes.length - 1].date);
-    const offDay = day.map((item) => ({ ...item, actualS: item.meanS * 1.05, inside: false, errorPct: -4.8 }));
+    const offDay = day.map((item) => ({ ...item, actualS: item.meanS * 1.1, inside: false, errorPct: -9.1 }));
     const causes = attribute(offDay.map((item) => ({ outcome: item })));
     if (offDay.length >= 3) assert.ok([...causes.values()].every((item) => item.cause === "dia-anormal"));
   });

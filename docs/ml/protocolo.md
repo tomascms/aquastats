@@ -170,3 +170,64 @@ Pré-registo completo em [`experiments.md`](experiments.md) §2. Em resumo:
   de 0,10 pp nem perde mais de 2 pp de calibração.
 - **Paragem**: dois pacotes seguidos sem experiência aceite, ou 15 experiências gastas → congelar
   v1.0 → confirmação única → entrega.
+
+## Adenda gerador 4.0 — realismo para o treinador (2026-10-12, antes de qualquer código ou resultado)
+
+Motivo: críticas do treinador aos dados sintéticos (tempos irrealistas, reps por cronometrar,
+produto centrado no modelo). O pedido chama-lhe "gerador v2"; no repositório é o **gerador 4.0**.
+
+**Regra de independência.** Os parâmetros do gerador 4.0 vêm só de
+[`../natacao/referencias.md`](../natacao/referencias.md). O gerador é congelado (commit registado
+em `../natacao/gerador.md`) **antes** de o modelo correr nele. Depois de ver resultados do modelo,
+nenhum parâmetro do gerador muda por causa desses resultados; um erro de realismo detetado depois
+é corrigido, registado aqui com data, e o backtest repete-se inteiro.
+
+**Modelo.** O v1.0 fica congelado. Nesta adenda não há experiências de modelo: só se mede o v1.0
+no gerador novo. Adaptações do harness ao formato novo (sem efeito nas previsões) são permitidas
+e testadas com o gerador 3.0 (previsões idênticas às de `results/confirmacao-v1.json`).
+
+**Sementes.**
+- Sintonia 6001–6005: depurar gerador e harness; nunca para relatar o modelo.
+- Desenvolvimento 6101–6115: invariantes do gerador e tabelas de realismo.
+- Confirmação 6201–6215: **uma única execução** do backtest v1.0 no gerador 4.0, nas 4 células de
+  decisão (`arranque`, `esparso`, `tipico`, `denso`), horizonte dia. É o número que se relata.
+
+**Critérios de sucesso do gerador** (invariantes, testes automáticos no CI, sementes 6101–6115):
+- G1: 0 reps por cronometrar para atletas presentes; ausência = falta registada, sem treino parcial.
+- G2: ritmo monotónico com a intensidade, por atleta e por condições iguais.
+- G3: melhores tempos dentro da banda do nível do atleta (tabelas de referência).
+- G4: razões 50/100/200/400 e 25 m/50 m dentro dos limites das referências.
+- G5: soma dos parciais = tempo final (tolerância 0,01 s).
+- G6: variação dia a dia do ritmo em condições iguais dentro do limite das referências (sem saltos).
+- G7: mesma semente → dados idênticos.
+- G8: distribuição por nível e sexo conforme a especificação.
+
+**Critérios para o modelo** (relatados tal como saírem; é por eles que se decide se mudam a decisão de o ligar):
+- M1: MAPE do v1.0 abaixo da referência "último valor" com IC 95 % < 0 em ≥ 3 de 4 células.
+- M2: cobertura a 80 % entre 75 % e 85 % em todas as 4.
+- M3: fuga temporal 0.
+Se M1 ou M2 falharem, o trabalho pára e pergunta-se ao dono antes de qualquer alteração ao modelo.
+O MAPE pode subir face ao gerador 3.0 (dados mais realistas e com mais níveis); isso relata-se, não se corrige.
+
+### Registo de tentativas (gerador 4.0)
+
+| Data | Tentativa | Resultado |
+|---|---|---|
+| 2026-10-12 | Níveis, razões de distância/estilo, reps todas cronometradas, faltas, parciais | G1 falhou: só o 1.º segmento de cada bloco era simulado (defeito do 3.0) → corrigido |
+| 2026-10-12 | G6 | Falhou por defeito do teste (misturava estilos na mesma chave) → chave inclui o estilo |
+| 2026-10-12 | Volume semanal | Elite ≈ 12 km/semana (fora das referências) → grupos de treino por nível; volume dentro das referências |
+| 2026-10-12 | Destreino de agosto | Adultos ≈ 0 % mais lentos: carga de referência de Banister sobrestimada 15–30 % → calibrada para a carga efetiva medida; níveis intercalados para equipas pequenas terem adultos |
+| 2026-10-12 | Modelo: propriedade "independente da ordem" falhou no gerador 4.0 | Fuga: o prior de fadiga de um atleta novo usava séries de colegas do mesmo dia (`forecaster.ts`, `fatigueFor`), proibido no horizonte dia. Corrigido como **v1.0.1** (desvio registado: é correção de fuga, não experiência); checksums dourados retirados de novo. Efeito: máx. 8·10⁻⁵ em log, ≈ 28 % das previsões do dia num cenário típico |
+| 2026-10-12 | Zonas de treino (detetado pelo teste de coerência dos indicadores, antes de qualquer resultado do modelo; o backtest em curso foi interrompido sem ser lido) | Zonas eram frações da velocidade dos 1500 m, não da CSS 200/400 das referências (A2 saía ≈ CSS + 8 s, na fronteira do A1) → ancoradas na CSS; congelamento e backtest repetidos |
+| 2026-10-12 | Validação no site local (perfil do atleta, antes de qualquer resultado do modelo; backtest interrompido sem ser lido) | Fundista de elite com 400 L acima do recorde mundial (1118 pontos): a banda de nível só fixava o 100 L → nível passa a fixar os pontos da prova principal da especialidade; 50/100 com razão própria; invariante G3 alargado a "nenhuma prova > 1000 pontos" |
+| 2026-10-12 | G2 com as zonas na CSS | A3 mais lento que A2 num atípico: o desvio atípico do A2 passava o A3 → limitado a A3 − 0,015; velocidade crítica do W′ = 0,986 × CSS (Dekerle) ajustada à piscina; teste compara intensidades na mesma distância |
+| 2026-10-12 | Validação no site (perfil do atleta; backtest interrompido sem ser lido) | Provas no taper acima da banda (velocista de elite com 962 pontos): banda passa a ser a da prova no pico (fresco = +2,5 %); velocistas sem CSS → teste CSS 400/200 em treino de 7 em 7 semanas; defeito na variante em-falta com blocos de teste corrigido |
+| 2026-10-12 | Backtest de confirmação (gerador congelado 4.ª vez; substituído pela linha seguinte) | M1 ✓, M2 ✓ (79,0–79,5 %), M3 ✓; ver `modelo-atual.md` |
+| 2026-10-12 | Validação no site (perfil, análise do treino) | Teste CSS em treino "quebrava" (W′ abaixo do que um 400 máximo exige) → CSS medida 7 % lenta; recuperação 1–5 sempre baixa (centrada em zero) → W′ mínimo coerente com as razões 200/400; recuperação centrada na forma habitual; invariante G9. Gerador congelado (5.ª vez) e confirmação repetida com as mesmas sementes 6201–6215 (os resultados anteriores não motivaram a mudança: vieram do ecrã) |
+
+Gerador 4.0 congelado (4.ª vez, versão final) no commit que acrescenta esta linha, antes de qualquer resultado do modelo.
+
+Gerador 4.0 (histórico) congelado (3.ª vez) no commit que acrescenta esta linha, antes de qualquer resultado do modelo.
+
+Gerador 4.0 (histórico) congelado (2.ª vez) no commit que acrescenta esta linha (ver `git log -- docs/natacao/gerador.md`), antes de qualquer resultado do modelo.
+

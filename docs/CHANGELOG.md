@@ -1,5 +1,24 @@
 # Registo de alterações
 
+## [Por lançar]
+
+### Produto para o treinador
+- Perfil do atleta "Que nadador é e o que treinar agora?": nível por pontos WA, CSS, zonas pessoais, aderência de
+  intensidade, queda de ritmo e sinais de treino com dado, razão, incerteza e alternativa (ADR 0004).
+- Época: distribuição de zonas da equipa vs referência indicativa da fase.
+- Fiabilidade do modelo passa para "Como se calculou".
+- `lib/indicators.ts` com testes; documentação em `docs/natacao/` (referências com fontes, gerador, indicadores,
+  produto, guia do treinador).
+
+### Dados sintéticos
+- Gerador 4.0: 6 níveis (iniciação a elite) ancorados em pontos World Aquatics, razões de distância e estilo dos
+  recordes mundiais, zonas na CSS 200/400, todas as reps dos presentes cronometradas, faltas registadas, parciais e
+  reação, grupos de treino por nível, teste CSS de 7 em 7 semanas; invariantes G1–G8 no CI.
+- Corrige: blocos com vários segmentos só simulavam o 1.º.
+
+### Modelo
+- v1.0.1: corrige uma fuga (o prior de fadiga de um atleta novo usava séries de colegas do mesmo dia).
+
 ## [1.0.0] — 2026-10-11
 
 ### Segurança

@@ -354,7 +354,13 @@ export function TreinoDashboard({
           <RepTimeline items={visible.slice(-60)} predictions={predictions} />
         </section>
 
-        <TrackRecordPanel athleteId={athleteId} athletes={athletes} workouts={workouts} timeLogs={timeLogs} races={races} canReadLedger={canReadLedger} />
+        {/* Model reliability stays behind "Como se calculou" (ADR 0004): the coach reads swimming, not the model. */}
+        <details className="rounded-2xl border border-line bg-panel p-5">
+          <summary className="cursor-pointer text-sm font-semibold text-mist">{t("Como se calculou: fiabilidade das estimativas")}</summary>
+          <div className="mt-3">
+            <TrackRecordPanel athleteId={athleteId} athletes={athletes} workouts={workouts} timeLogs={timeLogs} races={races} canReadLedger={canReadLedger} />
+          </div>
+        </details>
 
         <section className="rounded-2xl border border-line bg-panel p-5">
           <header className="mb-3 flex flex-wrap items-end justify-between gap-2">

@@ -9,10 +9,11 @@ import { V1_CALIBRATION, V1_OPTIONS } from "./v1";
 /*
  * v1.0 is frozen: these checksums were taken when it was frozen (docs/ml/experiments.md). If a change
  * anywhere moves a v1.0 forecast, this fails — that change is a new model version, not a refactor.
+ * Retaken 2026-10-12 for v1.0.1 (same-day fatigue-prior leak fixed) on generator 4.0 (docs/ml/protocolo.md).
  */
 const GOLDEN = {
-  day: { n: 526, sumMean: 33027.948069, sumHi: 34958.457288 },
-  rep: { n: 526, sumMean: 33140.017508, sumHi: 33950.753127 },
+  day: { n: 8708, sumMean: 975355.093268, sumHi: 1006255.429138 },
+  rep: { n: 8708, sumMean: 975466.523427, sumHi: 990452.816087 },
 };
 
 describe("v1.0 (frozen)", () => {

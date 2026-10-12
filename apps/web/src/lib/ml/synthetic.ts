@@ -1,4 +1,4 @@
-import type { Gear, Intensity, PoolCourse, RepDetail, SetSegment, Shift, Stroke, TimeLog, WellnessEntry, Workout, WorkoutBlock } from "../types";
+import type { Gear, Intensity, PoolCourse, RepDetail, SetSegment, Shift, SplitTime, Stroke, TimeLog, WellnessEntry, Workout, WorkoutBlock } from "../types";
 import { createRng, type Rng } from "./rng";
 
 /*
@@ -45,7 +45,7 @@ import { createRng, type Rng } from "./rng";
 
 export const SYNTHETIC_PREFIX = "syn-";
 /** Bumped whenever generated data changes; results in docs/ml/results name the version they used. */
-export const GENERATOR_VERSION = "3.0";
+export const GENERATOR_VERSION = "4.0";
 
 export type GroupName = "velocidade" | "intermedio" | "fundo";
 export type Phase = "ramp" | "general" | "specific" | "competitive" | "taper" | "transition";
@@ -55,13 +55,47 @@ export type DataLevel = "completos" | "em-falta";
 export type MetersLevel = "baixo" | "base" | "alto";
 export type ContextLevel = "nenhum" | "basico" | "carga" | "bem-estar";
 export type Variant = { data: DataLevel; meters: MetersLevel; context: ContextLevel };
-export const DEFAULT_VARIANT: Variant = { data: "em-falta", meters: "base", context: "carga" };
+export const DEFAULT_VARIANT: Variant = { data: "completos", meters: "base", context: "carga" };
+
+/** Performance levels (docs/natacao/referencias.md, "Tabela para o gerador"). */
+export type Level = "iniciacao" | "regional" | "nacional_jovem" | "nacional_absoluto" | "internacional" | "elite";
+export const LEVELS: Level[] = ["iniciacao", "regional", "nacional_jovem", "nacional_absoluto", "internacional", "elite"];
+/** World Aquatics points of the athlete's key event (dive start, 50 m pool) per level (referencias §1.6; elite capped below 930). */
+export const LEVEL_POINTS: Record<Level, [number, number]> = {
+  iniciacao: [150, 300],
+  regional: [300, 450],
+  nacional_jovem: [450, 600],
+  nacional_absoluto: [600, 750],
+  internacional: [750, 870],
+  elite: [870, 930],
+};
+/** World Aquatics 2026 long-course base times = world records (referencias §1.1). */
+export const LCM_FREE_BASE: Record<"M" | "F", Record<number, number>> = {
+  M: { 50: 20.91, 100: 46.4, 200: 102.0, 400: 219.96, 800: 452.12, 1500: 870.67 },
+  F: { 50: 23.61, 100: 51.71, 200: 112.23, 400: 234.18, 800: 484.12, 1500: 920.48 },
+};
+/** Taper (≈ 2 %) plus racing suit (≈ 0.5–1.5 %) between a fresh mid-season effort and a peak race. */
+export const PEAK_GAIN = 0.025;
+/** The event that defines a specialist's level. */
+export const KEY_EVENT: Record<"velocidade" | "intermedio" | "fundo", number> = { velocidade: 100, intermedio: 200, fundo: 400 };
+export const waPoints = (timeS: number, sex: "M" | "F", distanceM: number) => 1000 * (LCM_FREE_BASE[sex][distanceM] / timeS) ** 3;
+
+/** Age range (years) at the end of the data for each level. */
+export const LEVEL_AGE: Record<Level, [number, number]> = {
+  iniciacao: [11, 13],
+  regional: [12, 18],
+  nacional_jovem: [14, 18],
+  nacional_absoluto: [17, 26],
+  internacional: [18, 28],
+  elite: [20, 30],
+};
 export const DATA_LEVELS: DataLevel[] = ["completos", "em-falta"];
 export const METERS_LEVELS: MetersLevel[] = ["baixo", "base", "alto"];
 export const CONTEXT_LEVELS: ContextLevel[] = ["nenhum", "basico", "carga", "bem-estar"];
 
 export type AthleteProfile = {
   sex: "M" | "F";
+  level: Level;
   primaryStroke: Stroke;
   dateOfBirth: string;
   /** Adult potential: 100 m freestyle, 50 m pool, push start, fresh (s). */
@@ -71,6 +105,10 @@ export type AthleteProfile = {
   devTau: number;
   riegelShort: number;
   riegelLong: number;
+  /** Exponent below 100 m (50/100 ratio ≈ 0.45–0.47; world records 0.451 / 0.457). */
+  riegelSprint: number;
+  /** Exponent beyond 400 m (400 → 1500). */
+  riegelVeryLong: number;
   zone: Record<"SUAVE" | "A1" | "A2" | "A3" | "PROG" | "PA", number>;
   racePaceMult: number;
   strokeMult: Record<Stroke, number>;
@@ -121,6 +159,7 @@ export type SyntheticAthlete = {
   id: string;
   name: string;
   group: GroupName;
+  trainingGroup: TrainingGroup;
   gender: "M" | "F";
   dateOfBirth: string;
   primaryStroke: Stroke;
@@ -165,7 +204,30 @@ export type SyntheticRace = {
   priority: "A" | "B";
   expectedS: number;
   timeS: number;
+  /** Cumulative 50 m splits; the last one equals timeS. */
+  splits: SplitTime[];
+  reactionS: number;
 };
+
+/** A session's roll call: who was expected and did not come (an absence, not an untimed workout). */
+export type SyntheticAttendance = { workoutId: string; date: string; groupName: TrainingGroup; present: string[]; absent: string[] };
+
+/**
+ * Cumulative 50 m splits that add up exactly to `totalS`. The first 50 carries the start (dive or push) and
+ * later lengths slow by `fade` per length (positive split), as in race analyses.
+ */
+export function splitsOf(totalS: number, distanceM: number, firstGain: number, fade: number, rng: Rng): SplitTime[] {
+  const laps = Math.floor(distanceM / 50);
+  if (laps < 2) return [];
+  const weights = Array.from({ length: laps }, (_, i) => (i === 0 ? 1 - firstGain : 1 + fade * i) * (1 + rng.normal(0, 0.004)));
+  const sum = weights.reduce((a, b) => a + b, 0);
+  const totalCs = Math.round(totalS * 100);
+  let acc = 0;
+  return weights.map((w, i) => {
+    acc = i === laps - 1 ? totalCs : acc + Math.round((totalCs * w) / sum);
+    return { atM: (i + 1) * 50, mm: Math.floor(acc / 6000), ss: Math.floor((acc % 6000) / 100), cc: acc % 100 };
+  });
+}
 
 export type SyntheticDataset = {
   kind: "synthetic";
@@ -178,6 +240,7 @@ export type SyntheticDataset = {
   timeLogs: TimeLog[];
   truth: Map<string, RepTruth>;
   races: SyntheticRace[];
+  attendance: SyntheticAttendance[];
   meets: { date: string; priority: "A" | "B" }[];
   /** First and last day with data entered in the app. */
   dataStart: string;
@@ -341,6 +404,26 @@ const weekdayOf = (day: number) => (((day + 3) % 7) + 7) % 7;
 const clamp = (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value));
 const GROUPS: GroupName[] = ["velocidade", "intermedio", "fundo"];
 
+/**
+ * Training groups by level, as clubs organise lanes (docs/natacao/gerador.md). Sessions per week scale the scenario's
+ * base and reps per set scale the session, so weekly volume lands near the references (≈ 10–15 km at iniciação,
+ * 25–40 km at national youth, ≥ 45 km at international/elite).
+ */
+export type TrainingGroup = "formacao" | "competicao" | "rendimento";
+export const TRAINING_GROUPS: TrainingGroup[] = ["formacao", "competicao", "rendimento"];
+export const LEVEL_GROUP: Record<Level, TrainingGroup> = {
+  iniciacao: "formacao",
+  regional: "formacao",
+  nacional_jovem: "competicao",
+  nacional_absoluto: "competicao",
+  internacional: "rendimento",
+  elite: "rendimento",
+};
+const GROUP_SESSIONS: Record<TrainingGroup, number> = { formacao: 0.8, competicao: 1.15, rendimento: 1.45 };
+const GROUP_REPS: Record<TrainingGroup, number> = { formacao: 1.1, competicao: 1.9, rendimento: 2.5 };
+const groupSessions = (config: ScenarioConfig, group: TrainingGroup, metersFactor: number) =>
+  Math.max(2, Math.round(config.sessionsPerWeek.intermedio * GROUP_SESSIONS[group] * metersFactor));
+
 /** Physiological load per metre relative to swimming at CS: cubic in relative speed. */
 const loadPerMeter = (relSpeed: number) => Math.pow(relSpeed, 3);
 
@@ -359,13 +442,16 @@ const RESPONSIVENESS: Record<Intensity, number> = {
   P400: 1,
 };
 
-function makeProfile(rng: Rng, group: GroupName, config: ScenarioConfig, birthYearMid: number): AthleteProfile {
+function makeProfile(rng: Rng, group: GroupName, config: ScenarioConfig, level: Level, refDay: number): AthleteProfile {
   const sex = rng.chance(0.5) ? "M" : "F";
-  const talent = clamp(rng.normal(), -2, 2);
-  const t100Adult = clamp((sex === "M" ? 55.5 : 61.5) - 2.6 * talent + rng.normal(0, 0.8), 49, 72);
-  const riegelShort =
-    group === "velocidade" ? rng.uniform(1.07, 1.1) : group === "fundo" ? rng.uniform(1.05, 1.075) : rng.uniform(1.06, 1.085);
-  const riegelLong = riegelShort + rng.uniform(-0.025, 0.015);
+  // Distance ratios anchored on world-record ratios (200/100 ≈ 2.17–2.20, 400/200 ≈ 2.09–2.16, 1500/400 ≈ 3.93–3.96), wider for non-elite.
+  const r200 = group === "velocidade" ? rng.uniform(2.19, 2.3) : group === "fundo" ? rng.uniform(2.12, 2.19) : rng.uniform(2.16, 2.23);
+  const r400 = group === "velocidade" ? rng.uniform(2.13, 2.22) : group === "fundo" ? rng.uniform(2.05, 2.11) : rng.uniform(2.09, 2.16);
+  const r1500 = group === "fundo" ? rng.uniform(3.9, 3.97) : rng.uniform(3.95, 4.08);
+  const riegelShort = Math.log2(r200);
+  const riegelSprint = -Math.log2(rng.uniform(0.447, 0.47));
+  const riegelLong = Math.log2(r400);
+  const riegelVeryLong = Math.log(r1500) / Math.log(1500 / 400);
   const primaryStroke = rng.weighted<Stroke>([
     { value: "free", weight: 4 },
     { value: "back", weight: 2 },
@@ -373,34 +459,52 @@ function makeProfile(rng: Rng, group: GroupName, config: ScenarioConfig, birthYe
     { value: "fly", weight: 1.5 },
     { value: "im", weight: 1 },
   ]);
+  // World-record ratios vs freestyle (100 m; 200 IM vs 200 free), ± individual spread.
   const strokeMult: Record<Stroke, number> = {
     free: 1,
-    back: rng.uniform(1.07, 1.14),
-    breast: rng.uniform(1.18, 1.32),
-    fly: rng.uniform(1.03, 1.12),
-    im: rng.uniform(1.09, 1.16),
+    back: (sex === "M" ? 1.112 : 1.105) * rng.uniform(0.98, 1.03),
+    breast: (sex === "M" ? 1.226 : 1.24) * rng.uniform(0.98, 1.04),
+    fly: (sex === "M" ? 1.066 : 1.056) * rng.uniform(0.98, 1.04),
+    im: (sex === "M" ? 1.105 : 1.12) * rng.uniform(0.98, 1.03),
   };
   if (primaryStroke !== "free") strokeMult[primaryStroke] -= rng.uniform(0.02, 0.05);
   const logUniform = (lo: number, hi: number) => lo * Math.pow(hi / lo, rng.next());
-  const dPrime = group === "velocidade" ? logUniform(15, 50) : group === "fundo" ? logUniform(8, 25) : logUniform(10, 35);
-  const birthYear = birthYearMid + rng.int(-3, 3);
-  const dateOfBirth = isoOf(dayOf(`${birthYear}-01-01`) + rng.int(0, 364));
+  // Never below what the athlete's own 400 max needs above critical speed (+10 %): otherwise a CSS test "breaks".
+  const dPrime = Math.max(minReserve(r400), group === "velocidade" ? logUniform(15, 50) : group === "fundo" ? logUniform(8, 25) : logUniform(10, 35));
+  const [ageLo, ageHi] = LEVEL_AGE[level];
+  const age = rng.uniform(ageLo, ageHi + 0.99);
+  const dateOfBirth = isoOf(Math.round(refDay - age * 365.25));
+  const devA = (sex === "F" ? 0.15 : 0.22) * rng.uniform(0.6, 1.4);
+  const devTau = (sex === "F" ? 2.2 : 3) * rng.uniform(0.8, 1.2);
+  const blockGainS = rng.uniform(0.5, 1);
+  // The level fixes the points of the specialist's key event (dive start, 50 m pool) at the end of the data;
+  // the 100 follows from the distance ratios and adult potential from the growth curve.
+  const [lo, hi] = LEVEL_POINTS[level];
+  const event = KEY_EVENT[group];
+  // The band is the tapered race in a suit; the fresh mid-season time is PEAK_GAIN slower (referencias §4.3).
+  const eventTime = LCM_FREE_BASE[sex][event] * Math.cbrt(1000 / (lo + (hi - lo) * rng.uniform(0.1, 0.9))) * (1 + PEAK_GAIN);
+  const ratio = event === 100 ? 1 : event === 200 ? r200 : r200 * r400;
+  const t100Adult = (eventTime + blockGainS) / ratio / (1 + devA * Math.exp(-(age - 12) / devTau));
   return {
     sex,
+    level,
     primaryStroke,
     dateOfBirth,
     t100Adult,
-    devA: (sex === "F" ? 0.15 : 0.22) * rng.uniform(0.6, 1.4),
-    devTau: (sex === "F" ? 2.2 : 3) * rng.uniform(0.8, 1.2),
+    devA,
+    devTau,
     riegelShort,
     riegelLong,
+    riegelVeryLong,
+    riegelSprint,
+    // Fractions of the CSS 200/400 speed (referencias §4.1: A1 ≤ 88–92 %, A2 92–95 %, A3 96–99 %, PA 102–106 %).
     zone: {
-      SUAVE: rng.normal(0.79, 0.02),
-      A1: rng.normal(0.865, 0.015),
-      A2: rng.normal(0.925, 0.015),
-      A3: rng.normal(0.99, 0.012),
-      PROG: rng.normal(0.97, 0.012),
-      PA: rng.normal(1.065, 0.015),
+      SUAVE: rng.normal(0.8, 0.02),
+      A1: rng.normal(0.885, 0.012),
+      A2: rng.normal(0.935, 0.01),
+      A3: rng.normal(0.975, 0.008),
+      PROG: rng.normal(0.96, 0.01),
+      PA: rng.normal(1.04, 0.01),
     },
     racePaceMult: rng.uniform(0.975, 1),
     strokeMult,
@@ -415,7 +519,7 @@ function makeProfile(rng: Rng, group: GroupName, config: ScenarioConfig, birthYe
     },
     turnSec: rng.uniform(0.55, 1.05),
     turnSlowExp: rng.uniform(0.5, 1.5),
-    blockGainS: rng.uniform(0.5, 1),
+    blockGainS,
     dPrimeM: dPrime,
     dPrimeTauS: 30 * Math.pow(8, rng.next()),
     dPrimeKappa: rng.uniform(0.04, 0.1),
@@ -458,16 +562,22 @@ function makeProfile(rng: Rng, group: GroupName, config: ScenarioConfig, birthYe
   };
 }
 
+/**
+ * W′ (m) a maximal 400 needs above critical speed (0.986 × CSS 200/400): 400 − cs·T400 = 400 − 197.2·r/(r − 1), with
+ * r = T400/T200; plus 10 %. Independent of the athlete's speed.
+ */
+const minReserve = (r400: number) => 1.1 * (400 - (0.986 * 200 * r400) / (r400 - 1));
+
 /** An athlete who departs from the group on purpose: extreme reserve or recovery, unusual kick, reversed context. */
 function makeAtypical(rng: Rng, p: AthleteProfile): AthleteProfile {
   const extremeReserve = rng.chance(0.5);
   return {
     ...p,
     atypical: true,
-    dPrimeM: extremeReserve ? (rng.chance(0.5) ? rng.uniform(6, 9) : rng.uniform(45, 60)) : p.dPrimeM,
+    dPrimeM: Math.max(minReserve(Math.pow(2, p.riegelLong)), extremeReserve ? (rng.chance(0.5) ? rng.uniform(6, 9) : rng.uniform(45, 60)) : p.dPrimeM),
     dPrimeTauS: extremeReserve ? p.dPrimeTauS : rng.chance(0.5) ? rng.uniform(22, 32) : rng.uniform(220, 320),
     gearMult: { ...p.gearMult, legs: rng.chance(0.5) ? rng.uniform(1.12, 1.18) : rng.uniform(1.55, 1.7) },
-    zone: { ...p.zone, A2: p.zone.A2 * (rng.chance(0.5) ? 0.96 : 1.04) },
+    zone: { ...p.zone, A2: Math.min(p.zone.A2 * (rng.chance(0.5) ? 0.975 : 1.025), p.zone.A3 - 0.015) },
     morningPct: -Math.abs(p.morningPct) - 0.01,
     gymSameDay: -Math.abs(p.gymSameDay) - 0.006,
     sleepNight: -Math.abs(p.sleepNight),
@@ -478,13 +588,19 @@ function makeAtypical(rng: Rng, p: AthleteProfile): AthleteProfile {
 const ageOn = (p: AthleteProfile, day: number) => (day - dayOf(p.dateOfBirth)) / 365.25;
 
 /** Fresh, max-effort time over `distance` on `day` (50 m pool, push start): growth × piecewise power law. */
-function maxTime(p: AthleteProfile, distance: number, day: number): number {
+export function maxTime(p: AthleteProfile, distance: number, day: number): number {
   const t100 = p.t100Adult * (1 + p.devA * Math.exp(-(ageOn(p, day) - 12) / p.devTau));
-  const k = distance <= 100 ? p.riegelShort : p.riegelLong;
-  return t100 * Math.pow(distance / 100, k);
+  if (distance < 100) return t100 * Math.pow(distance / 100, p.riegelSprint);
+  if (distance <= 200) return t100 * Math.pow(distance / 100, p.riegelShort);
+  const t200 = t100 * Math.pow(2, p.riegelShort);
+  if (distance <= 400) return t200 * Math.pow(distance / 200, p.riegelLong);
+  return t200 * Math.pow(2, p.riegelLong) * Math.pow(distance / 400, p.riegelVeryLong);
 }
 
-const criticalSpeed = (p: AthleteProfile, day: number) => 1500 / maxTime(p, 1500, day);
+/** CSS from the 200/400 test, the anchor of training zones (referencias §4.1). */
+export const cssSpeed = (p: AthleteProfile, day: number) => 200 / (maxTime(p, 400, day) - maxTime(p, 200, day));
+/** Physiological critical speed of the W′ balance: ≈ 1.4 % below the CSS 200/400 (Dekerle; referencias §2.3), so threshold work is sustainable. */
+const criticalSpeed = (p: AthleteProfile, day: number) => cssSpeed(p, day) * 0.986;
 
 function targetSpeed(p: AthleteProfile, intensity: Intensity, distance: number, day: number): number {
   switch (intensity) {
@@ -498,17 +614,17 @@ function targetSpeed(p: AthleteProfile, intensity: Intensity, distance: number, 
       return (event / maxTime(p, event, day)) * p.racePaceMult;
     }
     default:
-      return criticalSpeed(p, day) * p.zone[intensity];
+      return cssSpeed(p, day) * p.zone[intensity];
   }
 }
 
 /** Extra walls in a 25 m pool compared with a 50 m pool for this distance. */
 export const extraTurns = (distance: number) => Math.max(0, Math.ceil(distance / 25) - 1) - Math.max(0, Math.ceil(distance / 50) - 1);
 
-type RepSpec = { distanceM: number; intensity: Intensity; fromBlock: boolean; gear: Gear[]; stroke: Stroke };
+export type RepSpec = { distanceM: number; intensity: Intensity; fromBlock: boolean; gear: Gear[]; stroke: Stroke };
 
 /** Fresh time of a rep with everything structural applied (stroke, gear, pool, start). */
-function structuralTime(p: AthleteProfile, rep: RepSpec, course: PoolCourse, day: number): { timeS: number; relSpeed: number } {
+export function structuralTime(p: AthleteProfile, rep: RepSpec, course: PoolCourse, day: number): { timeS: number; relSpeed: number } {
   const v = targetSpeed(p, rep.intensity, rep.distanceM, day);
   let time = rep.distanceM / v;
   time *= p.strokeMult[rep.stroke];
@@ -637,6 +753,24 @@ function phaseOf(season: Season, day: number): Phase {
   return "specific";
 }
 
+/**
+ * The season plan the generator follows, as a coach would enter it: one macro per run of weeks in the same phase
+ * (the return ramp counts as general preparation) and the A meets. Pure: it does not touch the random stream.
+ */
+export function seasonPlansOf(config: ScenarioConfig): { start: string; end: string; macros: { type: string; start: string; end: string }[]; meetsA: string[] }[] {
+  const PLAN_PHASE: Record<Phase, string> = { ramp: "general", general: "general", specific: "specific", competitive: "competitive", taper: "taper", transition: "transition" };
+  return buildSeasons(config).map((season) => {
+    const macros: { type: string; start: string; end: string }[] = [];
+    for (let day = season.returnDay; day <= season.endDay; day += 7) {
+      const type = PLAN_PHASE[phaseOf(season, day)];
+      const last = macros[macros.length - 1];
+      if (last && last.type === type) last.end = isoOf(Math.min(day + 6, season.endDay));
+      else macros.push({ type, start: isoOf(day), end: isoOf(Math.min(day + 6, season.endDay)) });
+    }
+    return { start: isoOf(season.returnDay), end: isoOf(season.endDay), macros, meetsA: season.meets.filter((m) => m.priority === "A").map((m) => isoOf(m.day)) };
+  });
+}
+
 function weekSlots(sessions: number): { weekday: number; shift: Shift }[] {
   const base: { weekday: number; shift: Shift }[] =
     sessions <= 3
@@ -702,6 +836,7 @@ const METERS_FACTOR: Record<MetersLevel, number> = { baixo: 0.7, base: 1, alto: 
 const SESSION_LOAD = 2.6;
 
 type SlotResult = {
+  distanceM: number;
   athleteId: string;
   blockId: string;
   repNumber: number;
@@ -750,8 +885,10 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
   const simStart = preSeasonEnd - 56;
 
   const athletes: SyntheticAthlete[] = Array.from({ length: config.athletes + config.arrivals }, (_, index) => {
-    const group = GROUPS[index % GROUPS.length];
-    const base = makeProfile(rng, group, config, config.firstSeason - 15);
+    // Levels cycle first so even a small team spans them; specialties shift every cycle to cover every pair in 18.
+    const level = LEVELS[index % LEVELS.length];
+    const group = GROUPS[(index + Math.floor(index / LEVELS.length)) % GROUPS.length];
+    const base = makeProfile(rng, group, config, level, dataEnd);
     const shifted = options.talentShift ? { ...base, t100Adult: base.t100Adult * Math.exp(options.talentShift) } : base;
     const profile = rng.chance(options.atypicalShare ?? 0.2) ? makeAtypical(rng, shifted) : shifted;
     const arrival = index >= config.athletes;
@@ -761,6 +898,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
       id: `${prefix}ath-${String(index + 1).padStart(2, "0")}`,
       name: `Sintético ${index + 1}`,
       group,
+      trainingGroup: LEVEL_GROUP[profile.level],
       gender: profile.sex,
       dateOfBirth: profile.dateOfBirth,
       primaryStroke: profile.primaryStroke,
@@ -805,7 +943,11 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
   };
 
   const steadyDaily = new Map<string, number>();
-  for (const athlete of athletes) steadyDaily.set(athlete.id, (config.sessionsPerWeek[athlete.group] * metersFactor * SESSION_LOAD) / 7);
+  for (const athlete of athletes) {
+    // Only the main sets scale with GROUP_REPS (warm-up and recovery do not), and nobody makes every session: measured ≈ 0.9 × (0.3 + 0.7 × GROUP_REPS).
+    const effective = 0.9 * (0.3 + 0.7 * GROUP_REPS[athlete.trainingGroup]);
+    steadyDaily.set(athlete.id, (groupSessions(config, athlete.trainingGroup, 1) * metersFactor * effective * SESSION_LOAD) / 7);
+  }
 
   const state = new Map<string, State>();
   for (const athlete of athletes) {
@@ -834,9 +976,11 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
   const timeLogs: TimeLog[] = [];
   const truth = new Map<string, RepTruth>();
   const races: SyntheticRace[] = [];
+  const attendance: SyntheticAttendance[] = [];
+  const perfUsual = new Map<string, number>();
   let workoutCounter = 0;
   let logCounter = 0;
-  const slotsByGroup = new Map(GROUPS.map((group) => [group, weekSlots(Math.max(2, Math.round(config.sessionsPerWeek[group] * metersFactor)))]));
+  const slotsByGroup = new Map(TRAINING_GROUPS.map((group) => [group, weekSlots(groupSessions(config, group, metersFactor))]));
   const allMeets = seasons.flatMap((season) => season.meets);
 
   for (let day = simStart; day <= dataEnd; day += 1) {
@@ -913,6 +1057,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
           const rep: RepSpec = { distanceM, intensity: "MAX", fromBlock: true, gear: [], stroke };
           const structural = structuralTime(p, rep, course, day);
           const expected = structural.timeS * (1 - form.perf - 0.01) * (1 + form.shock) * p.gearMult.suit;
+          const timeS = Math.round(expected * (1 + rng.normal(0, 0.006)) * 100) / 100;
           races.push({
             athleteId: athlete.id,
             date: iso,
@@ -921,7 +1066,9 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
             course,
             priority: meetToday.priority,
             expectedS: expected,
-            timeS: Math.round(expected * (1 + rng.normal(0, 0.006)) * 100) / 100,
+            timeS,
+            splits: splitsOf(timeS, distanceM, 0.06, distanceM <= 100 ? 0.05 : 0.012, rng),
+            reactionS: Math.round(rng.uniform(0.6, 0.75) * 100) / 100,
           });
         }
       }
@@ -929,8 +1076,8 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
 
     const teamTrains = phase != null && !meetToday && !(season?.offDays.has(day) ?? false);
     if (teamTrains) {
-      for (const group of GROUPS) {
-        const members = athletes.filter((athlete) => athlete.group === group);
+      for (const group of TRAINING_GROUPS) {
+        const members = athletes.filter((athlete) => athlete.trainingGroup === group);
         const active = members.filter(isActive);
         if (!active.length) continue;
         for (const slot of slotsByGroup.get(group)!.filter((item) => item.weekday === weekday)) {
@@ -941,7 +1088,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
           const course: PoolCourse = season && day >= season.lcmFromDay ? (rng.chance(0.7) ? "lcm" : "scm") : rng.chance(0.08) ? "lcm" : "scm";
           const ref = members[0].profile;
           const refTime = (rep: RepSpec) => active.reduce((sum, athlete) => sum + structuralTime(athlete.profile, rep, course, day).timeS, 0) / active.length;
-          const refCs = criticalSpeed(ref, day);
+          const refCs = cssSpeed(ref, day);
 
           const blocks: WorkoutBlock[] = [
             {
@@ -957,7 +1104,19 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
             },
           ];
           const rampScale = phase === "ramp" ? 0.6 + 0.1 * seasonWeek : 1;
-          let setCount = phase === "taper" ? 1 : phase === "general" ? rng.int(2, 3) : rng.int(1, 3);
+          // CSS test (400 then 200, both maximal; referencias §4.1) every 7 weeks on a Wednesday afternoon in preparation.
+          const cssTest = (phase === "general" || phase === "specific") && seasonWeek % 7 === 3 && slot.weekday === 2 && slot.shift === "afternoon";
+          if (cssTest)
+            for (const distanceM of [400, 200])
+              blocks.push({
+                id: `b${blocks.length + 1}`,
+                type: "main",
+                rounds: 1,
+                noSendOff: false,
+                betweenRounds: null,
+                segments: [segmentOf({ distanceM, intensity: "MAX", fromBlock: false, gear: [], stroke: "" }, 1, roundUp5(distanceM / refCs + 600))],
+              });
+          let setCount = cssTest ? 0 : phase === "taper" ? 1 : phase === "general" ? rng.int(2, 3) : rng.int(1, 3);
           if (metersFactor < 1 && setCount > 1 && rng.chance(0.5)) setCount -= 1;
           if (metersFactor > 1 && rng.chance(0.5)) setCount += 1;
           const used = new Set<string>();
@@ -968,7 +1127,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
             const template = rng.weighted(
               SETS.filter((item) => !used.has(item.key)).map((item) => ({
                 value: item,
-                weight: phase ? item.weights[phase] * (item.group?.[group] ?? 1) + 1e-6 : 1,
+                weight: phase ? item.weights[phase] + 1e-6 : 1,
               })),
             );
             used.add(template.key);
@@ -977,7 +1136,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
               built.intensity = "A2";
               built.fromBlock = false;
             }
-            built.reps = Math.max(3, Math.round(built.reps * rampScale * Math.sqrt(metersFactor)));
+            built.reps = Math.max(3, Math.round(built.reps * rampScale * Math.sqrt(metersFactor) * GROUP_REPS[group]));
             const stroke: Stroke = built.stroke === "im" ? "im" : "free";
             const repSpec: RepSpec = {
               distanceM: built.distanceM,
@@ -1001,7 +1160,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
           }
           // Untimed aerobic volume (continuous A1 / pull), the bulk of the metres.
           if (phase !== "taper" && rng.chance(0.75)) {
-            const reps = Math.max(1, Math.round(rng.int(2, 4) * metersFactor * (phase === "ramp" ? 0.7 : 1)));
+            const reps = Math.max(1, Math.round(rng.int(2, 4) * metersFactor * GROUP_REPS[group] * (phase === "ramp" ? 0.7 : 1)));
             blocks.push({
               id: `b${blocks.length + 1}`,
               type: "main",
@@ -1025,8 +1184,8 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
           const noTimesToday = !complete && rng.chance(0.2);
           const timedBlocks = new Set(
             blocks
-              .filter((block) => block.type === "main" && !UNTIMED.includes(block.segments[0].intensity))
-              .filter((block) => complete || (!noTimesToday && rng.chance(Math.min(0.97, timingChance(builtByBlock.get(block.id)!) * config.timingKeenness))))
+              .filter((block) => complete || (block.type === "main" && !UNTIMED.includes(block.segments[0].intensity)))
+              .filter((block) => complete || (!noTimesToday && rng.chance(Math.min(0.97, (builtByBlock.has(block.id) ? timingChance(builtByBlock.get(block.id)!) : 0.95) * config.timingKeenness))))
               .map((block) => block.id),
           );
 
@@ -1050,18 +1209,21 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
             let metersBefore = 0;
             let load = 0;
             for (const block of blocks) {
-              const segment = block.segments[0];
               const primary = primaryBlocks.has(block.id);
               const innerReps = block.segments.reduce((sum, item) => sum + item.reps, 0);
               for (let round = 1; round <= block.rounds; round += 1) {
                 // The reserve available for this set: today's W′, less what the session's volume has already cost.
                 const wMax = s.dPrimeM * (1 - p.volumeSens * Math.min(1.5, metersBefore / 4000));
                 let dBal = wMax;
-                const set = { key: `${block.id}|${round}`, planned: segment.reps, cliffAt: null as number | null, abandoned: false };
+                const set = { key: `${block.id}|${round}`, planned: innerReps, cliffAt: null as number | null, abandoned: false };
+                let offset = 0;
+                for (const segment of block.segments) {
                 for (let item = 0; item < segment.reps; item += 1) {
                   const stroke: Stroke = primary ? p.primaryStroke : segment.stroke && segment.stroke !== "sub" ? segment.stroke : "free";
                   const rep: RepSpec = { distanceM: segment.distanceM, intensity: segment.intensity, fromBlock: segment.fromBlock, gear: segment.gear, stroke };
                   const structural = structuralTime(p, rep, course, day);
+                  // Critical speed in this pool: a 25 m pool is faster through the walls, not through the engine.
+                  const csHere = course === "scm" ? (cs * structuralTime(p, rep, "lcm", day).timeS) / structural.timeS : cs;
                   const capacity = structural.timeS * (1 - RESPONSIVENESS[rep.intensity] * form.perf);
                   const deficit = 1 - clamp(dBal / Math.max(1, wMax), 0, 1);
                   const wPenalty = p.dPrimeKappa * 0.5 * deficit ** 2;
@@ -1069,8 +1231,8 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
                   const loadPenalty = RESPONSIVENESS[rep.intensity] >= 0.85 ? p.loadBeforePerKm * (metersBefore / 1000) : 0;
                   const intended = capacity * (1 + context) * (1 + wPenalty + drift + loadPenalty + (item === 0 ? p.firstRepPct : 0));
                   // The cliff: not enough W′ left to hold the intended pace — the rest of the rep is swum at critical speed.
-                  const need = Math.max(0, (rep.distanceM / intended - cs) * intended);
-                  const atCs = (rep.distanceM - Math.max(0, dBal)) / cs;
+                  const need = Math.max(0, (rep.distanceM / intended - csHere) * intended);
+                  const atCs = (rep.distanceM - Math.max(0, dBal)) / csHere;
                   const cliff = need > dBal && atCs > intended;
                   const systematic = cliff ? intended + softplus(atCs - intended, 0.25) : intended;
                   if (cliff && set.cliffAt == null) set.cliffAt = item + 1;
@@ -1079,22 +1241,23 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
                   const observed = expected * (1 + p.repSd * rng.studentT(p.repDf)) + rng.normal(0, p.timingSd);
                   const swum = Math.max(rep.distanceM * 0.45, observed);
                   const speed = rep.distanceM / swum;
-                  if (speed > cs) {
-                    dBal -= (speed - cs) * swum;
-                    anaerobicToday.set(athlete.id, (anaerobicToday.get(athlete.id) ?? 0) + (speed - cs) * swum);
+                  if (speed > csHere) {
+                    dBal -= (speed - csHere) * swum;
+                    anaerobicToday.set(athlete.id, (anaerobicToday.get(athlete.id) ?? 0) + (speed - csHere) * swum);
                   }
                   const rest = Math.max(5, segment.sendOffSeconds - swum);
-                  if (speed > cs && rest < swum) shortRestToday.set(athlete.id, (shortRestToday.get(athlete.id) ?? 0) + 1);
+                  if (speed > csHere && rest < swum) shortRestToday.set(athlete.id, (shortRestToday.get(athlete.id) ?? 0) + 1);
                   dBal = wMax - (wMax - dBal) * Math.exp(-rest / s.tauS);
                   metersBefore += rep.distanceM;
                   load += (rep.distanceM * loadPerMeter(structural.relSpeed)) / 1000;
                   // A broken rep is sometimes not logged (the coach skips a bad time).
-                  const skippedBad = cliff && systematic / intended > 1.06 && rng.chance(0.3);
+                  const skippedBad = !complete && cliff && systematic / intended > 1.06 && rng.chance(0.3);
                   const timed = recorded && timedHere && timedBlocks.has(block.id) && !skippedBad && (complete || rng.chance(0.96));
                   results.push({
                     athleteId: athlete.id,
                     blockId: block.id,
-                    repNumber: (round - 1) * innerReps + item + 1,
+                    repNumber: (round - 1) * innerReps + offset + item + 1,
+                    distanceM: rep.distanceM,
                     stroke,
                     swum,
                     expected,
@@ -1107,10 +1270,12 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
                     set,
                   });
                   // After a clear break some swimmers stop: the rest of the set is never swum or logged (censored).
-                  if (cliff && systematic / intended > 1.06 && item < segment.reps - 1 && rng.chance(p.abandonShare)) {
+                  if (!complete && cliff && systematic / intended > 1.06 && item < segment.reps - 1 && rng.chance(p.abandonShare)) {
                     set.abandoned = true;
                     break;
                   }
+                }
+                offset += segment.reps;
                 }
                 if (block.betweenRounds && round < block.rounds) {
                   metersBefore += block.betweenRounds.distanceM;
@@ -1126,7 +1291,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
           const logged = new Map<SlotResult, { value: number; error: EntryError | null }>();
           for (const result of results) if (result.timed) logged.set(result, { value: Math.round(result.swum * 100) / 100, error: null });
           for (const [result, entry] of logged) {
-            if (entry.error || !rng.chance(result.errorRate)) continue;
+            if (complete || entry.error || !rng.chance(result.errorRate)) continue;
             const kind = rng.weighted<EntryError>([
               { value: "minute", weight: 3 },
               { value: "digits", weight: 3 },
@@ -1162,6 +1327,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
           const workoutId = `${prefix}wk-${String(workoutCounter).padStart(5, "0")}`;
           const listed = present.map((athlete) => athlete.id);
           if (!complete) for (const athlete of active) if (!present.includes(athlete) && rng.chance(0.03)) listed.push(athlete.id);
+          if (complete) attendance.push({ workoutId, date: iso, groupName: group, present: present.map((a) => a.id), absent: active.filter((a) => !present.includes(a)).map((a) => a.id) });
           workouts.push({ id: workoutId, title: `Sintético ${phase}`, date: iso, shift: slot.shift, course, athleteIds: listed, blocks: stored, groups: [group], focus: "" });
 
           for (const result of results) {
@@ -1179,7 +1345,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
               mm: Math.floor(total / 6000),
               ss: Math.floor((total % 6000) / 100),
               cc: total % 100,
-              splits: [],
+              splits: complete ? splitsOf(entry.value, result.distanceM, 0.03, 0.006, rng) : [],
               stroke: result.stroke,
               pending: false,
               recordedAt: `${iso}T18:00:00Z`,
@@ -1224,6 +1390,9 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
       }
       s.gymYesterday = form.gym && dailyLoad.has(athlete.id);
       s.sleepYesterday = form.sleep;
+      // Recovery is felt against the athlete's own usual form (≈ 4-week average), not against zero.
+      const usual = perfUsual.get(athlete.id) ?? form.perf;
+      perfUsual.set(athlete.id, usual * 0.965 + form.perf * 0.035);
       if (variant.context === "bem-estar" && inData && sessionsToday.has(athlete.id)) {
         const share = complete ? 1 : Math.min(0.95, athlete.profile.wellnessShare * (form.sleep < 7 ? 1.6 : 1));
         if (rng.chance(share)) {
@@ -1231,7 +1400,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
             date: iso,
             sleepHours: form.sleep,
             gym: form.gym ? "strength" : null,
-            recovery: clamp(Math.round(3 + form.perf * 60 + rng.normal(0, 0.7)), 1, 5),
+            recovery: clamp(Math.round(3.4 + (form.perf - usual) * 80 + rng.normal(0, 0.7)), 1, 5),
           });
         }
       }
@@ -1253,6 +1422,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
     dataStart: isoOf(dataStart),
     dataEnd: isoOf(dataEnd),
     returns,
+    attendance,
     athleteTypes: new Map(athletes.map((athlete) => [athlete.id, athlete.profile.atypical ? "atípico" : "típico"])),
   };
 }
