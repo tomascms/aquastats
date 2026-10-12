@@ -52,8 +52,16 @@ Verificado antes de abrir:
 - **Capturas:** as que mostravam ecrãs removidos saíram; as do README são da equipa sintética.
 
 Consequências:
-- O histórico é reescrito uma vez com `git filter-repo` (nomes dos exemplos e email pessoal dos commits antigos
-  → email *noreply*). Os SHAs mudam; clones antigos têm de ser apagados e clonados de novo.
+- Dois repositórios. `tomascms/aquastats-privado` é onde se trabalha (PRs, issues, histórico original).
+  `tomascms/aquastats` é público e é um espelho do `main` privado, com o histórico limpo por `git filter-repo`:
+  nomes dos exemplos antigos → inventados, email pessoal → *noreply*, sem `dependabot.yml` nem o próprio
+  workflow. O GitHub guarda os commits dos PRs antigos, por isso limpar o histórico do privado e abri-lo não
+  chegava.
+- `.github/workflows/publicar.yml` publica a cada push no `main` privado. A limpeza é determinística (mesmos
+  commits → mesmos SHAs), por isso o push é *fast-forward*: falha, em vez de sobrescrever, se alguém fizer um
+  commit direto no público. As alterações fazem-se sempre no privado. Segredos do workflow:
+  `PUBLIC_DEPLOY_KEY` (chave com escrita só no público), `PUBLIC_REPLACEMENTS` e `PUBLIC_MAILMAP` (não estão
+  no repo porque contêm o que se quer esconder).
 - Depois de público: ligar o relato privado de vulnerabilidades (`SECURITY.md`), o *secret scanning* com *push
   protection*, o CodeQL e o *dependency review*, que nos repositórios privados exigem um plano pago.
 - O passo 9 da Fase G (rodar a password de `neondb_owner`, revogar `aquastats_app`) continua agendado e não
