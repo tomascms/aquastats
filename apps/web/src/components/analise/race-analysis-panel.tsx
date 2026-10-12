@@ -14,10 +14,10 @@ import type { RaceSession, WellnessEntry, Workout } from "@/lib/types";
 const one = (x: number) => x.toFixed(1).replace(".", ",");
 
 /** Better/worse against a reference time, with icon + word + colour (never colour alone). */
-function Delta({ d, digits = 2 }: { d: number; digits?: number }) {
+function Delta({ d, digits = 2, noise = 0.1 }: { d: number; digits?: number; noise?: number }) {
   const t = useT();
-  // Under 0.1 s a race difference is noise (reaction, touch): shown as equal, not as better or worse.
-  if (Math.abs(d) < 0.1)
+  // Under 0.1 s a split difference is noise (reaction, touch): shown as equal. The official final time has none.
+  if (Math.abs(d) < noise || d === 0)
     return (
       <span className="whitespace-nowrap font-semibold text-mute">
         <span aria-hidden>=</span> {diffS(d, digits)}
@@ -74,7 +74,7 @@ export function RaceAnalysisPanel({
         {r.pb ? <span className="rounded-full bg-good px-2 py-0.5 text-xs font-bold text-white">{t("MP")}</span> : null}
         {r.ref && r.deltaS != null ? (
           <span className="text-sm text-mute">
-            <Delta d={r.deltaS} /> {r.pb ? t("face ao MP anterior ({date})", { date: formatDatePt(r.ref.date) }) : t("face ao MP de {date}", { date: formatDatePt(r.ref.date) })}
+            <Delta d={r.deltaS} noise={0} /> {r.pb ? t("face ao MP anterior ({date})", { date: formatDatePt(r.ref.date) }) : t("face ao MP de {date}", { date: formatDatePt(r.ref.date) })}
             {r.ref.meetTitle ? ` · ${r.ref.meetTitle}` : ""}
           </span>
         ) : null}
@@ -82,6 +82,18 @@ export function RaceAnalysisPanel({
       <p className={`mt-2 border-l-4 pl-3 font-semibold text-mist ${toneClass}`}>{say(r.headline)}</p>
 
       <ReportPoints points={r.points} />
+
+      {r.reaction ? (
+        <p className="mt-4 text-sm tabular-nums text-mist">
+          {t("Reação")}: <span className="font-semibold">{one2(r.reaction.now)} s</span>
+          {r.reaction.ref ? (
+            <span className="text-mute">
+              {" · "}
+              {t("No MP")} {one2(r.reaction.ref)} s · <Delta d={r.reaction.now - r.reaction.ref} />
+            </span>
+          ) : null}
+        </p>
+      ) : null}
 
       {r.splits.length ? (
         <>

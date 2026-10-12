@@ -10,7 +10,7 @@ import type { RaceSession, SplitTime, WellnessEntry, Workout } from "./types";
  * first). The swimmer's version keeps one strength and one focus and leaves the taper to the coach.
  */
 
-export type RaceMark = { id: string; date: string; timeS: number; meetTitle: string; splits?: SplitTime[] };
+export type RaceMark = { id: string; date: string; timeS: number; meetTitle: string; splits?: SplitTime[]; reactionS?: number };
 export type SplitRow = { fromM: number; toM: number; thisS: number; refS: number | null };
 export type Halves = { firstS: number; secondS: number };
 export type RaceReport = {
@@ -24,6 +24,7 @@ export type RaceReport = {
   points: Point[];
   splits: SplitRow[];
   pacing: { now: Halves; ref: Halves | null } | null;
+  reaction: { now: number; ref: number | null } | null;
   prep: RaceAnalysis;
 };
 
@@ -116,6 +117,14 @@ export function raceReport(
   // Detailed race analyses (start, turns, finish) when both races have one.
   if (prep.vsBest?.fastStart && !improve.length)
     improve.push({ tone: "improve", what: { key: "Saiu mais rápido que no recorde e quebrou no fim: abertura rápida demais." } });
+  // Reaction against the PB's; under 0.1 s it is noise.
+  const reaction = mark.reactionS ? { now: mark.reactionS, ref: ref?.reactionS || null } : null;
+  if (reaction?.ref && reaction.now - reaction.ref >= 0.1)
+    improve.push({
+      tone: "improve",
+      what: { key: athlete ? "Reagiste {s} s mais devagar que no recorde ({now} s)." : "Reação {s} s mais lenta que no recorde ({now} s; no MP {ref} s).", vars: { s: r2(reaction.now - reaction.ref), now: reaction.now, ref: reaction.ref } },
+      next: { key: athlete ? "Foco para a próxima: sair do bloco ao sinal." : "Para a próxima, pode ajudar: treinar partidas." },
+    });
 
   // Preparation: the coach's side (taper, speed work, sleep); the swimmer sees the training trend only.
   if (!athlete && prep.taper) {
@@ -171,6 +180,7 @@ export function raceReport(
     points: [...good.slice(0, maxGood), ...improve.slice(0, maxImprove)],
     splits,
     pacing: nowHalves ? { now: nowHalves, ref: refHalves } : null,
+    reaction,
     prep,
   };
 }

@@ -1761,5 +1761,9 @@ export const en = {
   "Treino acima do habitual: {k} de {m} séries acima.": "Above usual: {k} of {m} sets above.",
   "Treino misto: {f} de {m} séries acima do habitual e {s} abaixo.": "Mixed session: {f} of {m} sets above usual and {s} below.",
   "Quase tudo ao nível habitual: {k} de {m} séries abaixo.": "Mostly at the usual level: {k} of {m} sets below.",
+    "Reagiste {s} s mais devagar que no recorde ({now} s).": "Your reaction was {s} s slower than in your best ({now} s).",
+  "Reação {s} s mais lenta que no recorde ({now} s; no MP {ref} s).": "Reaction {s} s slower than in the PB ({now} s; PB {ref} s).",
+  "Foco para a próxima: sair do bloco ao sinal.": "Focus for next time: leave the block on the signal.",
+  "Para a próxima, pode ajudar: treinar partidas.": "Next time, it may help: practise starts.",
   // @@APPEND@@
 } as const;

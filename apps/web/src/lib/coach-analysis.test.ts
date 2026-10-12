@@ -115,4 +115,14 @@ describe("carga e prova", () => {
     assert.equal(pace.what.vars?.a, 0.5);
     assert.equal(pace.next?.vars?.t, "0:29,50");
   });
+
+  it("reação contra a do MP: só conta a partir de 0,1 s", () => {
+    const race = { id: "now", athleteId: "a", date: "2026-10-12", course: "lcm", distanceM: 100, stroke: "free", reactionS: 0, flightS: 0, officialTimeS: 61.6, laps: [] } as unknown as RaceSession;
+    const pbMark = { id: "pb", date: "2026-06-01", timeS: 61.0, meetTitle: "", reactionS: 0.65 };
+    const slow = raceReport({ id: "now", date: "2026-10-12", timeS: 61.6, meetTitle: "", reactionS: 0.8 }, [pbMark], race, [race], [], [], [], new Map());
+    assert.deepEqual(slow.reaction, { now: 0.8, ref: 0.65 });
+    assert.equal(slow.points.find((p) => p.tone === "improve")?.what.vars?.s, 0.15);
+    const same = raceReport({ id: "now", date: "2026-10-12", timeS: 61.6, meetTitle: "", reactionS: 0.7 }, [pbMark], race, [race], [], [], [], new Map());
+    assert.ok(!same.points.some((p) => p.what.key.startsWith("Reação")));
+  });
 });

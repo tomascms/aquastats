@@ -34,6 +34,8 @@ export type RaceRecord = {
   meetTitle: string;
   /** Official cumulative splits, when the result has them. */
   splits?: SplitTime[];
+  /** Start reaction (s), from the official result or the race analysis. */
+  reactionS?: number;
 };
 
 // World Aquatics Points base times (1000 points), official document "Points - Base Times SCM and LCM 2026".
@@ -191,6 +193,7 @@ export function raceRecords(
       venue: meet.venue,
       meetTitle: meet.title,
       splits: result?.splits?.length ? result.splits : undefined,
+      reactionS: result?.reactionS || session?.reactionS || undefined,
     });
   }
   return out.sort((a, b) => b.date.localeCompare(a.date) || a.timeS - b.timeS);

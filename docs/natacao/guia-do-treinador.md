@@ -87,6 +87,7 @@ Por baixo: o nível (melhor prova e pontos World Aquatics) e, no máximo, 3 sina
   - "Perdeu 0,72 s na 2.ª metade face ao recorde. Para a próxima: trabalhar a 2.ª metade."
   - "Passou aos 50 m 0,5 s mais rápido que no recorde e perdeu 1,1 s na 2.ª metade: a prova decidiu-se no
     ritmo." Neste caso sugere a passagem do recorde como referência.
+- **Reação:** a desta prova e a do MP. Entra em "A melhorar" só se for 0,1 s ou mais lenta.
 - **Parciais:** cada parcial com o do MP e a diferença (▲ ▼, e "=" abaixo de 0,1 s). Por baixo, o ritmo de
   prova num número: 2.ª metade menos a 1.ª.
 - **Preparação (só o treinador vê):**

@@ -157,6 +157,7 @@ function PersonalBestTable({
   onOpenRecord: (id: string) => void;
 }) {
   const t = useT();
+  const { historyLoaded } = useAppState();
   const year = dob ? dob.slice(0, 4) : "";
   const scored = bests
     .map((record) => ({ record, points: finaPoints(record.timeS, record.course, record.stroke, record.distanceM, gender) || 0 }))
@@ -207,7 +208,7 @@ function PersonalBestTable({
         </dl>
       </div>
       {bests.length === 0 ? (
-        <p className="px-4 py-8 text-center text-mute">{t("Ainda sem tempos de prova para este atleta.")}</p>
+        <p className="px-4 py-8 text-center text-mute" role="status">{historyLoaded ? t("Ainda sem tempos de prova para este atleta.") : t("A carregar…")}</p>
       ) : (
         <>
           <PbGrid bests={bests} gender={gender} onOpen={(record) => onOpenRecord(record.id)} onOpenEvent={onOpenEvent} titleFor={() => t("Abrir análise")} />
