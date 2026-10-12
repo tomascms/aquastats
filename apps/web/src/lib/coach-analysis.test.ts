@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { analyzeRace, analyzeSession, expectedTimes, loadConclusion, targetFromBest, taperVerdict, verdictOf, type LoadWeek } from "./coach-analysis";
+import { analyzeRace, expectedTimes, loadConclusion, targetFromBest, taperVerdict, type LoadWeek } from "./coach-analysis";
+import { raceReport } from "./race-report";
 import type { TrainingRep } from "./training-context";
 import type { RaceSession, Workout } from "./types";
 
@@ -31,7 +32,6 @@ const rep = (date: string, workoutId: string, timeS: number, extra: Partial<Trai
 /** Three earlier sessions of 4×100 A2 around 70 s: target 70 s, noise floor 0.35 s. */
 const history = () => ["2026-09-01", "2026-09-03", "2026-09-05"].flatMap((d, i) => [69.9, 70, 70.1].map((t, k) => rep(d, `h${i}`, t, { repInSegment: k + 1 })));
 const set = (times: number[], extra: Partial<TrainingRep> = {}) => times.map((t, i) => rep("2026-09-10", "today", t, { repInSegment: i + 1, ...extra }));
-const ctx = { workouts: [] as Workout[], wellness: [], athleteId: "a" };
 
 describe("tempo que devia fazer", () => {
   it("é a mediana das reps anteriores da mesma distância, zona e material — nunca um ritmo /100 m", () => {
@@ -39,6 +39,7 @@ describe("tempo que devia fazer", () => {
     const exp = expectedTimes(rows).get(rows.at(-1)!.log.id)!;
     assert.equal(exp.targetS, 70);
     assert.equal(exp.basis, "treino");
+    assert.equal(exp.n, 9);
     // A 50 at the same zone has no history: no target is invented from the 100s.
     const fifty = rep("2026-09-10", "today", 33, { distanceM: 50 });
     assert.equal(expectedTimes([...history(), fifty]).get(fifty.log.id), undefined);
@@ -57,45 +58,6 @@ describe("tempo que devia fazer", () => {
     assert.equal(expectedTimes([...history(), fins]).get(fins.log.id), undefined);
   });
 
-  it("cor: dentro do ruído é alvo", () => {
-    const e = { targetS: 70, noiseS: 0.35, basis: "treino" as const };
-    assert.equal(verdictOf(70.3, e), "alvo");
-    assert.equal(verdictOf(71, e), "lento");
-    assert.equal(verdictOf(69, e), "rapido");
-  });
-});
-
-describe("frases da análise do treino", () => {
-  const notesOf = (today: TrainingRep[], extra = ctx) => {
-    const rows = [...history(), ...today];
-    return analyzeSession(today, expectedTimes(rows), extra);
-  };
-
-  it("queda no fim com saída curta: aponta a rep, o ritmo de queda, a causa e a prevenção", () => {
-    const notes = notesOf(set([70.2, 70, 70.1, 70, 70.2, 71.2, 72, 72.8], { restSeconds: 3 }));
-    assert.equal(notes.length, 1);
-    assert.equal(notes[0].what.key, "O rendimento caiu a partir da rep {n} nos {dist} {zone} (+{s} s/rep)");
-    assert.equal(notes[0].what.vars?.n, 6);
-    assert.equal(notes[0].why[0].key, "a saída deu só {s} s de descanso");
-    assert.equal(notes[0].fix?.vars?.k, 5);
-  });
-
-  it("aceleração com mais descanso que o habitual", () => {
-    const notes = notesOf(set([71, 71, 71, 69, 69, 69], { restVsSet: "more", restSeconds: 25 }));
-    assert.equal(notes[0].what.key, "Acelerou da rep {a} à {b} nos {dist} {zone}");
-    assert.ok(notes[0].why.some((w) => w.key === "a saída deu {s} s de descanso, mais que o habitual"));
-  });
-
-  it("sono mau explica um treino lento; sem causa nos dados, não inventa", () => {
-    const slow = notesOf(set([71.5, 71.4, 71.6], { sleepHours: 5 }));
-    assert.equal(slow[0].what.key, "Esteve {s} s mais lento que o devido nos {dist} {zone}");
-    assert.deepEqual(slow[0].why, [{ key: "dormiu {h} h", vars: { h: 5 } }]);
-    assert.deepEqual(notesOf(set([71.5, 71.4, 71.6]))[0].why, []);
-  });
-
-  it("nada abaixo do ruído", () => {
-    assert.deepEqual(notesOf(set([70.2, 69.9, 70.1, 70])), []);
-  });
 });
 
 describe("carga e prova", () => {
@@ -109,19 +71,48 @@ describe("carga e prova", () => {
     assert.equal(loadConclusion(weeks.slice(0, 4)).key, "Ainda não houve subidas de carga suficientes para ver como este atleta reage.");
   });
 
+  it("menos trabalho rápido só conta se a proporção cair para menos de metade", () => {
+    const w = (date: string, a1: number, pa: number): Workout =>
+      ({ id: date, title: "", date, shift: "afternoon", athleteIds: ["a"], blocks: [{ id: "x", type: "main", rounds: 1, segments: [{ reps: 1, distanceM: a1, intensity: "A1", details: [] }, { reps: 1, distanceM: pa, intensity: "PA", details: [] }] }] }) as unknown as Workout;
+    const race = { id: "r", athleteId: "a", date: "2026-10-12", course: "lcm", distanceM: 100, stroke: "free", reactionS: 0, flightS: 0, officialTimeS: 60, laps: [] } as unknown as RaceSession;
+    const block = [w("2026-09-01", 4800, 1200), w("2026-09-08", 4800, 1200), w("2026-09-15", 4800, 1200), w("2026-09-22", 4800, 1200)];
+    const kept = analyzeRace(race, [race], [...block, w("2026-10-05", 2000, 500)], [], [], new Map());
+    assert.equal(kept.taper?.lowSpeed, false);
+    const dropped = analyzeRace(race, [race], [...block, w("2026-10-05", 2400, 100)], [], [], new Map());
+    assert.equal(dropped.taper?.lowSpeed, true);
+  });
+
   it("veredito do polimento", () => {
     assert.equal(taperVerdict(20), "pouca");
     assert.equal(taperVerdict(50), "adequada");
     assert.equal(taperVerdict(80), "demasiada");
   });
 
-  it("polimento excessivo aparece no resumo da prova", () => {
+  it("polimento excessivo aparece em 'a melhorar' do treinador, e não na versão do atleta", () => {
     const w = (date: string, m: number): Workout =>
       ({ id: date, title: "", date, shift: "afternoon", athleteIds: ["a"], blocks: [{ id: "x", type: "main", rounds: 1, segments: [{ reps: 1, distanceM: m, intensity: "A1", details: [] }] }] }) as unknown as Workout;
     const workouts = [w("2026-09-01", 6000), w("2026-09-08", 6000), w("2026-09-15", 6000), w("2026-09-22", 6000), w("2026-10-05", 1000)];
     const race = { id: "r", athleteId: "a", date: "2026-10-12", course: "lcm", distanceM: 100, stroke: "free", reactionS: 0, flightS: 0, officialTimeS: 60, laps: [] } as unknown as RaceSession;
     const out = analyzeRace(race, [race], workouts, [], [], new Map());
     assert.equal(out.taper?.verdict, "demasiada");
-    assert.ok(out.summary.some((m) => m.key === "Polimento excessivo: o volume desceu {pct} % face ao bloco anterior."));
+    const mark = { id: "r", date: "2026-10-12", timeS: 60, meetTitle: "" };
+    const coach = raceReport(mark, [mark], race, [race], workouts, [], [], new Map());
+    assert.ok(coach.points.some((p) => p.tone === "improve" && p.what.key === "Polimento excessivo: o volume desceu {pct} % nas 2 semanas antes."));
+    const athlete = raceReport(mark, [mark], race, [race], workouts, [], [], new Map(), "athlete");
+    assert.ok(!athlete.points.some((p) => p.what.key.startsWith("Polimento")));
+  });
+
+  it("prova contra o MP: parciais com diferença, ritmo de prova e foco na passagem", () => {
+    const split = (atM: number, s: number) => ({ atM, mm: Math.floor(s / 60), ss: Math.floor(s % 60), cc: Math.round((s % 1) * 100) });
+    const pbMark = { id: "pb", date: "2026-06-01", timeS: 61.0, meetTitle: "Nacionais", splits: [split(50, 29.5)] };
+    const mark = { id: "now", date: "2026-10-12", timeS: 61.6, meetTitle: "Torneio", splits: [split(50, 29.0)] };
+    const race = { id: "now", athleteId: "a", date: "2026-10-12", course: "lcm", distanceM: 100, stroke: "free", reactionS: 0, flightS: 0, officialTimeS: 61.6, laps: [] } as unknown as RaceSession;
+    const r = raceReport(mark, [mark, pbMark], race, [race], [], [], [], new Map());
+    assert.equal(r.pb, false);
+    assert.equal(r.deltaS, 0.6);
+    assert.deepEqual(r.splits.map((s) => [s.thisS, s.refS]), [[29, 29.5], [32.6, 31.5]]);
+    const pace = r.points.find((p) => p.tone === "improve")!;
+    assert.equal(pace.what.vars?.a, 0.5);
+    assert.equal(pace.next?.vars?.t, "0:29,50");
   });
 });

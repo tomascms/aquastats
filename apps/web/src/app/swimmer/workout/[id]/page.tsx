@@ -9,6 +9,7 @@ import { useAppState } from "@/lib/store";
 import { formatTime } from "@/lib/swim-time";
 import type { TimeLog, WorkoutBlock } from "@/lib/types";
 import { IconBack } from "@/components/ui/icons";
+import { SessionAnalysis } from "@/components/workouts/session-analysis";
 import { useT } from "@/i18n/provider";
 import { HrAttach } from "@/components/heart-rate/hr-attach";
 import { HrChart } from "@/components/heart-rate/hr-chart";
@@ -37,6 +38,7 @@ export default function SwimmerWorkoutPage() {
         {workout.course === "scm" || workout.course === "lcm" ? ` · ${COURSE_LABEL[workout.course]}` : ""} ·{" "}
         {t("só os teus parciais")}
       </p>
+      <SessionAnalysis workout={workout} athletes={[me]} audience="athlete" />
       <HrAttach athleteId={me.id} workoutId={workout.id} session={hr} />
       {hr ? <HrChart session={hr} /> : null}
 

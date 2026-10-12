@@ -87,7 +87,7 @@ export function LoadResponse({ athlete }: { athlete: Athlete }) {
         </p>
       )}
       {weeks.length ? (
-        <table className="mt-3 w-full text-sm tabular-nums">
+        <table className="mt-3 w-full text-[13px] tabular-nums sm:text-sm">
           <caption className="sr-only">
             {t("Carga, cansaço e tempos por semana")}
           </caption>
@@ -118,7 +118,7 @@ export function LoadResponse({ athlete }: { athlete: Athlete }) {
                 </td>
                 <td className="pr-2">
                   <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-10 shrink-0" aria-hidden>
+                    <span className="hidden w-10 shrink-0 sm:inline-block" aria-hidden>
                       <span
                         className="block h-2.5 rounded-full bg-aqua"
                         style={{
@@ -130,15 +130,20 @@ export function LoadResponse({ athlete }: { athlete: Athlete }) {
                   </span>
                 </td>
                 <td
-                  className={`whitespace-nowrap pl-2 text-right font-semibold ${w.vsDuePct == null ? "text-mute" : Math.abs(w.vsDuePct) <= 0.5 ? "text-good" : w.vsDuePct > 0 ? "text-coral" : "text-amber-600 dark:text-amber-400"}`}
+                  className={`whitespace-nowrap pl-2 text-right font-semibold ${w.vsDuePct == null ? "text-mute" : Math.abs(w.vsDuePct) <= 0.5 ? "text-good" : w.vsDuePct > 0 ? "text-slower" : "text-faster"}`}
                 >
-                  {w.vsDuePct == null
-                    ? "—"
-                    : Math.abs(w.vsDuePct) <= 0.5
-                      ? t("no devido")
-                      : w.vsDuePct > 0
-                        ? t("{pct} % lento", { pct: one(w.vsDuePct) })
-                        : t("{pct} % rápido", { pct: one(-w.vsDuePct) })}
+                  {w.vsDuePct == null ? (
+                    "—"
+                  ) : (
+                    <>
+                      <span aria-hidden>{Math.abs(w.vsDuePct) <= 0.5 ? "✓ " : w.vsDuePct > 0 ? "▼ " : "▲ "}</span>
+                      {Math.abs(w.vsDuePct) <= 0.5
+                        ? t("no devido")
+                        : w.vsDuePct > 0
+                          ? t("{pct} % lento", { pct: one(w.vsDuePct) })
+                          : t("{pct} % rápido", { pct: one(-w.vsDuePct) })}
+                    </>
+                  )}
                 </td>
                 <td className="pl-2 text-right">{one(w.rpe)}</td>
                 <td className="whitespace-nowrap pl-2 text-right">

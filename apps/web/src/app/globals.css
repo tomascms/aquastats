@@ -26,6 +26,11 @@
   --lane-red: #e2463c;
   --good: #117a59;
   --good-soft: #e3f4ed;
+  /* Verdicts (docs/natacao/benchmark-visualizacao.md D6): colour-blind safe, always with an icon and a word. */
+  --faster: #0067a3;
+  --faster-soft: #e5f1f9;
+  --slower: #b34700;
+  --slower-soft: #fbeee4;
 
   --sand: #46607d;
   --coral: #c03528;
@@ -58,6 +63,10 @@
   --color-lane: var(--lane-red);
   --color-good: var(--good);
   --color-good-soft: var(--good-soft);
+  --color-faster: var(--faster);
+  --color-faster-soft: var(--faster-soft);
+  --color-slower: var(--slower);
+  --color-slower-soft: var(--slower-soft);
   --color-sand: var(--sand);
   --color-coral: var(--coral);
   --color-mist: var(--mist);

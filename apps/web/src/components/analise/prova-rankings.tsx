@@ -514,6 +514,9 @@ function RecordDetail({
       })()}
 
       <RaceAnalysisPanel
+        mark={record}
+        sameEvent={[record, ...sameEvent]}
+        audience={role === "swimmer" ? "athlete" : "coach"}
         session={
           raceSessions.find((item) => item.id === (record.sessionId ?? record.id)) ?? {
             id: record.id,
@@ -532,7 +535,6 @@ function RecordDetail({
           }
         }
         sessions={raceSessions}
-        bestBefore={sameEvent.filter((item) => item.date < record.date).sort((a, b) => a.timeS - b.timeS)[0] ?? null}
         workouts={workouts}
         wellness={wellness}
         reps={reps}

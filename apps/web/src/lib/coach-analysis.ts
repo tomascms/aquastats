@@ -2,6 +2,7 @@ import type { MessageKey } from "@/i18n";
 import { compareRaces } from "./race-analysis";
 import { workoutMeters } from "./rankings";
 import { workoutBands } from "./season";
+import { median, TE_PRIOR, typicalError } from "./coach-verdict";
 import type { TrainingRep } from "./training-context";
 import type { Intensity, RaceSession, Stroke, WellnessEntry, Workout } from "./types";
 
@@ -10,26 +11,17 @@ import type { Intensity, RaceSession, Stroke, WellnessEntry, Workout } from "./t
  * - "Tempo que devia fazer": per distance, never from a /100 m pace. The median of the athlete's own reps
  *   with the same pool, stroke, distance, zone, material and rest (last 42 days); else the same without the
  *   rest; else best race time at that distance ÷ % of the zone.
- * - Noise: the athlete's own rep-to-rep SD at that key, floor 0.5 % of the target (Pyne 2004). Nothing below it is said.
+ * - Noise: the athlete's own rep-to-rep spread at that key (coach-verdict.ts typicalError). Nothing below it is said.
  * - Every sentence carries the number behind it; with no cause in the data it says so.
  */
 
-export type Msg = { key: MessageKey; vars?: Record<string, string | number> };
-export type Expected = { targetS: number; noiseS: number; basis: "treino" | "prova" };
-export type Verdict = "alvo" | "rapido" | "lento";
+export type Msg = { key: MessageKey; vars?: Record<string, string | number | Msg> };
+/** `noiseS` is the swimmer's typical error in this kind of set; `n` the earlier reps the target comes from (0 = from a race best). */
+export type Expected = { targetS: number; noiseS: number; n: number; basis: "treino" | "prova" };
 
 const DAY = 86_400_000;
 const daysBetween = (later: string, earlier: string) => Math.round((Date.parse(later) - Date.parse(earlier)) / DAY);
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
-const median = (xs: number[]) => {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
-const sd = (xs: number[]) => {
-  const m = mean(xs);
-  return Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / Math.max(1, xs.length - 1));
-};
 const r1 = (x: number) => Math.round(x * 10) / 10;
 
 const baseKey = (row: TrainingRep) => `${row.course}|${row.stroke}|${row.distanceM}|${row.intensity}|${[...row.gear].sort().join("+")}`;
@@ -74,21 +66,16 @@ export function expectedTimes(rows: TrainingRep[], bests: Map<string, number> = 
     if (pool.length >= MIN_REPS) {
       const times = pool.map((o) => o.timeS);
       const targetS = median(times);
-      out.set(row.log.id, { targetS, noiseS: Math.max(sd(times), 0.005 * targetS), basis: "treino" });
+      out.set(row.log.id, { targetS, noiseS: typicalError(times, targetS), n: pool.length, basis: "treino" });
       continue;
     }
     const best = row.stroke ? bests.get(`${row.stroke}|${row.distanceM}`) : undefined;
     if (best && !row.gear.length) {
       const targetS = targetFromBest(best, row.intensity);
-      out.set(row.log.id, { targetS, noiseS: 0.01 * targetS, basis: "prova" });
+      out.set(row.log.id, { targetS, noiseS: TE_PRIOR * targetS, n: 0, basis: "prova" });
     }
   }
   return out;
-}
-
-export function verdictOf(timeS: number, expected: Expected): Verdict {
-  const diff = timeS - expected.targetS;
-  return Math.abs(diff) <= expected.noiseS ? "alvo" : diff < 0 ? "rapido" : "lento";
 }
 
 /** Metres in the 7 days up to `date` vs the weekly mean of the 21 days before (% change), or null. */
@@ -102,89 +89,6 @@ export function loadChangePct(workouts: Workout[], athleteId: string, date: stri
     else if (d >= 7 && d < 28) before += workoutMeters(w);
   }
   return before > 0 ? ((now - before / 3) / (before / 3)) * 100 : null;
-}
-
-export type SessionContext = { workouts: Workout[]; wellness: WellnessEntry[]; athleteId: string };
-
-/** Reasons in the data for a worse day: short sleep, gym the day before, second session, load jump. */
-function causesWorse(rows: TrainingRep[], ctx: SessionContext): Msg[] {
-  const date = rows[0].date;
-  const out: Msg[] = [];
-  const sleep = rows[0].sleepHours ?? ctx.wellness.find((w) => w.date === date)?.sleepHours ?? null;
-  if (sleep != null && sleep < 6.5) out.push({ key: "dormiu {h} h", vars: { h: r1(sleep) } });
-  const yesterday = new Date(Date.parse(date) - DAY).toISOString().slice(0, 10);
-  const gym = ctx.wellness.find((w) => w.date === yesterday)?.gym;
-  if (gym === "strength" || gym === "explosive") out.push({ key: "teve ginásio de força ontem" });
-  if (rows[0].trainedEarlierToday) out.push({ key: "era a segunda sessão do dia" });
-  const load = loadChangePct(ctx.workouts, ctx.athleteId, date);
-  if (load != null && load > 20) out.push({ key: "a carga desta semana é {pct} % acima das 3 anteriores", vars: { pct: Math.round(load) } });
-  return out;
-}
-
-export type SessionNote = { what: Msg; why: Msg[]; fix?: Msg };
-type Scored = { row: TrainingRep; exp: Expected; diff: number };
-
-/** Coach-language notes for one athlete's session; each sentence carries its number and reason. */
-export function analyzeSession(rows: TrainingRep[], expected: Map<string, Expected>, ctx: SessionContext): SessionNote[] {
-  if (!rows.length) return [];
-  const groups = new Map<string, Scored[]>();
-  for (const row of rows) {
-    const exp = expected.get(row.log.id);
-    // Easy swimming (warm-up, swim-down) is not read: a coach does not judge a 200 easy.
-    if (!exp || row.intensity === "SUAVE") continue;
-    const key = `${row.blockId}|${row.segmentIndex}|${row.round}`;
-    groups.set(key, [...(groups.get(key) ?? []), { row, exp, diff: row.timeS - exp.targetS }]);
-  }
-  const notes: SessionNote[] = [];
-  const worse = causesWorse(rows, ctx);
-  const faster: { s: number; dist: number; zone: string }[] = [];
-  for (const set of groups.values()) {
-    set.sort((a, b) => a.row.repInSegment - b.row.repInSegment);
-    const head = set[0].row;
-    const label = { dist: head.distanceM, zone: head.intensity };
-    const noise = mean(set.map((s) => s.exp.noiseS));
-    const rest = set.map((s) => s.row.restSeconds).filter((x): x is number => x != null);
-    const restMed = rest.length ? median(rest) : null;
-
-    if (set.length >= 5) {
-      const first = set.slice(1, 4).map((s) => s.diff);
-      const last = set.slice(-3).map((s) => s.diff);
-      const drop = mean(last) - mean(first);
-      if (drop > 2 * noise && last.filter((d) => d > 2 * noise).length >= 2) {
-        const start = set.findIndex((s, i) => i > 0 && set.slice(i).every((t) => t.diff > noise));
-        const from = start > 0 ? start : set.length - 3;
-        const perRep = drop / Math.max(1, set.length - 3);
-        const why = restMed != null && restMed < 5 ? [{ key: "a saída deu só {s} s de descanso" as MessageKey, vars: { s: Math.round(restMed) } }, ...worse] : worse;
-        notes.push({
-          what: { key: "O rendimento caiu a partir da rep {n} nos {dist} {zone} (+{s} s/rep)", vars: { n: from + 1, ...label, s: r1(perRep) } },
-          why,
-          fix: { key: "Para prevenir: mais 5 s de saída, ou {k} reps em vez de {n}", vars: { k: from, n: set.length } },
-        });
-        continue;
-      }
-      const firstHalf = set.slice(0, set.length >> 1).map((s) => s.diff);
-      const lastHalf = set.slice(set.length >> 1).map((s) => s.diff);
-      if (mean(firstHalf) - mean(lastHalf) > 2 * noise) {
-        const why: Msg[] = [];
-        if (head.restVsSet === "more" && restMed != null) why.push({ key: "a saída deu {s} s de descanso, mais que o habitual", vars: { s: Math.round(restMed) } });
-        if (mean(firstHalf) > noise) why.push({ key: "começou a guardar-se: a 1.ª metade ficou {s} s acima do devido", vars: { s: r1(mean(firstHalf)) } });
-        notes.push({ what: { key: "Acelerou da rep {a} à {b} nos {dist} {zone}", vars: { a: (set.length >> 1) + 1, b: set.length, ...label } }, why });
-        continue;
-      }
-    }
-    const avg = mean(set.slice(set.length > 2 ? 1 : 0).map((s) => s.diff));
-    if (avg > noise) notes.push({ what: { key: "Esteve {s} s mais lento que o devido nos {dist} {zone}", vars: { s: r1(avg), ...label } }, why: worse });
-    else if (avg < -noise) faster.push({ s: r1(-avg), ...label });
-  }
-  // Faster than the last 6 weeks is read once, not set by set: it is the athlete moving up.
-  const evolving: Msg = { key: "está acima do que fez nas últimas 6 semanas nestas séries: sinal de evolução" };
-  if (faster.length === 1) notes.push({ what: { key: "Esteve {s} s mais rápido que o devido nos {dist} {zone}", vars: faster[0] }, why: [evolving] });
-  else if (faster.length > 1)
-    notes.push({
-      what: { key: "Mais rápido que o devido em {n} séries ({list})", vars: { n: faster.length, list: faster.map((f) => `${f.dist} ${f.zone} −${String(f.s).replace(".", ",")} s`).join(", ") } },
-      why: [evolving],
-    });
-  return notes;
 }
 
 /* ── Carga: how this athlete reacts to load, week by week ─────────────────────────────── */
@@ -263,8 +167,8 @@ export function loadConclusion(weeks: LoadWeek[]): Msg {
 /* ── Análise de prova ──────────────────────────────────────────────────────────────────── */
 
 export type TaperVerdict = "pouca" | "adequada" | "demasiada";
+/** What happened before a race (no sentences: race-report.ts writes them). */
 export type RaceAnalysis = {
-  summary: Msg[];
   vsBest: { bestDate: string; bestS: number; deltaS: number; reactionS: number | null; gains: { from: number; to: number; delta: number }[]; fastStart: boolean } | null;
   taper: { reductionPct: number; verdict: TaperVerdict; speedShareNow: number; speedShareBefore: number; lowSpeed: boolean } | null;
   trend: { recentPct: number; beforePct: number } | null;
@@ -278,7 +182,7 @@ export function taperVerdict(reductionPct: number): TaperVerdict {
   return reductionPct < 30 ? "pouca" : reductionPct > 65 ? "demasiada" : "adequada";
 }
 
-/** Race vs personal best, taper, speed trend, 25/50 vs long profile and context in the weeks before. */
+/** Race vs best detailed race, taper, speed trend, 25/50 vs long profile and context in the weeks before. */
 export function analyzeRace(
   session: RaceSession,
   sessions: RaceSession[],
@@ -286,10 +190,8 @@ export function analyzeRace(
   wellness: WellnessEntry[],
   rows: TrainingRep[],
   expected: Map<string, Expected>,
-  bestBefore: { date: string; timeS: number } | null = null,
 ): RaceAnalysis {
   const date = session.date;
-  const summary: Msg[] = [];
 
   const earlier = sessions.filter((s) => s.id !== session.id && s.date < date && s.stroke === session.stroke && s.distanceM === session.distanceM && s.course === session.course && s.officialTimeS > 0);
   const best = earlier.sort((a, b) => a.officialTimeS - b.officialTimeS)[0];
@@ -301,15 +203,6 @@ export function analyzeRace(
     const deltaS = Math.round((session.officialTimeS - best.officialTimeS) * 100) / 100;
     const reactionS = session.reactionS > 0 && best.reactionS > 0 ? Math.round((session.reactionS - best.reactionS) * 100) / 100 : null;
     vsBest = { bestDate: best.date, bestS: best.officialTimeS, deltaS, reactionS, gains: cmp.segments.map(({ from, to, delta }) => ({ from, to, delta })), fastStart };
-    summary.push(deltaS <= 0 ? { key: "Melhorou o recorde pessoal em {s} s.", vars: { s: Math.abs(deltaS) } } : { key: "Ficou {s} s acima do recorde pessoal.", vars: { s: deltaS } });
-    const worst = [...cmp.segments].sort((a, b) => b.delta - a.delta)[0];
-    if (worst && worst.delta > 0.1) summary.push({ key: "Onde mais perdeu: {from}–{to} m (+{s} s).", vars: { from: worst.from, to: worst.to, s: worst.delta } });
-    if (fastStart) summary.push({ key: "Saiu mais rápido que no recorde e quebrou no fim: abertura rápida demais." });
-  } else if (bestBefore && bestBefore.timeS > 0) {
-    // A best mark without splits: only the total can be compared.
-    const deltaS = Math.round((session.officialTimeS - bestBefore.timeS) * 100) / 100;
-    vsBest = { bestDate: bestBefore.date, bestS: bestBefore.timeS, deltaS, reactionS: null, gains: [], fastStart: false };
-    summary.push(deltaS <= 0 ? { key: "Melhorou o recorde pessoal em {s} s.", vars: { s: Math.abs(deltaS) } } : { key: "Ficou {s} s acima do recorde pessoal.", vars: { s: deltaS } });
   }
 
   const mine = workouts.filter((w) => w.athleteIds.includes(session.athleteId) && w.date < date);
@@ -323,13 +216,9 @@ export function analyzeRace(
     const reductionPct = Math.round((1 - metres(last) / 2 / (metres(block) / 4)) * 100);
     const speedShareNow = metres(last) ? Math.round((speed(last) / metres(last)) * 100) : 0;
     const speedShareBefore = Math.round((speed(block) / metres(block)) * 100);
-    const lowSpeed = speed(last) / 2 < (speed(block) / 4) * 0.5;
+    // A taper cuts metres, fast ones included: what matters is the *share* of fast work (logica-treinador R7).
+    const lowSpeed = speedShareBefore > 0 && speedShareNow < speedShareBefore * 0.5;
     taper = { reductionPct, verdict: taperVerdict(reductionPct), speedShareNow, speedShareBefore, lowSpeed };
-    summary.push({
-      key: taper.verdict === "adequada" ? "Polimento adequado: o volume desceu {pct} % face ao bloco anterior." : taper.verdict === "pouca" ? "Polimento curto: o volume só desceu {pct} % face ao bloco anterior." : "Polimento excessivo: o volume desceu {pct} % face ao bloco anterior.",
-      vars: { pct: reductionPct },
-    });
-    if (lowSpeed) summary.push({ key: "Pouco estímulo de velocidade nas 2 semanas antes da prova." });
   }
 
   const pctOf = (from: number, to: number, filter: (r: TrainingRep) => boolean = () => true) => {
@@ -342,28 +231,15 @@ export function analyzeRace(
   const recentPct = pctOf(1, 7);
   const beforePct = pctOf(8, 21);
   const trend = recentPct != null && beforePct != null ? { recentPct, beforePct } : null;
-  if (trend && Math.abs(trend.recentPct - trend.beforePct) >= 0.5)
-    summary.push({ key: trend.recentPct < trend.beforePct ? "Nos últimos treinos estava a ficar mais rápido." : "Nos últimos treinos estava a ficar mais lento." });
   const shortPct = pctOf(1, 14, (r) => r.distanceM <= 50);
   const longPct = pctOf(1, 14, (r) => r.distanceM >= 200);
   const profile = shortPct != null && longPct != null ? { shortPct, longPct } : null;
-  if (profile && profile.shortPct < -0.5 && profile.longPct > 0.5) summary.push({ key: "Mais forte nos 25/50 e pior nas séries longas: ganhou potência, perdeu resistência." });
-  else if (profile && profile.shortPct > 0.5 && profile.longPct < -0.5) summary.push({ key: "Melhor nas séries longas e pior nos 25/50: tem resistência, faltou velocidade." });
   const vsDuePct = pctOf(1, 14);
-  if (vsDuePct != null)
-    summary.push(
-      Math.abs(vsDuePct) <= 0.5
-        ? { key: "Nos treinos das 2 semanas antes andou no tempo que devia." }
-        : { key: vsDuePct < 0 ? "Nos treinos das 2 semanas antes andou {pct} % mais rápido do que devia." : "Nos treinos das 2 semanas antes andou {pct} % mais lento do que devia.", vars: { pct: Math.abs(vsDuePct) } },
-    );
 
   const win = (from: number, to: number) => wellness.filter((w) => { const d = daysBetween(date, w.date); return d >= from && d <= to; });
   const avg = (ws: WellnessEntry[], k: "sleepHours" | "recovery") => avgOrNull(ws.map((w) => w[k]).filter((x): x is number => x != null));
   const context = { sleep: avg(win(1, 14), "sleepHours"), sleepBefore: avg(win(15, 42), "sleepHours"), recovery: avg(win(1, 14), "recovery"), gym: win(1, 14).filter((w) => w.gym === "strength" || w.gym === "explosive").length };
-  if (context.sleep != null && context.sleepBefore != null && context.sleep < context.sleepBefore - 0.5)
-    summary.push({ key: "Dormiu menos nas 2 semanas antes ({h} h por noite).", vars: { h: r1(context.sleep) } });
-
-  return { summary: summary.slice(0, 5), vsBest, taper, trend, profile, context, vsDuePct };
+  return { vsBest, taper, trend, profile, context, vsDuePct };
 }
 
 export const bestsKey = (stroke: Stroke | "", distanceM: number) => `${stroke}|${distanceM}`;

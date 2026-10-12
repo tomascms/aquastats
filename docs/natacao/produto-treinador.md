@@ -31,12 +31,17 @@ distância + 0,8 s (partida de bloco → impulso) ÷ % da zona (A1 79 %, A2 85 %
 
 ## Ecrãs
 
+A forma de apresentar (conclusão primeiro, "Correu bem / A melhorar", certeza em palavras, cores acessíveis,
+versão do atleta) vem de [`benchmark-visualizacao.md`](benchmark-visualizacao.md).
+
 | Ecrã | Pergunta no título | O que mostra |
 |---|---|---|
-| Treino | "Como correu o treino?" | Seletor de atleta; por série, cada rep com **Fez / Previsto / Devia fazer / Dif.** (verde no devido, âmbar mais rápido, vermelho mais lento); "Leitura do treino" em frases com o porquê e, quando há queda, como a prevenir |
-| Atleta › Perfil | "Que nadador é e o que treinar agora?" | Nível = melhor prova e pontos World Aquatics; queda média nas séries; como se sente (esforço, recuperação, sono); sinais de treino |
-| Atleta / Época › Carga | "Carga: como reage este atleta?" | Uma frase de conclusão ("quando a carga sobe mais de 20 %, os tempos pioram x % na semana seguinte e recuperam na 2.ª") e, por semana: km, tempos face ao devido, esforço, sono |
-| Análise › Prova | "Porque correu assim?" | 3–5 frases no topo; contra o recorde pessoal (reação e parciais, quando há); o polimento resultou (redução de volume: pouca < 30 %, adequada 30–65 %, demasiada > 65 %; estímulo de velocidade); últimos treinos; perfil 25/50 vs séries longas; contexto (sono, recuperação, ginásio) |
+| Treino | "Como correu o treino?" | Fichas de atleta com o estado do dia; frase de abertura; Correu bem / A melhorar (coincide com…, opção para a próxima); cartão por série (média, devia, regularidade, fim vs início, pontos sobre a faixa normal; reps com Fez / Previsto / Devia fazer / Dif.) |
+| Análise › Treino | Sessão · "Está a melhorar?" | O mesmo relatório para qualquer dia; Evolução por tipo de série (2 últimas semanas vs as 6 anteriores), melhores médias, recuperação depois das paragens |
+| Atleta | "Como está …?" | Cartões Treino / Carga e cansaço / Provas com estado em palavras e ligação ao detalhe; nível (melhor prova e pontos World Aquatics); até 3 sinais de treino |
+| Atleta / Época › Carga | "Carga: como reage este atleta?" | Frase de conclusão sobre a reação a subidas de carga; por semana: km, tempos face ao devido, esforço, sono |
+| Análise › Prova | "Porque correu assim?" | Tempo, MP, Δ ao MP com nome; Correu bem / A melhorar; parciais com Δ e ritmo de prova; preparação (polimento, trabalho rápido, treinos antes, contexto) só para o treinador |
+| Atleta (app) | "O teu último treino" · "Como correu a tua prova?" | Um ponto forte e um foco, comparação só consigo, sem crítica do polimento; histórico com a série principal de cada treino |
 | Hoje | "Hoje" | O que mudou desde o último treino e a comparação do período |
 | Época | "A distribuição de zonas está certa para a fase?" | % do volume por zona contra a referência da fase |
 
@@ -50,6 +55,8 @@ distância + 0,8 s (partida de bloco → impulso) ÷ % da zona (A1 79 %, A2 85 %
   como o treinador pensa uma série; substituídos pelo tempo devido por distância.
 - Prova mais forte e mais fraca: o nível mostra só a melhor prova.
 - "Carga A:C": substituída por "Carga", que liga carga, cansaço e tempos.
+- Análise › Treino › "Modelo" (médias que misturavam zonas, histograma, efeitos do modelo em %, fiabilidade
+  das estimativas): substituído por "Evolução" por tipo de série.
 
 ## Recolha de dados (só o que vale o toque)
 
