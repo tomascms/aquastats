@@ -6,9 +6,6 @@ Usa o **relato privado de vulnerabilidades do GitHub**: separador *Security* →
 O relato fica visível só para quem mantém o projeto. Não abras uma *issue* pública nem publiques detalhes antes
 de haver correção.
 
-Enquanto o repositório for privado (ver `docs/adr/0001-licenca-e-autoria.md`), quem tem acesso pode abrir um
-*security advisory* em rascunho no mesmo separador.
-
 Indica, se possível: o que encontraste, como reproduzir, o impacto e a versão/commit.
 
 ## O que esperar

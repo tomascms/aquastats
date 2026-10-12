@@ -1,6 +1,6 @@
 # ADR 0001 — Licença, visibilidade e autoria
 
-- Estado: aceite
+- Estado: aceite (atualizado a 12/10/2026: repositório público)
 - Data: 06/10/2026
 - Decisor: dono do projeto (decisão delegada ao agente e registada aqui)
 
@@ -34,3 +34,27 @@ quem o lê. O dono quer o repositório privado até nova ordem e pediu uma decis
   ficam aqui por serem úteis para operar o serviço.
 - Os *badges* e o `SECURITY.md` (relato privado de vulnerabilidades do GitHub) só funcionam plenamente com o
   repositório público; o `SECURITY.md` explica o canal alternativo enquanto for privado.
+
+## Atualização — 12/10/2026: repositório público
+
+O dono decidiu tornar o repositório público, para consulta (portefólio). A licença continua proprietária: o
+código pode ser lido, não reutilizado.
+
+Verificado antes de abrir:
+- **Segredos:** gitleaks em todo o histórico, no CI de cada PR, sem resultados. Os `.env` e o `.local/` estão no
+  `.gitignore`; nenhum ficheiro de credenciais está versionado.
+- **Dados pessoais:** só dados sintéticos em capturas, demos e testes. Os exemplos dos parsers de resultados
+  (SPLASH/PDF) tinham linhas de resultados publicados com nomes, ano e licença de nadadores reais; passaram a
+  nomes inventados. Ainda estão nos commits antigos: limpar o histórico antes de abrir (ver abaixo).
+- **Documentos de operação:** `docs/security/` e `docs/release/` têm ids do Neon e do Cloud Run e os riscos que
+  restam. Nenhum dá acesso sem credenciais: a origem da API só aceita o Worker (`X-Edge-Auth`) e a base exige
+  password. Ficam públicos.
+- **Capturas:** as que mostravam ecrãs removidos saíram; as do README são da equipa sintética.
+
+Consequências:
+- O histórico é reescrito uma vez com `git filter-repo` (nomes dos exemplos e email pessoal dos commits antigos
+  → email *noreply*). Os SHAs mudam; clones antigos têm de ser apagados e clonados de novo.
+- Depois de público: ligar o relato privado de vulnerabilidades (`SECURITY.md`), o *secret scanning* com *push
+  protection*, o CodeQL e o *dependency review*, que nos repositórios privados exigem um plano pago.
+- O passo 9 da Fase G (rodar a password de `neondb_owner`, revogar `aquastats_app`) continua agendado e não
+  depende disto.

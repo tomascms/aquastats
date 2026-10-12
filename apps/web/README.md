@@ -5,8 +5,8 @@ inglês completo. Pensado para o telemóvel à beira da piscina, com fila offlin
 
 ## O que faz
 
-- **Treinador:** "Hoje" (quem merece atenção), construtor de treinos, cronometragem em matriz, competições e
-  análise de prova, época e carga, equipa, comparação por dia, semana, mês e ano.
+- **Treinador:** "Hoje", construtor de treinos, cronometragem em matriz, "Como correu o treino?", evolução,
+  carga, competições e análise de prova, época, equipa, comparação por dia, semana, mês e ano.
 - **Atleta:** evolução, objetivos, recordes, bem-estar, histórico e provas, só com os seus dados.
 - **Modelo de previsão:** corre no browser, num Web Worker, e prevê cada repetição com intervalo.
 - **Proxy:** `/api/v1/*` é reencaminhado para a API (cookies, `X-Edge-Auth`, limites de tempo e tamanho).
@@ -24,7 +24,9 @@ src/components/  UI por área: workouts, matrix, race (analise), season, competi
 src/lib/         lógica pura e testada
   set.ts, workout-text.ts, send-off.ts      treino: estrutura, texto escrito, saídas
   race.ts, race-analysis.ts, rankings.ts    provas, parciais, recordes
-  season.ts, planned-done.ts, morning.ts    época, planeado vs. feito, vista "Hoje"
+  season.ts, morning.ts                     época, vista "Hoje"
+  coach-verdict.ts, session-report.ts        variação normal de cada atleta e relatório do treino
+  evolution.ts, race-report.ts, coach-analysis.ts   evolução, análise de prova, carga e tempo devido
   ml/                                        modelo de previsão (ver abaixo)
 src/i18n/        en.ts: cada texto t("...") em português precisa de entrada em inglês
 scripts/         gerador de dados sintéticos e ferramentas de backtest do modelo (ml-*.ts)

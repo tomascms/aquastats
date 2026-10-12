@@ -6,13 +6,37 @@ Gestão de uma equipa de natação para o treinador e os atletas: construtor de 
 na beira da piscina, competições e análise de prova, época e carga, objetivos, bem-estar, frequência cardíaca,
 recordes e um modelo de previsão de tempos. Feito para o telemóvel, em português europeu com inglês completo.
 
-Site: <https://aquastats.net> · [Documentação](docs/README.md) · Código proprietário, repositório privado ([ADR 0001](docs/adr/0001-licenca-e-autoria.md)).
+Site: <https://aquastats.net> · [Documentação](docs/README.md) · Código público para consulta, licença proprietária ([ADR 0001](docs/adr/0001-licenca-e-autoria.md)).
 
-| Treinador: "quem merece atenção hoje" | Cronometragem | Atleta |
-|---|---|---|
-| ![Vista da manhã do treinador](docs/img/coach-home-360.png) | ![Matriz de cronometragem](docs/img/matrix-360.png) | ![Página do atleta](docs/img/swimmer-360.png) |
+| "Como correu o treino?" | Cronometragem | "Porque correu assim?" | Atleta |
+|---|---|---|---|
+| ![Relatório do treino](docs/img/natacao-analise-treino-mobile.jpg) | ![Matriz de cronometragem](docs/img/matrix-360.png) | ![Análise de prova](docs/img/natacao-analise-prova-mobile.jpg) | ![Último treino do atleta](docs/img/natacao-atleta-ultimo-treino-mobile.jpg) |
 
 Capturas de um ambiente local com uma **equipa sintética** (nomes "Sintético N"), nunca dados reais.
+
+## In English
+
+Aquastats is a mobile-first web app for swimming coaches and their swimmers, in production at
+<https://aquastats.net> (Portuguese UI with a full English translation). Designed, built and run by one person.
+
+- **Product:** workout builder, poolside timing grid with an offline queue, meets (Lenex/PDF import with
+  AI-assisted reading checked against the document text, live results), season planning, and coach-facing
+  analysis that answers one question per screen ("How did the session go?", "Is this swimmer improving?",
+  "Why did the race go this way?").
+- **Analysis grounded in sports science:** each swimmer is compared with their own typical error (Hopkins,
+  Pyne), certainty is stated in words, and every sentence points to the data behind it. Research notes and
+  sources: [docs/natacao/](docs/natacao/).
+- **Stack:** Next.js 16 + React + TypeScript on Cloudflare Workers (OpenNext) · FastAPI (Python 3.12) on Cloud Run ·
+  Neon Postgres 18 with row-level security · Cloudflare AI worker · GitHub Actions.
+- **Security:** tenant isolation enforced in the database (RLS, two roles without `BYPASSRLS`, 49 tests against
+  a real Postgres), argon2id, HttpOnly sessions, origin-based CSRF, rate limits, API origin closed to the edge
+  worker. Threat model: [docs/security/](docs/security/).
+- **Measured performance:** timing grid LCP 21.8 s → 3.8 s and blocking time 10.3 s → 40 ms on a throttled
+  phone; page navigation under 300 ms; idempotent, conflict-free concurrent writes.
+- **Prediction model:** a hierarchical state model for every training rep, pre-registered and validated on a
+  synthetic generator, running in shadow mode until real data confirms it ([docs/ml/](docs/ml/README.md)).
+- **Quality:** pytest (incl. a Postgres suite), node:test, tsc, eslint, `pip-audit`, `npm audit` and gitleaks
+  over the full history on every PR. Screenshots and demos use a synthetic team only.
 
 ## Estado do projeto
 
@@ -36,9 +60,19 @@ querem ver a sua evolução e os objetivos sem expor os dados aos colegas.
   gravação é idempotente e ordenada pela hora da edição no dispositivo (sem corridas entre dois treinadores).
 - **Competições:** inscrições, resultados, ficheiros oficiais (Lenex/PDF, leitura assistida por IA) e
   resultados ao vivo; análise de prova (parciais, frequência, distância por braçada).
-- **Época e carga:** macrociclos, carga aguda:crónica (EWMA), simulação de taper.
-- **Treinador, "Hoje":** quem merece atenção e porquê (carga, falta de tempos, bem-estar), sem prescrições; comparação por dia, semana, mês e ano.
-- **Atleta:** evolução, objetivos com progresso, recordes, bem-estar, e uma nota clara sobre o que o treinador vê.
+- **Treino — "Como correu o treino?":** uma frase de conclusão, "✓ Correu bem" e "→ A melhorar" com o dado, o
+  que coincidiu (sono, ginásio, carga) e uma opção para a próxima; cada série num cartão com média, tempo devido,
+  regularidade e reps. Cada atleta é comparado com a sua variação normal, com a certeza em palavras.
+- **Evolução — "Está a melhorar?":** por tipo de série, as últimas 2 semanas contra as 6 anteriores.
+- **Carga — "Como reage este atleta?":** carga, cansaço (esforço, sono, recuperação) e tempos por semana.
+- **Prova — "Porque correu assim?":** tempo e diferença ao recorde pessoal, reação e parciais lado a lado com o
+  recorde, ritmo de prova e, para o treinador, polimento e preparação.
+- **Época:** macrociclos, distribuição de zonas por fase, simulação de polimento.
+- **Atleta:** o último treino e as provas escritos para ele (um ponto forte, um foco), objetivos, recordes,
+  bem-estar, e uma nota clara sobre o que o treinador vê.
+
+Porquê assim, com as fontes: [docs/natacao/benchmark-visualizacao.md](docs/natacao/benchmark-visualizacao.md) e
+[docs/natacao/guia-do-treinador.md](docs/natacao/guia-do-treinador.md).
 - **Modelo de previsão (v1.0, em sombra):** ver abaixo.
 
 ## Estrutura do repositório
@@ -66,8 +100,8 @@ Cada app tem o seu README com a estrutura interna e os comandos: [web](apps/web/
 2. **À beira da piscina, cronometra na matriz** (atletas em linhas, repetições em colunas). Cada toque grava
    no telemóvel, entra numa fila offline e sincroniza com a API; duas gravações da mesma célula nunca se
    sobrepõem (ganha a edição mais recente).
-3. **A app transforma tempos em informação:** forma e carga (aguda:crónica), quem merece atenção hoje,
-   recordes, objetivos, análise de prova (parciais, frequência de braçada, distância por braçada).
+3. **A app transforma tempos em conclusões:** como correu cada treino face ao normal de cada atleta, se está a
+   melhorar, como reage à carga, recordes, objetivos e análise de prova (parciais, reação, ritmo).
 4. **Em competição**, importa inscrições e resultados (Lenex ou PDF, com leitura assistida por IA validada
    contra o texto do documento), segue os resultados ao vivo e compara com a previsão do modelo.
 
@@ -83,7 +117,7 @@ os seus dados e o treinador só lê os da sua equipa.
 | Parcial (*split*) | Tempo intermédio dentro da repetição ou da prova |
 | Piscina curta / longa | 25 m (*scm*) / 50 m (*lcm*): os tempos de uma e de outra não se misturam |
 | Intensidade | Suave, A1 a A3, PROG, PA, MAX e ritmos de prova (P50…P400) |
-| Carga aguda:crónica | Carga recente (7 dias) dividida pela média das semanas anteriores |
+| Erro típico | A variação normal de um atleta na mesma série; uma diferença abaixo dela não é sinal |
 | Taper | Redução de volume antes da prova principal |
 | Conformal | Método que dá um intervalo com cobertura medida, sem supor a forma do erro |
 | RLS | *Row-Level Security*: o Postgres filtra as linhas por equipa e utilizador |

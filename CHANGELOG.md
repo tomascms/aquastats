@@ -2,6 +2,17 @@
 
 ## [Por lançar]
 
+### Visualização para o treinador (PR #28)
+- Treino "Como correu o treino?": frase de conclusão, "Correu bem / A melhorar" com o dado, o que coincidiu e uma
+  opção para a próxima; cartão por série; cada atleta comparado com o seu erro típico, certeza em palavras.
+- Análise › Treino: "Evolução" por tipo de série substitui "Modelo".
+- "Carga" substitui "Carga A:C"; análise de prova contra o recorde pessoal (reação, parciais, ritmo, polimento).
+- Atleta: "O teu último treino" e provas escritas para o nadador.
+- Removidos: "Quem merece atenção", "Como se calculou", plano de prova, "Planeado vs feito", CSS e aderência de
+  intensidade por ritmo /100 m, prova mais forte e mais fraca.
+- Navegação abaixo de 300 ms (Atleta 1,9 s → 0,14 s; Treino 1,0 s → 0,08 s).
+- Repositório público: README com resumo em inglês, exemplos dos parsers com nomes inventados (ADR 0001).
+
 ### Produto para o treinador
 - Perfil do atleta "Que nadador é e o que treinar agora?": nível por pontos WA, CSS, zonas pessoais, aderência de
   intensidade, queda de ritmo e sinais de treino com dado, razão, incerteza e alternativa (ADR 0004).
