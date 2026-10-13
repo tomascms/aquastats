@@ -522,6 +522,7 @@ export const en = {
   "Olá": "Hi",
   "Ainda sem treino": "No workout yet",
   "Tempos hoje": "Times today",
+  "Confirma que não és um robô e tenta outra vez.": "Confirm you are not a robot and try again.",
   "Tempos neste treino": "Times in this session",
   "Ver a minha série": "See my set",
   "Quando o treinador te convocar, o treino aparece aqui.": "When your coach adds you, the workout shows up here.",

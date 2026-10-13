@@ -201,8 +201,8 @@ Plano de produção desta versão: [docs/release/fase-g-plano.md](docs/release/f
 
 ## Roadmap
 
-Previsão de provas futuras com intervalo (modelo v1.1), comparação por escalão, resumo semanal, Turnstile no
-login, CSP com nonces, tarefa agendada para os resultados ao vivo. Avaliar o modelo
+Previsão de provas futuras com intervalo (modelo v1.1), comparação por escalão, resumo semanal, tarefa
+agendada para os resultados ao vivo. Avaliar o modelo
 desafiante com dados reais logo que haja algumas semanas de tempos cronometrados.
 
 ## Licença

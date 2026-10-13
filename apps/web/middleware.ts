@@ -96,6 +96,31 @@ function writeLimitFor(path: string, method: string): { limit: number; windowSec
   return WRITE_LIMITS["/api/v1/"];
 }
 
+/**
+ * Per-request CSP: only scripts carrying this request's nonce (Next.js adds it to its own) and what they load
+ * may run, so an injected <script> or inline handler does nothing. Styles stay inline-friendly (style={...}).
+ */
+function contentSecurityPolicy(nonce: string) {
+  const dev = process.env.NODE_ENV !== "production";
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? " 'unsafe-eval'" : ""}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    // 'strict-dynamic' ignores 'self' for scripts: the prediction model's Web Worker needs its own rule.
+    "worker-src 'self' blob:",
+    `connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://challenges.cloudflare.com${
+      dev ? " ws: wss: http://127.0.0.1:3000 http://localhost:3000" : ""
+    }`,
+    "frame-src https://accounts.google.com https://challenges.cloudflare.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
 function withSecurityHeaders(response: NextResponse, path: string) {
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     response.headers.set(key, value);
@@ -146,7 +171,17 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  return withSecurityHeaders(NextResponse.next(), path);
+  if (path.startsWith("/api/")) return withSecurityHeaders(NextResponse.next(), path);
+
+  // Next.js reads the nonce from the request's CSP header and puts it on the scripts it renders.
+  const nonce = btoa(crypto.randomUUID());
+  const csp = contentSecurityPolicy(nonce);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set("Content-Security-Policy", csp);
+  return withSecurityHeaders(response, path);
 }
 
 export const config = {

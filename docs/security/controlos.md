@@ -9,7 +9,7 @@ Legenda: ✅ em vigor em produção · 🟡 feito na branch, à espera da Fase G
 | Passwords argon2id (t=3, m=64 MiB, p=2); verificação fictícia quando a conta não existe (tempo constante) | ✅ |
 | Mínimo 12 caracteres com letras e números nas passwords novas; lista de comuns (PT incluídas) | 🟡 |
 | Mensagem única em qualquer falha de login (sem enumeração) | 🟡 |
-| Bloqueio de 15 min após 8 falhas | ✅ (limite: abusável para bloquear um treinador → Turnstile ⏳) |
+| Bloqueio de 15 min após 8 falhas | ✅ (Turnstile no login trava o abuso automático, quando ligado) |
 | Access token HMAC-SHA256 de 15 min; refresh rotativo com deteção de reutilização (revoga a família) | ✅ |
 | Cookies `HttpOnly`, `Secure`, `SameSite=Lax`, `path=/` | ✅ |
 | Eliminar conta exige "ELIMINAR" + password ou login recente (< 5 min) | ✅ |
@@ -33,8 +33,9 @@ Legenda: ✅ em vigor em produção · 🟡 feito na branch, à espera da Fase G
 
 API: `X-Content-Type-Options`, `X-Frame-Options DENY`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP/COEP,
 `Cache-Control: no-store`, HSTS 2 anos com `preload`. Site: os mesmos + CSP (`frame-ancestors 'none'`,
-`object-src 'none'`, `base-uri 'self'`, `form-action 'self'`). Limite: `script-src 'unsafe-inline'` (Next sem
-nonces) ⏳.
+`object-src 'none'`, `base-uri 'self'`, `form-action 'self'`) com `script-src 'nonce-…' 'strict-dynamic'`: um nonce
+novo por pedido em `middleware.ts`, sem `unsafe-inline` nos scripts (os estilos inline continuam permitidos) ✅.
+Login e registo: Cloudflare Turnstile verificado na edge, ligado com `TURNSTILE_SITE_KEY` e `TURNSTILE_SECRET_KEY` ✅.
 
 ## Base de dados
 
@@ -64,5 +65,5 @@ quando/se o repositório for público.
 2. A RLS protege contra bugs da app; SQL injection nos fluxos de autenticação (`aquastats_auth`) continuaria grave.
 3. Endpoint do Neon acessível da internet (sem *allowlist*: o Cloud Run não tem IP de saída fixo sem custo).
 4. Rate limit distribuído aproximado (sem Redis).
-5. CSP com `unsafe-inline`.
+5. CSP permite estilos inline (`style-src 'unsafe-inline'`); os scripts não.
 6. Sem pentest independente; sem monitorização de segurança dedicada.

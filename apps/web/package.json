@@ -12,7 +12,8 @@
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "test": "node --import tsx --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\"",
-    "backtest": "tsx scripts/ml-backtest.ts"
+    "backtest": "tsx scripts/ml-backtest.ts",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.8",
@@ -21,6 +22,7 @@
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24.19.1",
     "@types/react": "^19",

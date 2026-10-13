@@ -46,3 +46,7 @@ desktop.ini
 CLAUDE.md
 .claudeignore
 .claude/
+
+# Playwright
+test-results/
+playwright-report/
