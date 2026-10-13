@@ -67,7 +67,7 @@ from ..domain.models import Athlete, EmailVerificationToken, OAuthAccount, Passw
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
-def _finish_oauth(session: Session, request: Request, *, provider: str, provider_id: str, email: str | None, name: str, verified: bool) -> tuple[User, str]:
+def _finish_oauth(session: Session, request: Request, *, provider: str, provider_id: str, email: str | None, name: str, verified: bool, invite: str = "") -> tuple[User, str]:
     email = normalize_email(email)
     account = session.scalar(
         select(OAuthAccount).where(OAuthAccount.provider == provider, OAuthAccount.provider_account_id == provider_id)
@@ -81,7 +81,8 @@ def _finish_oauth(session: Session, request: Request, *, provider: str, provider
             raise HTTPException(status_code=403, detail="Conta desactivada.")
         if email:
             owner = find_user_by_email(session, email)
-            if owner and owner.id != user.id:
+            # Merge into the email's account only when Google vouches for the email.
+            if owner and owner.id != user.id and verified:
                 if user.email and normalize_email(user.email) != email:
                     raise HTTPException(status_code=409, detail="Este login já está ligado a outro email.")
                 user = absorb_user(session, user, owner)
@@ -90,10 +91,16 @@ def _finish_oauth(session: Session, request: Request, *, provider: str, provider
         if verified:
             user.is_verified = True
         user.last_login_at = stamp
-        return user, invite_next_path(request, home_path(user.role))
+        return user, invite_next_path(request, home_path(user.role), invite)
 
     existing = find_user_by_email(session, email)
     if existing:
+        # Same email = same account, but only on an email Google verified: otherwise anyone could claim it.
+        if not verified:
+            raise HTTPException(status_code=409, detail="Este email já tem conta. Entra com email e palavra-passe.")
+        if existing.password_hash and not existing.is_verified:
+            # Password set by someone who never proved the inbox (pre-registration hijack): drop it.
+            existing.password_hash = None
         already = session.scalar(
             select(OAuthAccount).where(OAuthAccount.user_id == existing.id, OAuthAccount.provider == provider)
         )
@@ -112,7 +119,7 @@ def _finish_oauth(session: Session, request: Request, *, provider: str, provider
         if verified:
             existing.is_verified = True
         existing.last_login_at = stamp
-        return existing, invite_next_path(request, home_path(existing.role))
+        return existing, invite_next_path(request, home_path(existing.role), invite)
 
     if not email:
         raise HTTPException(
@@ -132,7 +139,7 @@ def _finish_oauth(session: Session, request: Request, *, provider: str, provider
             updated_at=stamp,
         )
     )
-    return user, invite_next_path(request, "/escolher")
+    return user, invite_next_path(request, "/escolher", invite)
 
 
 @router.get("/status")
@@ -159,7 +166,8 @@ def google_start(request: Request, invite: str = ""):
         raise HTTPException(status_code=503, detail="Login Google ainda não está configurado.")
     verifier = pkce_verifier()
     state = secrets.token_urlsafe(24)
-    invite_code = clean_text(invite or request.cookies.get(INVITE_COOKIE) or "", 12).upper()
+    # Only an explicit invite: a cookie left by an old invite link must not hijack a later plain login.
+    invite_code = clean_text(invite or "", 12).upper()
     signed = sign_oauth_state(
         {
             "state": state,
@@ -230,6 +238,7 @@ def google_callback(
         email=email,
         name=name,
         verified=bool(google.get("email_verified")),
+        invite=invite,
     )
     redirect = RedirectResponse(safe_app_path(path, "/escolher"), status_code=303)
     if invite:
@@ -245,7 +254,7 @@ def google_login(body: dict, request: Request, response: Response, session: Sess
     client_id = settings.google_client_id.strip()
     if not client_id:
         raise HTTPException(status_code=503, detail="Login Google ainda não está configurado.")
-    remember_invite(response, body.get("invite") or request.cookies.get(INVITE_COOKIE))
+    invite = remember_invite(response, _body_invite(body) or request.cookies.get(INVITE_COOKIE))
     try:
         google = verify_google_id_token(str(body.get("credential") or ""), client_id)
     except Exception:
@@ -260,6 +269,7 @@ def google_login(body: dict, request: Request, response: Response, session: Sess
         email=email,
         name=name,
         verified=bool(google.get("email_verified")),
+        invite=invite,
     )
     issue_session(session, user, request, response)
     return {"role": user.role, "next": safe_app_path(path, "/escolher")}
@@ -298,7 +308,8 @@ def register(body: dict, request: Request, response: Response, session: Session 
         raise HTTPException(status_code=400, detail="Email inválido ou palavra-passe fraca (mínimo 12, letras e números).")
     existing = find_user_by_email(session, email)
     if existing:
-        if existing.password_hash:
+        # Checked before any write: HTTPException still commits the session.
+        if existing.password_hash or existing.is_verified:
             raise HTTPException(status_code=409, detail="Este email já tem conta. Entra, ou usa Google.")
         existing.password_hash = hash_password(password)
         existing.last_login_at = now()
@@ -306,8 +317,6 @@ def register(body: dict, request: Request, response: Response, session: Session 
             profile = session.get(Profile, existing.id)
             if profile and (not profile.full_name or profile.full_name == "Utilizador"):
                 profile.full_name = name[:80]
-        if existing.is_verified:
-            raise HTTPException(status_code=409, detail="Este email já tem conta. Entra, ou usa Google.")
         remember_invite(response, _body_invite(body))
         confirm = _send_signup_confirmation(session, existing)
         payload = {"ok": True, "needsConfirmation": True, "next": "/confirmar-pendente"}
@@ -362,7 +371,7 @@ def forgot_password(body: dict, session: Session = Depends(get_auth_session)):
     email = normalize_email(clean_text(str(body.get("email") or ""), 254))
     user = find_user_by_email(session, email)
     payload = {"ok": True}
-    if user and user.password_hash and user.is_active and not user.deleted_at:
+    if user and user.is_active and not user.deleted_at:
         raw = new_token(32)
         stamp = now()
         session.add(
@@ -398,6 +407,7 @@ def reset_password(body: dict, response: Response, session: Session = Depends(ge
     if not user or not user.is_active or user.deleted_at:
         raise HTTPException(status_code=400, detail="Este link já não é válido. Pede outro.")
     user.password_hash = hash_password(password)
+    user.is_verified = True  # the link reached the inbox
     user.failed_login_count = 0
     user.locked_until = None
     row.used_at = stamp

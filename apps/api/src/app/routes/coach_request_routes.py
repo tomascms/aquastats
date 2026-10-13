@@ -136,6 +136,8 @@ def request_coach_account(body: dict, request: Request, session: Session = Depen
         "O link vale 30 dias e só pode ser usado uma vez.\n",
     )
     if not sent:
+        # HTTPException still commits: undo the request so the user can retry instead of waiting 24h.
+        _set_request(user, previous or None)
         raise HTTPException(status_code=503, detail="Não foi possível enviar o pedido agora. Tenta mais tarde.")
     return {"requested": True, "requestedAt": stamp.isoformat()}
 

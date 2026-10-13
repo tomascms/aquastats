@@ -146,7 +146,8 @@ export async function middleware(request: NextRequest) {
   }
 
   if (path === "/") {
-    return withSecurityHeaders(NextResponse.redirect(new URL("/entrar", request.url), 307), path);
+    // Keep the query: /?invite=CODE and /?error=... must reach the login page.
+    return withSecurityHeaders(NextResponse.redirect(new URL(`/entrar${request.nextUrl.search}`, request.url), 307), path);
   }
 
   const authRule = authLimitFor(path);

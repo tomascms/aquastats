@@ -154,6 +154,8 @@ const listeners = new Set<() => void>();
 
 function requiresAuthBootstrap() {
   if (typeof window === "undefined") return false;
+  // The invite page (/entrar/CODE) must know the session too, or it never finishes joining.
+  if (window.location.pathname.startsWith("/entrar/")) return true;
   return ["/coach", "/swimmer", "/escolher"].some(
     (prefix) => window.location.pathname === prefix || window.location.pathname.startsWith(`${prefix}/`),
   );

@@ -7,6 +7,7 @@ import { AuthFrame } from "@/components/auth/auth-frame";
 import { useT, useTDynamic } from "@/i18n/provider";
 import { GoogleSignIn } from "@/components/auth/google-sign-in";
 import { api } from "@/lib/api";
+import { homeFor } from "@/lib/auth";
 import { safeNext } from "@/lib/safe-next";
 import { writeInviteCookie } from "@/lib/invite";
 import { useAppState, useAuthBoot } from "@/lib/store";
@@ -101,6 +102,11 @@ export default function JoinTeamPage() {
         <p className="mt-4 text-sm text-coral" role="alert">
           {banner}
         </p>
+      )}
+      {loggedIn && error && (
+        <Link href={homeFor(role)} className="btn-ghost mt-3 h-10 w-full">
+          {t("Continuar")}
+        </Link>
       )}
     </AuthFrame>
   );
