@@ -21,7 +21,7 @@ Porque é assim: [`benchmark-visualizacao.md`](benchmark-visualizacao.md).
 
 ## Treino › "Como correu o treino?"
 
-![Relatório do treino](../img/natacao-analise-treino-mobile.jpg)
+![Relatório do treino](../img/mobile-session.webp)
 
 - **Fichas de atleta com o estado do dia:**
   - ✓ ao nível ou acima do habitual;
@@ -58,7 +58,7 @@ Porque é assim: [`benchmark-visualizacao.md`](benchmark-visualizacao.md).
 
 ## Atleta › "Como está …?"
 
-![Resumo do atleta](../img/natacao-perfil-atleta-mobile.jpg)
+![Resumo do atleta](../img/mobile-profile.webp)
 
 Três cartões, cada um com uma ligação para o detalhe:
 - **Treino:** a evolução por tipo de série.
@@ -80,7 +80,7 @@ Por baixo: o nível (melhor prova e pontos World Aquatics) e, no máximo, 3 sina
 
 ## Análise › Prova › "Porque correu assim?"
 
-![Análise de prova](../img/natacao-analise-prova-mobile.jpg)
+![Análise de prova](../img/mobile-race.webp)
 
 - **Cabeçalho:** o tempo, a etiqueta MP se for recorde pessoal, e a diferença ao MP com data e competição.
 - **Correu bem / A melhorar.** Exemplos:
@@ -98,7 +98,7 @@ Por baixo: o nível (melhor prova e pontos World Aquatics) e, no máximo, 3 sina
 
 ## O que vê o atleta
 
-![Último treino do atleta](../img/natacao-atleta-ultimo-treino-mobile.jpg)
+![Último treino do atleta](../img/mobile-swimmer.webp)
 
 O atleta vê o mesmo, mas escrito para ele:
 - no máximo um ponto forte e um foco ("Foco para a próxima: …");

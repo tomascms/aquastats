@@ -56,5 +56,5 @@ DATABASE_ENABLE_RLS=true PYTHONPATH=src .venv/Scripts/uvicorn app.main:app --rel
 .venv/Scripts/python.exe -m pytest tests/ -q     # TEST_ADMIN_DATABASE_URL liga também a suite de RLS
 ```
 
-Dados de demonstração e passos completos: [README da raiz](../../README.md#correr-localmente-com-dados-sintéticos).
+Dados de demonstração e passos completos: [README da raiz](../../README.md#run-it-locally-synthetic-data-only).
 Deploy, reversão e restauro: [../../docs/runbooks.md](../../docs/runbooks.md).

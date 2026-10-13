@@ -1,15 +1,16 @@
-# Contribuir
+# Contributing
 
-Código proprietário ([LICENSE](LICENSE)): contribuições externas só com acordo escrito do titular.
+The code is proprietary ([LICENSE](../LICENSE)): outside contributions only with the owner's written agreement.
+Bug reports and ideas are welcome as issues.
 
-## Regras do projeto
+## Project rules
 
-- Branches de funcionalidade e PR para `main`; nada vai para `main` sem PR aprovado. Sem *force push*.
-- Commits pequenos, mensagem no imperativo; nunca segredos, `.env` ou dados reais de atletas (demonstração =
-  dados sintéticos de `scripts/export-synthetic.ts`).
-- UI em português europeu com inglês completo: cada `t("...")` novo precisa da chave em `apps/web/src/i18n/en.ts`.
-  Datas sempre dd/mm/aaaa (`DateField`).
-- Tabelas novas: RLS + `GRANT` numa migração e classificação em `tests/postgres/test_rls_matrix.py`.
-- Antes do PR: `pytest` (com `TEST_ADMIN_DATABASE_URL` para a suite Postgres), `npm test`, `npx next typegen &&
-  npx tsc --noEmit`, `npm run lint`, `npx opennextjs-cloudflare build`.
-- Modelo de previsão congelado em v1.0: mudanças são uma versão nova, pré-registada em `docs/ml/`.
+- Feature branches and a PR to `main`; nothing reaches `main` without a reviewed PR. No force pushes.
+- Small commits with imperative messages. Never secrets, `.env` files or real swimmer data (demos use the
+  synthetic data from `apps/web/scripts/export-synthetic.ts`).
+- The UI is European Portuguese with full English: every new `t("...")` needs its key in
+  `apps/web/src/i18n/en.ts`. Dates are always dd/mm/yyyy (`DateField`).
+- New tables: RLS and `GRANT` in a migration, and a row in `apps/api/tests/postgres/test_rls_matrix.py`.
+- Before a PR: `pytest` (with `TEST_ADMIN_DATABASE_URL` for the Postgres suite), `npm test`,
+  `npx next typegen && npx tsc --noEmit`, `npm run lint`, `npx opennextjs-cloudflare build`.
+- The prediction model is frozen at v1.0: any change is a new version, pre-registered in `docs/ml/`.

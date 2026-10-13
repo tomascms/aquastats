@@ -1,6 +1,10 @@
 # Aquastats
 
 [![CI](https://github.com/tomascms/aquastats/actions/workflows/ci.yml/badge.svg)](https://github.com/tomascms/aquastats/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/tomascms/aquastats/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/tomascms/aquastats/security/code-scanning)
+[![Licença: proprietária](https://img.shields.io/badge/licen%C3%A7a-propriet%C3%A1ria-lightgrey)](LICENSE)
+
+**English:** [README.md](README.md)
 
 Gestão de uma equipa de natação para o treinador e os atletas: construtor de treinos, cronometragem em matriz
 na beira da piscina, competições e análise de prova, época e carga, objetivos, bem-estar, frequência cardíaca,
@@ -10,33 +14,9 @@ Site: <https://aquastats.net> · [Documentação](docs/README.md) · Código pú
 
 | "Como correu o treino?" | Cronometragem | "Porque correu assim?" | Atleta |
 |---|---|---|---|
-| ![Relatório do treino](docs/img/natacao-analise-treino-mobile.jpg) | ![Matriz de cronometragem](docs/img/matrix-360.png) | ![Análise de prova](docs/img/natacao-analise-prova-mobile.jpg) | ![Último treino do atleta](docs/img/natacao-atleta-ultimo-treino-mobile.jpg) |
+| ![Relatório do treino](docs/img/mobile-session.webp) | ![Matriz de cronometragem](docs/img/mobile-matrix.webp) | ![Análise de prova](docs/img/mobile-race.webp) | ![Página do atleta](docs/img/mobile-swimmer.webp) |
 
 Capturas de um ambiente local com uma **equipa sintética** (nomes "Sintético N"), nunca dados reais.
-
-## In English
-
-Aquastats is a mobile-first web app for swimming coaches and their swimmers, in production at
-<https://aquastats.net> (Portuguese UI with a full English translation). Designed, built and run by one person.
-
-- **Product:** workout builder, poolside timing grid with an offline queue, meets (Lenex/PDF import with
-  AI-assisted reading checked against the document text, live results), season planning, and coach-facing
-  analysis that answers one question per screen ("How did the session go?", "Is this swimmer improving?",
-  "Why did the race go this way?").
-- **Analysis grounded in sports science:** each swimmer is compared with their own typical error (Hopkins,
-  Pyne), certainty is stated in words, and every sentence points to the data behind it. Research notes and
-  sources: [docs/natacao/](docs/natacao/).
-- **Stack:** Next.js 16 + React + TypeScript on Cloudflare Workers (OpenNext) · FastAPI (Python 3.12) on Cloud Run ·
-  Neon Postgres 18 with row-level security · Cloudflare AI worker · GitHub Actions.
-- **Security:** tenant isolation enforced in the database (RLS, two roles without `BYPASSRLS`, 49 tests against
-  a real Postgres), argon2id, HttpOnly sessions, origin-based CSRF, rate limits, API origin closed to the edge
-  worker. Threat model: [docs/security/](docs/security/).
-- **Measured performance:** timing grid LCP 21.8 s → 3.8 s and blocking time 10.3 s → 40 ms on a throttled
-  phone; page navigation under 300 ms; idempotent, conflict-free concurrent writes.
-- **Prediction model:** a hierarchical state model for every training rep, pre-registered and validated on a
-  synthetic generator, running in shadow mode until real data confirms it ([docs/ml/](docs/ml/README.md)).
-- **Quality:** pytest (incl. a Postgres suite), node:test, tsc, eslint, `pip-audit`, `npm audit` and gitleaks
-  over the full history on every PR. Screenshots and demos use a synthetic team only.
 
 ## Estado do projeto
 
@@ -84,7 +64,7 @@ aquastats/
 │   ├── api/          API (FastAPI): regras de negócio, autenticação, RLS, importação de ficheiros oficiais
 │   └── ai-worker/    Worker de IA (Cloudflare): lê regulamentos e listas em PDF
 ├── docs/             Arquitetura, decisões (ADR), segurança, runbooks, modelo de ML, histórico da release
-├── .github/          CI (testes, auditorias, gitleaks), Dependabot, modelos de issue e PR
+├── .github/          CI (testes, auditorias, gitleaks), modelos de issue e PR, política de segurança
 ├── docker-compose.yml  Serviços locais opcionais (Postgres, Redis)
 └── CHANGELOG.md
 ```

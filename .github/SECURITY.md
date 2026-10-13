@@ -1,25 +1,29 @@
-# Política de segurança
+# Security policy
 
-## Relatar uma vulnerabilidade
+## Reporting a vulnerability
 
-Usa o **relato privado de vulnerabilidades do GitHub**: separador *Security* → *Report a vulnerability*.
-O relato fica visível só para quem mantém o projeto. Não abras uma *issue* pública nem publiques detalhes antes
-de haver correção.
+Use GitHub's **private vulnerability reporting**: *Security* tab → *Report a vulnerability*. Only the
+maintainer sees the report. Please do not open a public issue or publish details before a fix is out.
 
-Indica, se possível: o que encontraste, como reproduzir, o impacto e a versão/commit.
+If you can, include what you found, how to reproduce it, the impact and the version or commit.
 
-## O que esperar
+## What to expect
 
-- Confirmação da receção em até 5 dias úteis.
-- Avaliação e plano de correção, com prazo, depois da confirmação.
-- Crédito no registo de alterações, se quiseres.
+- Acknowledgement within 5 working days.
+- An assessment and a fix plan with a date after that.
+- Credit in the changelog, if you want it.
 
-## Âmbito
+## Scope
 
-`aquastats.net`, a API (`apps/api`), o site (`apps/web`) e o Worker de IA (`apps/ai-worker`). Testes que
-afetem dados de outros utilizadores, a disponibilidade do serviço ou que usem engenharia social **não** estão
-autorizados. Usa contas e dados teus.
+`aquastats.net`, the API (`apps/api`), the site (`apps/web`) and the AI worker (`apps/ai-worker`). Testing that
+touches other users' data, the availability of the service, or uses social engineering is **not** authorised.
+Use your own accounts and data.
 
-## Versões suportadas
+## Supported versions
 
-Só a versão em produção (ramo `main`).
+Only the version in production (the `main` branch).
+
+---
+
+*Português:* relata pelo separador *Security* → *Report a vulnerability* (relato privado), nunca numa *issue*
+pública. Âmbito e prazos acima.
