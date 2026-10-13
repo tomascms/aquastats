@@ -66,7 +66,7 @@ export function SwimRankingsCard({ athlete, role }: { athlete: Athlete; role: "c
         </label>
         <div>
           <p className="text-xs text-mute">
-            {t("Para atualizar: abre o perfil, carrega Ctrl+A e Ctrl+C, e cola aqui. Só entram os tempos finais; o que já está no Aquastats não é alterado.")}
+            {t("Para atualizar: abre o perfil, seleciona tudo, copia e cola aqui. Só entram os tempos finais; o que já está no Aquastats não é alterado.")}
           </p>
           <textarea
             className="field mt-1 h-20 py-2 font-mono text-xs"

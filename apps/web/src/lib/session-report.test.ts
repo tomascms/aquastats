@@ -71,7 +71,7 @@ describe("relatório do treino", () => {
     const hist = [...history(), ...days.flatMap((d, i) => [...other(d, `h${i}`, 50, 35, 1), ...other(d, `h${i}`, 200, 150, 2)])];
     const today = [...set([71.6, 71.5, 71.7, 71.6]), ...other("2026-09-10", "today", 50, 35, 1), ...other("2026-09-10", "today", 200, 150, 2)];
     const r = sessionReport(today, expectedTimes([...hist, ...today]), ctx());
-    assert.equal(r.headline.key, "Quase tudo ao nível habitual: {k} de {m} séries abaixo.");
+    assert.equal(r.headline.key, "Quase tudo ao nível habitual: {k} de {m} séries mais lentas.");
     assert.equal(r.headline.vars?.m, 3);
   });
 

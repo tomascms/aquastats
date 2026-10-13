@@ -229,16 +229,16 @@ export function sessionReport(rows: TrainingRep[], expected: Map<string, Expecte
     headline = { key: "Ainda não dá para dizer: estas séries foram feitas poucas vezes." };
     tone = "unclear";
   } else if (slower * 2 >= main.length && slower > 0) {
-    headline = { key: "Treino abaixo do habitual: {k} de {m} séries abaixo.", vars: { k: slower, m: main.length } };
+    headline = { key: "Treino mais lento que o habitual: {k} de {m} séries mais lentas.", vars: { k: slower, m: main.length } };
     tone = "improve";
   } else if (faster > 0 && slower === 0) {
-    headline = { key: "Treino acima do habitual: {k} de {m} séries acima.", vars: { k: faster, m: main.length } };
+    headline = { key: "Treino mais rápido que o habitual: {k} de {m} séries mais rápidas.", vars: { k: faster, m: main.length } };
     tone = "good";
   } else if (faster > 0 && slower > 0) {
-    headline = { key: "Treino misto: {f} de {m} séries acima do habitual e {s} abaixo.", vars: { f: faster, s: slower, m: main.length } };
+    headline = { key: "Treino misto: {f} de {m} séries mais rápidas que o habitual e {s} mais lentas.", vars: { f: faster, s: slower, m: main.length } };
     tone = "mixed";
   } else if (slower > 0) {
-    headline = { key: "Quase tudo ao nível habitual: {k} de {m} séries abaixo.", vars: { k: slower, m: main.length } };
+    headline = { key: "Quase tudo ao nível habitual: {k} de {m} séries mais lentas.", vars: { k: slower, m: main.length } };
     tone = "mixed";
   } else {
     headline = { key: "Treino ao nível habitual: {m} séries no tempo devido.", vars: { m: main.length } };

@@ -23,6 +23,12 @@ describe("morning view", () => {
     assert.deepEqual(periodRanges(today, "year"), { current: ["2026-01-01", today], previous: ["2025-01-01", "2025-10-09"] });
   });
 
+  it("counts groups training in parallel once per shift, like the calendar", () => {
+    const sized = (id: string, meters: number) =>
+      ({ ...workout(id, today, []), blocks: [{ id, type: "main", rounds: 1, segments: [{ reps: 1, distanceM: meters, intensity: "A1", details: [] }] }] }) as unknown as Workout;
+    assert.equal(periodComparison([sized("fast", 4000), sized("long", 6000)], [], [], today, "day").current.meters, 6000);
+  });
+
   it("counts attendance marks, late as present", () => {
     const session = (date: string, statuses: ("present" | "late" | "absent")[]) => ({
       id: date, date, groupName: "", createdAt: "", marks: statuses.map((status, i) => ({ athleteId: `a${i}`, status, volumeM: 0 })),

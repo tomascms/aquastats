@@ -189,7 +189,7 @@ function PersonalBestTable({
           </div>
           <div>
             <dt className="text-xs text-white/65">
-              {t("Melhor pontuação FINA")}
+              {t("Melhor pontuação World Aquatics")}
               {gender !== "M" && gender !== "F" ? <span className="block text-[#ffd8a8]">{t("define o género do atleta")}</span> : null}
             </dt>
             <dd className="font-display text-3xl font-bold tabular">

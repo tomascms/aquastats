@@ -72,7 +72,9 @@ export function evolution(rows: TrainingRep[], today: string): Evolution {
       newBest: age(last.date) <= 14 && points.length >= 4 && points.every((p) => p === last || p.meanS > last.meanS),
     });
   }
-  kinds.sort((a, b) => b.points.length - a.points.length);
+  // Changes first (so what is shown backs up the headline), then the most practised sets.
+  const rank = (k: SetKind) => (k.verdict.dir === "faster" || k.verdict.dir === "slower" ? 0 : k.verdict.dir === "same" ? 1 : 2);
+  kinds.sort((a, b) => rank(a) - rank(b) || b.points.length - a.points.length);
   const judged = kinds.filter((k) => k.verdict.dir !== "unclear");
   const better = judged.filter((k) => k.verdict.dir === "faster").length;
   const worse = judged.filter((k) => k.verdict.dir === "slower").length;

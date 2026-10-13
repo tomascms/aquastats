@@ -93,7 +93,7 @@ export function GoalsPanel({ athleteId, role }: { athleteId: string; role: "coac
       distanceM: goal.distanceM ?? "",
       course: goal.course ?? "",
       target:
-        goal.targetValue == null ? "" : goal.kind === "time" ? formatRaceClock(goal.targetValue).replace(`'`, ":").replace(`"`, ".") : String(goal.targetValue),
+        goal.targetValue == null ? "" : goal.kind === "time" ? formatRaceClock(goal.targetValue) : String(goal.targetValue),
       metric: goal.metric ?? "",
       targetDate: goal.targetDate ?? "",
       competitionId: goal.competitionId ?? "",

@@ -25,6 +25,13 @@ describe("evolução por tipo de série", () => {
     assert.equal(out.kinds[0].distanceM, 100);
   });
 
+  it("mostra primeiro o que mudou, mesmo numa série menos treinada", () => {
+    const usual = [...base, ...session("2026-08-24", [70]), ...session("2026-10-01", [70, 70.1]), ...session("2026-10-08", [70, 69.9])];
+    const slower = ["2026-09-07", "2026-09-14", "2026-09-21"].flatMap((d) => session(d, [33, 33.1], { distanceM: 50 }));
+    const out = evolution([...usual, ...slower, ...session("2026-10-08", [34.5, 34.6], { distanceM: 50 })], today);
+    assert.deepEqual(out.kinds.map((k) => [k.distanceM, k.verdict.dir]), [[50, "slower"], [100, "same"]]);
+  });
+
   it("sem sessões recentes: ainda não dá para dizer", () => {
     const out = evolution(base, today);
     assert.equal(out.kinds[0].verdict.dir, "unclear");

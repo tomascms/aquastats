@@ -34,6 +34,8 @@ export default function SwimmerHomePage() {
     );
   }
   const today = workouts.find((workout) => workout.date === todayIso()) ?? workouts[0];
+  // Falls back to the latest session: then "today" would be wrong.
+  const isToday = today?.date === todayIso();
   const mine = timeLogs.filter((log) => log.athleteId === me?.id && log.workoutId === today?.id);
   // Only reps that actually needed a time count towards the stats (warm-up/cool-down/easy never do).
   const timedBlockOf = (blockId: string) => today?.blocks.find((block) => block.id === blockId);
@@ -74,7 +76,7 @@ export default function SwimmerHomePage() {
             <p className="font-mono text-xl text-aqua">{formatMeters(me ? athleteVolumeM(workouts, me.id) : 0)}</p>
           </div>
           <div className="rounded-2xl bg-ink-2 px-3 py-3">
-            <p className="text-xs tracking-[0.16em] text-mute">{t("Tempos hoje")}</p>
+            <p className="text-xs tracking-[0.16em] text-mute">{t(isToday ? "Tempos hoje" : "Tempos neste treino")}</p>
             <p className="text-xl font-semibold tracking-tight">{mineTimed.length}</p>
           </div>
         </div>
@@ -140,7 +142,7 @@ export default function SwimmerHomePage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">{t("Blocos de hoje")}</h2>
+        <h2 className="mb-3 text-lg font-semibold">{t(isToday ? "Blocos de hoje" : "Blocos do treino")}</h2>
         <div className="space-y-2">
           {today?.blocks.map((block) => {
             const count = mineTimed.filter((log) => log.blockId === block.id).length;

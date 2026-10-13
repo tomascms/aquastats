@@ -26,7 +26,13 @@ export function ReportPoints({ points }: { points: Point[] }) {
                   <span className="text-mist">{say(p.what)}</span>
                   {p.why?.length ? (
                     <span className="block text-mute">
-                      {t("Coincide com:")} {p.why.map(say).join("; ")}.
+                      {p.why.length === 1 && p.why[0].key === "sem causa clara nos dados" ? (
+                        t("Sem causa clara nos dados.")
+                      ) : (
+                        <>
+                          {t("Coincide com:")} {p.why.map(say).join("; ")}.
+                        </>
+                      )}
                     </span>
                   ) : null}
                   {p.next ? <span className="block text-mute">{say(p.next)}</span> : null}

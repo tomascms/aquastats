@@ -33,6 +33,15 @@ from app.core.passwords import hash_password  # noqa: E402
 PRODUCTION_ENDPOINTS = ("ep-rough-unit-b1cgm5pl",)  # Neon branch "production"
 DEMO_DOMAIN = "demo.aquastats.test"
 LOCAL_DEMO_PASSWORD = "sintetico-demo-2026"  # localhost databases only
+# The generator names workouts after its season phase ("Sintético taper"); the UI is in Portuguese.
+PHASE_TITLES = {
+    "ramp": "Retoma",
+    "general": "Preparação geral",
+    "specific": "Preparação específica",
+    "competitive": "Competitivo",
+    "taper": "Taper",
+    "transition": "Transição",
+}
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 NS = uuid.UUID("6f9b2a3e-5d1c-4e8a-9b7f-0c2d4e6f8a10")
 
@@ -121,7 +130,8 @@ def main(path: str) -> None:
         ) as copy:
             for w in data["workouts"]:
                 extra = {"course": w.get("course") or "", "groups": w.get("groups") or [], "focus": w.get("focus") or ""}
-                copy.write_row((w["id"], team, coach, w["title"][:120], w["date"], w["shift"], w["athleteIds"], Jsonb(w["blocks"]), Jsonb(extra)))
+                title = PHASE_TITLES.get(w["title"].removeprefix("Sintético "), w["title"])
+                copy.write_row((w["id"], team, coach, title[:120], w["date"], w["shift"], w["athleteIds"], Jsonb(w["blocks"]), Jsonb(extra)))
 
         with conn.cursor().copy(
             "copy time_logs (id, workout_id, block_id, athlete_id, rep_number, mm, ss, cc, splits, stroke, recorded_by, recorded_at) from stdin"

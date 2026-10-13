@@ -17,7 +17,8 @@ const one = (x: number) => x.toFixed(1).replace(".", ",");
 function Delta({ d, digits = 2, noise = 0.1 }: { d: number; digits?: number; noise?: number }) {
   const t = useT();
   // Under 0.1 s a split difference is noise (reaction, touch): shown as equal. The official final time has none.
-  if (Math.abs(d) < noise || d === 0)
+  // Rounded first: 0.71 − 0.61 is 0.0999… in floating point, yet it is shown as 0,10 s.
+  if (Math.abs(Math.round(d * 100) / 100) < noise || d === 0)
     return (
       <span className="whitespace-nowrap font-semibold text-mute">
         <span aria-hidden>=</span> {diffS(d, digits)}
@@ -143,10 +144,10 @@ export function RaceAnalysisPanel({
                 <dd>
                   <span className={`font-semibold ${prep.taper.verdict === "adequada" ? "text-good" : "text-slower"}`}>
                     <span aria-hidden>{prep.taper.verdict === "adequada" ? "✓ " : "▼ "}</span>
-                    {t(prep.taper.verdict === "adequada" ? "adequado" : prep.taper.verdict === "pouca" ? "curto" : "excessivo")}
+                    {t(prep.taper.verdict === "adequada" ? "adequado" : prep.taper.reductionPct < 0 ? "sem polimento" : prep.taper.verdict === "pouca" ? "curto" : "excessivo")}
                   </span>
                   {" · "}
-                  {t("volume −{pct} %", { pct: prep.taper.reductionPct })} · {t("trabalho rápido {now} % (antes {before} %)", { now: prep.taper.speedShareNow, before: prep.taper.speedShareBefore })}
+                  {prep.taper.reductionPct < 0 ? t("volume +{pct} %", { pct: -prep.taper.reductionPct }) : t("volume −{pct} %", { pct: prep.taper.reductionPct })} · {t("trabalho rápido {now} % (antes {before} %)", { now: prep.taper.speedShareNow, before: prep.taper.speedShareBefore })}
                 </dd>
               </div>
             ) : null}
