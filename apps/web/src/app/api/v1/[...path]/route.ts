@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { forwardCookies } from "@/lib/forward-cookies";
+import { TURNSTILE_PATHS, verifyTurnstile } from "@/lib/turnstile";
 
 const apiOrigin = (process.env.API_URL || "").replace(/\/$/, "");
 const edgeAuthToken = process.env.EDGE_AUTH_TOKEN || "";
@@ -35,6 +36,13 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   }
 
   const { path } = await context.params;
+  // Bot check on sign-in/sign-up, here at the edge: the API only accepts traffic from this worker.
+  // Off until TURNSTILE_SECRET_KEY is set (wrangler secret).
+  const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+  if (turnstileSecret && request.method === "POST" && TURNSTILE_PATHS.has(path.join("/"))) {
+    const human = await verifyTurnstile(turnstileSecret, request.headers.get("x-turnstile-token"), request.headers.get("cf-connecting-ip"));
+    if (!human) return NextResponse.json({ detail: "Confirma que não és um robô e tenta outra vez." }, { status: 403 });
+  }
   const target = `${apiOrigin}/api/v1/${path.join("/")}${request.nextUrl.search}`;
 
   const headers = new Headers();

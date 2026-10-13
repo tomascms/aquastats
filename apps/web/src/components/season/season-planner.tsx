@@ -205,6 +205,7 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
   const t = useT();
   const today = todayIso();
   const currentRef = useRef<HTMLTableRowElement>(null);
+  const currentCardRef = useRef<HTMLLIElement>(null);
   const weeks = useMemo(() => {
     const out: string[] = [];
     for (let week = weekStartMonday(plan.start); week <= plan.end && out.length < 60; week = addDays(week, 7)) out.push(week);
@@ -212,12 +213,72 @@ function SeasonWeeks({ plan, workouts, competitions }: { plan: SeasonPlan; worko
   }, [plan.end, plan.start]);
 
   useEffect(() => {
+    // Only one of the two layouts is visible; scrolling a hidden one does nothing.
     currentRef.current?.scrollIntoView({ block: "center" });
+    currentCardRef.current?.scrollIntoView({ block: "center" });
   }, []);
 
   return (
     <section className="overflow-hidden rounded-xl border border-line bg-panel">
-      <div className="max-h-[70vh] overflow-auto">
+      {/* Phone: one card per week, the 7 days side by side, so the week reads without scrolling sideways. */}
+      <ol className="max-h-[70vh] divide-y divide-line overflow-auto md:hidden">
+        {weeks.map((start, index) => {
+          const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+          const end = days[6];
+          const macro = plan.macros.find((cycle) => cycle.start <= end && cycle.end >= start);
+          const meso = plan.mesos.find((cycle) => cycle.start <= end && cycle.end >= start);
+          const weekWorkouts = workouts.filter((workout) => workout.date >= start && workout.date <= end);
+          const current = today >= start && today <= end;
+          return (
+            <li key={start} ref={current ? currentCardRef : undefined} className={`px-3 py-3 ${current ? "bg-pool-soft/40" : ""}`}>
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-sm">
+                  <span className="font-semibold text-mist">{t("Sem. {n}", { n: index + 1 })}</span>{" "}
+                  <span className="text-mute">
+                    {formatDatePt(start).slice(0, 5)}–{formatDatePt(end).slice(0, 5)}
+                  </span>
+                </p>
+                <p className="text-sm font-semibold tabular text-mist">{weekWorkouts.length ? formatMeters(parallelVolume(weekWorkouts, workoutMeters)) : "—"}</p>
+              </div>
+              {macro?.label || meso?.label ? (
+                <p className="mt-1 flex flex-wrap gap-1 text-xs">
+                  {macro?.label ? (
+                    <span className="rounded px-2 py-0.5 font-semibold" style={{ background: colorOf(macro).soft, color: colorOf(macro).band }}>
+                      {macro.label}
+                    </span>
+                  ) : null}
+                  {meso?.label ? (
+                    <span className="rounded px-2 py-0.5 font-medium" style={{ color: colorOf(meso).band, border: `1px dashed ${colorOf(meso).band}` }}>
+                      {meso.label}
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
+              <div className="mt-2 grid grid-cols-7 gap-1">
+                {days.map((iso, i) => {
+                  const dayWorkouts = weekWorkouts.filter((workout) => workout.date === iso);
+                  const meet = competitions.some((item) => item.date <= iso && meetEnd(item) >= iso);
+                  const km = dayWorkouts.length ? (parallelVolume(dayWorkouts, workoutMeters) / 1000).toFixed(1) : "";
+                  return (
+                    <Link
+                      key={iso}
+                      href={`/coach?date=${iso}`}
+                      className={`flex min-h-12 flex-col items-center justify-center rounded-lg text-center ${meet ? "bg-coral text-white" : dayWorkouts.length ? "bg-panel-2 text-mist" : "text-mute"} ${iso === today ? "ring-2 ring-pool" : ""}`}
+                      aria-label={`${WEEKDAYS[i]} ${formatDatePt(iso)}${km ? ` · ${km} km` : ""}${meet ? ` · ${t("Competição")}` : ""}`}
+                    >
+                      <span className="text-[10px]">
+                        {WEEKDAYS[i]} {Number(iso.slice(8, 10))}
+                      </span>
+                      <span className="text-xs font-semibold tabular">{km || "·"}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      <div className="hidden max-h-[70vh] overflow-auto md:block">
         <table className="w-full min-w-[980px] table-fixed text-xs">
           <thead className="sticky top-0 z-10 bg-panel-2 text-[11px] font-semibold uppercase tracking-wide text-mute">
             <tr>

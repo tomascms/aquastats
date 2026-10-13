@@ -13,6 +13,15 @@ gcloud run deploy aquastats-api --source . --region europe-west3 --project gen-l
 npx opennextjs-cloudflare build && npx opennextjs-cloudflare deploy
 ```
 
+Turnstile (login e registo): criar o widget no painel da Cloudflare (Turnstile → Add widget, domínio
+`aquastats.net`) e, a partir de `apps/web`, `npx wrangler secret put TURNSTILE_SECRET_KEY` e
+`npx wrangler secret put TURNSTILE_SITE_KEY`. Fica ativo no pedido seguinte, sem novo deploy. Desligar: `npx wrangler
+secret delete TURNSTILE_SECRET_KEY` (sem segredo a edge não verifica) e o mesmo para a chave do site.
+
+Custo 0 €: Cloud Run com `min-instances` 0 e no máximo 3 instâncias, CPU só durante pedidos; Neon suspende o compute
+quando parado (0,25–2 CU); orçamento GCP "aquastats 0 EUR" de 1 € com alertas por email a 1 %, 50 %, 100 % e
+previsão de 100 % (`gcloud billing budgets list --billing-account=01072B-666958-EE03A3`).
+
 Antes: CI verde, `npx tsc --noEmit`, `npm run lint`, `npm test`, `pytest` (com Postgres), build OpenNext.
 Depois: `https://aquastats.net/api/v1/health` → `aquastats-api`; `/api/v1/health/ready` → `ok`; login, criar
 treino, cronometrar, competições.

@@ -2,6 +2,15 @@
 
 ## [Por lançar]
 
+### Época no telemóvel, testes E2E, CSP com nonces, Turnstile e custo
+- Época: no telemóvel, um cartão por semana com os 7 dias lado a lado (km por dia, competições a vermelho, hoje
+  marcado); a tabela fica para ecrãs largos.
+- Testes E2E (Playwright, viewport de telemóvel) contra a demo sintética, também no CI: cronometrar, resumo do
+  atleta, análise de prova, relatório do treino, vista do atleta e CSP sem violações.
+- CSP com nonce por pedido e `'strict-dynamic'` (sem `unsafe-inline` nos scripts); `worker-src` para o modelo.
+- Cloudflare Turnstile no login e no registo, verificado na edge; desligado até haver chaves.
+- Custo: orçamento GCP de 1 € com alertas; Cloud Run e Neon confirmados a escalar a zero.
+
 ### Revisão do treinador e repositório para portefólio
 - "Hoje" conta o volume dos grupos em paralelo uma vez por turno, como o calendário (antes 29 km contra 17 km).
 - Um só formato de tempo em toda a app: `1:06,42` (decisão D7); antes os recordes usavam `01'06"42`.

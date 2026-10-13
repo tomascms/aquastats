@@ -11,6 +11,7 @@ Bug reports and ideas are welcome as issues.
 - The UI is European Portuguese with full English: every new `t("...")` needs its key in
   `apps/web/src/i18n/en.ts`. Dates are always dd/mm/yyyy (`DateField`).
 - New tables: RLS and `GRANT` in a migration, and a row in `apps/api/tests/postgres/test_rls_matrix.py`.
-- Before a PR: `pytest` (with `TEST_ADMIN_DATABASE_URL` for the Postgres suite), `npm test`,
+- Before a PR: `pytest` (with `TEST_ADMIN_DATABASE_URL` for the Postgres suite), `npm test`, `npm run e2e`
+  (against the local demo),
   `npx next typegen && npx tsc --noEmit`, `npm run lint`, `npx opennextjs-cloudflare build`.
 - The prediction model is frozen at v1.0: any change is a new version, pre-registered in `docs/ml/`.

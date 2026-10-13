@@ -98,6 +98,8 @@ Measured locally on a synthetic team (32 swimmers × 4 seasons, 71,636 times) wi
 - Row-level security with two database roles without `BYPASSRLS`: one for team requests, one only for sign-in.
   Checked by 49 tests against a real Postgres (cross-team reads and writes, cascades, races).
 - argon2id, HttpOnly/Secure/SameSite sessions, origin-based CSRF checks, rate limits, no account enumeration.
+- Strict Content-Security-Policy with a fresh nonce per request (`'strict-dynamic'`, no inline scripts), and
+  Cloudflare Turnstile on sign-in and sign-up, verified at the edge.
 - The API only accepts traffic from the edge worker (`X-Edge-Auth`); SSRF guards on outbound fetches.
 - Deleting a swimmer or an account deletes everything that belongs to them, predictions included.
 - gitleaks over the full history, `pip-audit` and `npm audit` on every PR, CodeQL weekly.
@@ -166,10 +168,12 @@ Open `http://127.0.0.1:3000` (not `localhost`) and sign in as `treinador@demo.aq
 |---|---|
 | `cd apps/api && pytest` | 150+ API tests; with `TEST_ADMIN_DATABASE_URL` also the RLS, cascade and race suite on real Postgres |
 | `cd apps/web && npm test` | 120+ logic tests (node:test), the model harness and its golden test |
+| `cd apps/web && npm run e2e` | Playwright on a phone viewport against the demo: timing a rep, swimmer summary, race analysis, training report, swimmer view, CSP |
 | `npx next typegen && npx tsc --noEmit`, `npm run lint` | Types and lint |
 | `npx tsx scripts/ml-backtest.ts --seeds tune …` | Model backtest ([docs/ml/harness.md](docs/ml/harness.md)) |
 
-CI runs all of it on every PR with Postgres 18, plus `pip-audit`, `npm audit`, gitleaks and the production build.
+CI runs all of it on every PR with Postgres 18 (the E2E job builds a synthetic team, starts the API with RLS on
+and the production build of the site), plus `pip-audit`, `npm audit`, gitleaks and the production build.
 
 ## Deployment and operations
 

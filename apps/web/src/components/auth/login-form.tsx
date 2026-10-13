@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthFrame } from "@/components/auth/auth-frame";
 import { GoogleSignIn } from "@/components/auth/google-sign-in";
+import { Turnstile } from "@/components/auth/turnstile";
 import { PasswordStrength } from "@/components/ui/password-strength";
 import { useT, useTDynamic } from "@/i18n/provider";
 import { homeFor } from "@/lib/auth";
@@ -15,7 +16,7 @@ import { useAppState, useAuthBoot } from "@/lib/store";
 
 type AuthStatus = { apiAvailable: boolean; database: boolean; google: boolean; clientId?: string };
 
-export function LoginForm() {
+export function LoginForm({ turnstileSiteKey = "" }: { turnstileSiteKey?: string }) {
   const t = useT();
   const td = useTDynamic();
   const router = useRouter();
@@ -31,6 +32,8 @@ export function LoginForm() {
   const [status, setStatus] = useState<AuthStatus | null>(null);
   const [invite, setInvite] = useState("");
   const [teamCode, setTeamCode] = useState("");
+  const [captcha, setCaptcha] = useState("");
+  const [captchaRound, setCaptchaRound] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -72,6 +75,7 @@ export function LoginForm() {
         mode === "register" ? "/api/v1/auth/register" : "/api/v1/auth/login",
         {
           method: "POST",
+          headers: turnstileSiteKey ? { "x-turnstile-token": captcha } : undefined,
           body: JSON.stringify({ email, password, name, invite: invite || teamCode }),
         },
       );
@@ -87,6 +91,9 @@ export function LoginForm() {
     } catch (err) {
       setError(formatApiError(err as ApiError) || t("Não foi possível entrar."));
       setBusy(false);
+      // The token was spent on this attempt.
+      setCaptcha("");
+      setCaptchaRound((round) => round + 1);
     }
   }
 
@@ -179,7 +186,9 @@ export function LoginForm() {
           </p>
         )}
 
-        <button type="submit" disabled={busy} className="btn-primary mt-2 h-11 w-full font-semibold text-base">
+        <Turnstile siteKey={turnstileSiteKey} round={captchaRound} onToken={setCaptcha} />
+
+        <button type="submit" disabled={busy || Boolean(turnstileSiteKey && !captcha)} className="btn-primary mt-2 h-11 w-full font-semibold text-base">
           {busy ? t("A entrar…") : mode === "register" ? t("Criar conta") : t("Entrar")}
         </button>
       </form>

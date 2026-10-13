@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { Barlow_Condensed, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastHost } from "@/components/ui/toast-host";
@@ -73,6 +74,7 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const locale = await getServerLocale();
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -87,7 +89,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang={locale} className={`${geist.variable} ${geistMono.variable} ${barlow.variable} h-full antialiased`}>
       <body className="min-h-full">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-        <script dangerouslySetInnerHTML={{ __html: EARLY_SNAPSHOT_SCRIPT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: EARLY_SNAPSHOT_SCRIPT }} />
         <a
           href="#conteudo"
           className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-aqua focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink"
