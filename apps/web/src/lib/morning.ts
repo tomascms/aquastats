@@ -1,4 +1,5 @@
 import { addDays, addMonths, weekStartMonday } from "./dates";
+import { parallelVolume } from "./groups";
 import { workoutMeters } from "./rankings";
 import type { AttendanceSession, TimeLog, Workout } from "./types";
 
@@ -38,7 +39,8 @@ export function periodComparison(
     const marks = attendance.filter((session) => session.date >= from && session.date <= to).flatMap((session) => session.marks);
     return {
       sessions: inRange.length,
-      meters: inRange.reduce((sum, workout) => sum + workoutMeters(workout), 0),
+      // Same rule as the calendar: groups training in parallel count once per shift.
+      meters: parallelVolume(inRange, workoutMeters),
       times: timeLogs.filter((log) => ids.has(log.workoutId)).length,
       attendance: { present: marks.filter((mark) => mark.status !== "absent").length, marked: marks.length },
     };

@@ -100,7 +100,7 @@ export default function AthletePage() {
                       {GENDER_LABEL[value]}
                     </button>
                   ))}
-                  <span className="text-xs text-[#ffd8a8]">{t("Necessário para calcular os pontos FINA.")}</span>
+                  <span className="text-xs text-[#ffd8a8]">{t("Necessário para calcular os pontos World Aquatics.")}</span>
                 </>
               )}
             </div>

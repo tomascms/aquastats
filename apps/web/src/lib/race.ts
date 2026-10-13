@@ -420,10 +420,9 @@ export function formatRaceClock(total: number): string {
   const rest = rounded % 6000;
   const whole = Math.floor(rest / 100);
   const hundredths = rest % 100;
-  if (minutes > 0) {
-    return `${String(minutes).padStart(2, "0")}'${String(whole).padStart(2, "0")}"${String(hundredths).padStart(2, "0")}`;
-  }
-  return `${whole}"${String(hundredths).padStart(2, "0")}`;
+  // One time format across the app (docs/natacao/benchmark-visualizacao.md, D7): 1:06,42 and 28,74.
+  const cc = String(hundredths).padStart(2, "0");
+  return minutes > 0 ? `${minutes}:${String(whole).padStart(2, "0")},${cc}` : `${whole},${cc}`;
 }
 
 export function eventLabel(session: Pick<RaceSession, "distanceM" | "stroke" | "course">): string {

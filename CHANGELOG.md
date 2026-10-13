@@ -2,6 +2,21 @@
 
 ## [Por lançar]
 
+### Revisão do treinador e repositório para portefólio
+- "Hoje" conta o volume dos grupos em paralelo uma vez por turno, como o calendário (antes 29 km contra 17 km).
+- Um só formato de tempo em toda a app: `1:06,42` (decisão D7); antes os recordes usavam `01'06"42`.
+- Análise de prova: com mais volume antes da prova diz "Sem polimento: o volume subiu X %" (antes "só desceu
+  -52 %"); reação de 0,10 s já conta; "Chegou mais rápido" só quando a semana não está "no devido".
+- Relatório do treino e Evolução: "mais rápido/mais lento que o habitual" em vez de "acima/abaixo"; as séries que
+  mudaram aparecem primeiro; "Suave" em vez de "SUAVE".
+- Equipa e listas de atletas por ordem natural em português (2 antes de 10, acentos no sítio certo).
+- Competições e recordes mostram "A carregar…" enquanto chega o histórico, em vez de "Ainda não há".
+- Matriz: cada sessão paralela mostra o volume, para distinguir os grupos.
+- Atleta: "Tempos neste treino" quando o último treino não é de hoje.
+- Pontos "World Aquatics" em vez de "FINA"; texto do SwimRankings sem atalhos de teclado.
+- README em inglês com galeria (WebP), README.pt.md, SECURITY e CONTRIBUTING em inglês, índice de `docs/` e
+  dos resultados do modelo; títulos dos treinos sintéticos em português.
+
 ### Visualização para o treinador (PR #28)
 - Treino "Como correu o treino?": frase de conclusão, "Correu bem / A melhorar" com o dado, o que coincidiu e uma
   opção para a próxima; cartão por série; cada atleta comparado com o seu erro típico, certeza em palavras.

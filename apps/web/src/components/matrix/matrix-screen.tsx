@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDistance, sameMeters, splitChoices } from "@/lib/distances";
 import { BLOCK_LABEL, COURSE_LABEL, SHIFT_LABEL, displayTitle, strokeLabel } from "@/lib/labels";
 import { formatSendOff } from "@/lib/send-off";
+import { formatMeters, workoutMeters } from "@/lib/rankings";
 import {
   INTENSITY_LABEL,
   WORKOUT_STROKE_LABEL,
@@ -523,7 +524,8 @@ export function MatrixScreen() {
                 item.id === workout.id ? "bg-aqua text-ink" : "border border-line bg-panel text-mute"
               }`}
             >
-              {SHIFT_LABEL[item.shift]} · {displayTitle(item.title)}
+              {/* Parallel group sessions share shift and title: the volume tells them apart, as on the calendar. */}
+              {SHIFT_LABEL[item.shift]} · {displayTitle(item.title)} · {formatMeters(workoutMeters(item))}
             </button>
           ))}
         </div>

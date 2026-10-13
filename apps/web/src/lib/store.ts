@@ -240,7 +240,8 @@ function applySnapshot(snapshot: Snapshot, role: AppState["role"], swimmerId = "
     swimmerId: snapshot.swimmerId || swimmerId,
     teamName: snapshot.teamName,
     joinCode: snapshot.joinCode || "",
-    athletes: snapshot.athletes,
+    // The database sorts by byte order ("Álvaro" after "Zé", "Atleta 10" before "Atleta 2").
+    athletes: [...snapshot.athletes].sort((a, b) => a.name.localeCompare(b.name, "pt", { numeric: true, sensitivity: "base" })),
     workouts: [...snapshot.workouts, ...olderWorkouts],
     timeLogs: [
       ...olderLogs,

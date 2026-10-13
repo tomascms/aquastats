@@ -13,7 +13,7 @@ import { useT } from "@/i18n/provider";
 
 export default function CompeticoesPage() {
   const t = useT();
-  const { competitions, meetEntries, meetResults, raceSessions } = useAppState();
+  const { competitions, meetEntries, meetResults, raceSessions, historyLoaded } = useAppState();
 
   return (
     <div className="space-y-6">
@@ -26,7 +26,10 @@ export default function CompeticoesPage() {
 
       <MeetFilesDrop />
 
-      {competitions.length === 0 ? (
+      {/* Past meets arrive with the older history: no "nothing here" before it does. */}
+      {competitions.length === 0 && !historyLoaded ? (
+        <p className="text-sm text-mute" role="status">{t("A carregar…")}</p>
+      ) : competitions.length === 0 ? (
         <section className="rounded-2xl border border-dashed border-line-strong bg-panel px-6 py-12 text-center">
           <p className="font-display text-2xl font-bold">{t("Ainda não há competições")}</p>
           <p className="mt-1 text-sm text-mute">{t("Larga o regulamento acima para criar a primeira.")}</p>

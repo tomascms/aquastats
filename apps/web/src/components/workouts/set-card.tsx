@@ -4,6 +4,8 @@ import { POSITION, PositionLegend, VerdictTag, diffS, swimClock } from "@/compon
 import { useT } from "@/i18n/provider";
 import { TE_PRIOR, repPosition } from "@/lib/coach-verdict";
 import type { SetSummary } from "@/lib/session-report";
+import { INTENSITY_LABEL } from "@/lib/set";
+import type { Intensity } from "@/lib/types";
 import type { TrainingTarget } from "@/lib/training-prediction";
 
 /**
@@ -21,7 +23,7 @@ export function SetCard({ set, predicted, showPredicted = true, openReps = false
     <article className="rounded-xl border border-line p-3">
       <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h4 className="font-semibold text-mist">
-          {set.reps}×{set.distanceM} {set.intensity}
+          {set.reps}×{set.distanceM} {INTENSITY_LABEL[set.intensity as Intensity] ?? set.intensity}
           {set.gearLabel ? <span className="font-normal text-mute"> · {set.gearLabel}</span> : null}
         </h4>
         {!easy ? <VerdictTag verdict={set.verdict} size="xs" /> : null}

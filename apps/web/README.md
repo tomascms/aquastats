@@ -15,12 +15,12 @@ inglês completo. Pensado para o telemóvel à beira da piscina, com fila offlin
 
 ```
 src/app/
-  coach/        cronometro, matrix, workouts, plano, epoca, competicoes, provas, team, definicoes
+  coach/        calendário e "Hoje", workouts, matrix, competicoes, provas (análise), epoca, team, definicoes
   swimmer/      página do atleta, histórico, treino, provas, definições
   entrar/ confirmar/ repor/ escolher/ aprovar-treinador/   entrada, convites e confirmações
   api/v1/[...path]/route.ts   proxy para a API
-src/components/  UI por área: workouts, matrix, race (analise), season, competicoes, goals, heart-rate,
-                 wellness, team, shells (layouts), ui (botões, toasts, confirmações)
+src/components/  UI por área: coach, workouts, matrix, analise, season, competicoes, goals, heart-rate,
+                 wellness, team, settings, auth, shells (layouts), ui (botões, toasts, confirmações)
 src/lib/         lógica pura e testada
   set.ts, workout-text.ts, send-off.ts      treino: estrutura, texto escrito, saídas
   race.ts, race-analysis.ts, rankings.ts    provas, parciais, recordes
@@ -51,5 +51,5 @@ npx opennextjs-cloudflare build                                            # bui
 ```
 
 Sem uma API a correr, o site abre mas não autentica; os passos para a API e os dados sintéticos estão no
-[README da raiz](../../README.md#correr-localmente-com-dados-sintéticos).
+[README da raiz](../../README.md#run-it-locally-synthetic-data-only).
 Backtest do modelo: [../../docs/ml/harness.md](../../docs/ml/harness.md). Deploy: [../../docs/runbooks.md](../../docs/runbooks.md).

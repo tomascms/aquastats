@@ -218,7 +218,7 @@ const clock = (seconds: number | null | undefined) => (seconds ? formatRaceClock
 const resultSeconds = (result?: MeetResult) => (result && (result.mm || result.ss || result.cc) ? result.mm * 60 + result.ss + result.cc / 100 : null);
 const heatLane = (heat?: number | null, lane?: number | null) => (heat || lane != null ? `S${heat ?? "—"}/P${lane ?? "—"}` : "—");
 const placeLabel = (place?: number | null) => (place ? `${place}.º` : "");
-const typed = (seconds: number) => formatRaceClock(seconds).replace("'", ":").replace('"', ".");
+const typed = formatRaceClock;
 
 function AthleteEvents({
   meet,
@@ -506,7 +506,7 @@ function EntryForm({
       <label className={`${small} sm:col-span-2`}>
         {t("Tempo de inscrição")}
         <span className="flex gap-1">
-          <input className={`${field} font-mono`} placeholder="1:02.34" value={entryTime} onChange={(change) => setEntryTime(change.target.value)} />
+          <input className={`${field} font-mono`} placeholder="1:02,34" value={entryTime} onChange={(change) => setEntryTime(change.target.value)} />
           <select className="field h-9 w-20 py-1 text-sm" value={entryCourse} onChange={(change) => setEntryCourse(change.target.value as PoolCourse)}>
             <option value="scm">25m</option>
             <option value="lcm">50m</option>
@@ -515,11 +515,11 @@ function EntryForm({
       </label>
       <label className={small}>
         {t("Objetivo")}
-        <input className={`${field} font-mono`} placeholder="1:01.50" value={goal} onChange={(change) => setGoal(change.target.value)} />
+        <input className={`${field} font-mono`} placeholder="1:01,50" value={goal} onChange={(change) => setGoal(change.target.value)} />
       </label>
       <label className={small}>
         {t("Resultado")}
-        <input className={`${field} font-mono`} placeholder="1:01.20" value={final} onChange={(change) => setFinal(change.target.value)} />
+        <input className={`${field} font-mono`} placeholder="1:01,20" value={final} onChange={(change) => setFinal(change.target.value)} />
       </label>
       <div className="flex items-end justify-end gap-2 sm:col-span-4">
         <button type="button" className="btn-ghost h-9" onClick={onDone} disabled={busy}>

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vulnerabilidade de segurança · Security vulnerability
+    url: https://github.com/tomascms/aquastats/security/advisories/new
+    about: Relato privado, nunca numa issue pública · Private report, never a public issue.

@@ -68,7 +68,7 @@ Este ficheiro é o registo único do progresso (sobrevive a compactações de co
 - [x] Role `aquastats_auth` separada (migração 012): a role da API já não contorna a RLS mesmo com a flag
 - [x] Login: mensagens uniformes (sem enumeração), password mínima 12
 - [x] `next=` rejeita caracteres de controlo; `X-Request-Id` validado; limpeza do `_hits` do rate limit
-- [x] Dependabot: triagem em `dependabot.md` (7 substituídos pelo #14; 3 majors abertos com razão)
+- [x] Dependabot: triagem feita (7 substituídos pelo #14; 3 majors fechados com razão)
 - [x] `docs/security/` (modelo de ameaças, matriz RLS, controlos e limites)
 
 ## Fase C — Resiliência, concorrência, escalabilidade

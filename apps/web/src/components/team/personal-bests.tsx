@@ -27,7 +27,7 @@ const COURSES: PoolCourse[] = ["scm", "lcm"];
 export function PersonalBests({ athlete, role }: { athlete: Athlete; role: "coach" | "swimmer" }) {
   const t = useT();
   const router = useRouter();
-  const { competitions, meetEntries, meetResults, raceSessions } = useAppState();
+  const { competitions, meetEntries, meetResults, raceSessions, historyLoaded } = useAppState();
   const best = useMemo(
     () => personalBests(raceRecords(competitions, meetEntries, meetResults, raceSessions, athlete.id, athlete.seedRecords)),
     [athlete.id, athlete.seedRecords, competitions, meetEntries, meetResults, raceSessions],
@@ -47,7 +47,7 @@ export function PersonalBests({ athlete, role }: { athlete: Athlete; role: "coac
   }
 
   if (!best.length) {
-    return <p className="px-4 py-5 text-sm text-mute">{t("Ainda não há recordes pessoais.")}</p>;
+    return <p className="px-4 py-5 text-sm text-mute" role="status">{historyLoaded ? t("Ainda não há recordes pessoais.") : t("A carregar…")}</p>;
   }
 
   return (

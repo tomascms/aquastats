@@ -100,6 +100,10 @@ describe("carga e prova", () => {
     assert.ok(coach.points.some((p) => p.tone === "improve" && p.what.key === "Polimento excessivo: o volume desceu {pct} % nas 2 semanas antes."));
     const athlete = raceReport(mark, [mark], race, [race], workouts, [], [], new Map(), "athlete");
     assert.ok(!athlete.points.some((p) => p.what.key.startsWith("Polimento")));
+    // More metres before the race than in the block: say it rose, never "only dropped -52 %".
+    const more = [...workouts.slice(0, 4), w("2026-10-05", 9000), w("2026-10-06", 9000)];
+    const rose = raceReport(mark, [mark], race, [race], more, [], [], new Map()).points.find((p) => p.what.key.startsWith("Sem polimento"));
+    assert.equal(rose?.what.vars?.pct, 50); // 9 km a week against 6 km
   });
 
   it("prova contra o MP: parciais com diferença, ritmo de prova e foco na passagem", () => {
@@ -124,5 +128,8 @@ describe("carga e prova", () => {
     assert.equal(slow.points.find((p) => p.tone === "improve")?.what.vars?.s, 0.15);
     const same = raceReport({ id: "now", date: "2026-10-12", timeS: 61.6, meetTitle: "", reactionS: 0.7 }, [pbMark], race, [race], [], [], [], new Map());
     assert.ok(!same.points.some((p) => p.what.key.startsWith("Reação")));
+    // 0.71 − 0.61 is 0.0999… in floating point: still the 0,10 s the screen shows.
+    const edge = raceReport({ id: "now", date: "2026-10-12", timeS: 61.6, meetTitle: "", reactionS: 0.71 }, [{ ...pbMark, reactionS: 0.61 }], race, [race], [], [], [], new Map());
+    assert.equal(edge.points.find((p) => p.what.key.startsWith("Reação"))?.what.vars?.s, 0.1);
   });
 });

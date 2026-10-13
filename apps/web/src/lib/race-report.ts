@@ -119,7 +119,7 @@ export function raceReport(
     improve.push({ tone: "improve", what: { key: "Saiu mais rápido que no recorde e quebrou no fim: abertura rápida demais." } });
   // Reaction against the PB's; under 0.1 s it is noise.
   const reaction = mark.reactionS ? { now: mark.reactionS, ref: ref?.reactionS || null } : null;
-  if (reaction?.ref && reaction.now - reaction.ref >= 0.1)
+  if (reaction?.ref && r2(reaction.now - reaction.ref) >= 0.1)
     improve.push({
       tone: "improve",
       what: { key: athlete ? "Reagiste {s} s mais devagar que no recorde ({now} s)." : "Reação {s} s mais lenta que no recorde ({now} s; no MP {ref} s).", vars: { s: r2(reaction.now - reaction.ref), now: reaction.now, ref: reaction.ref } },
@@ -132,7 +132,10 @@ export function raceReport(
     else
       improve.push({
         tone: "improve",
-        what: { key: prep.taper.verdict === "pouca" ? "Polimento curto: o volume só desceu {pct} % nas 2 semanas antes." : "Polimento excessivo: o volume desceu {pct} % nas 2 semanas antes.", vars: { pct: prep.taper.reductionPct } },
+        what:
+          prep.taper.reductionPct < 0
+            ? { key: "Sem polimento: o volume subiu {pct} % nas 2 semanas antes.", vars: { pct: -prep.taper.reductionPct } }
+            : { key: prep.taper.verdict === "pouca" ? "Polimento curto: o volume só desceu {pct} % nas 2 semanas antes." : "Polimento excessivo: o volume desceu {pct} % nas 2 semanas antes.", vars: { pct: prep.taper.reductionPct } },
         next: { key: "Referência: descer 40–60 % do volume nas 2 semanas antes, mantendo a intensidade (Bosquet 2007)." },
       });
     if (prep.taper.lowSpeed)
@@ -142,7 +145,8 @@ export function raceReport(
         next: { key: "No polimento, manter algum trabalho rápido e curto." },
       });
   }
-  if (prep.trend && Math.abs(prep.trend.recentPct - prep.trend.beforePct) >= 0.5) {
+  // Same ±0.5 % band as the panel ("no devido"): no sentence when both weeks read "no devido".
+  if (prep.trend && Math.abs(prep.trend.recentPct - prep.trend.beforePct) >= 0.5 && Math.max(Math.abs(prep.trend.recentPct), Math.abs(prep.trend.beforePct)) > 0.5) {
     if (prep.trend.recentPct < prep.trend.beforePct) good.push({ tone: "good", what: { key: athlete ? "Chegaste à prova a nadar mais rápido nos treinos." : "Chegou à prova a nadar mais rápido nos treinos da última semana." } });
     else {
       const why: Msg[] = [];
