@@ -73,3 +73,16 @@ def test_live_url_is_restricted():
     for bad in ("http://live.swimrankings.net/1/", "https://user:pw@evil.example/1/", "https://live.swimrankings.net/../etc/", "https://x.org:8080/a/"):
         with pytest.raises(HTTPException):
             normalize_url(bad)
+
+
+def test_result_line_without_comma_licence_before_year():
+    person, result = _result_line("1. Afonso Demo EXEMPLO 900005 12 Vilacondense 38.39 520", EVENT_100, [], None, 2026)
+    assert (person.first, person.last, person.license, person.year, person.club) == ("Afonso Demo", "Exemplo", "900005", 2012, "Vilacondense")
+    assert (result.time_s, result.place) == (38.39, 1)
+
+
+def test_pool_from_record_lines():
+    from app.domain.meet_rules import detect_course
+
+    assert detect_course("prova 1 masc., 50m mariposa recordes nacionais 25m open 22.48 recorde territorial 25m juv a 25.01") == "scm"
+    assert detect_course("prova 1 masc., 50m mariposa recordes nacionais 50m open 23.10") == "lcm"
