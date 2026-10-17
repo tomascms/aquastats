@@ -3,7 +3,7 @@ from fastapi import HTTPException
 
 from app.domain.lenex import name_score
 from app.domain.live_results import normalize_url
-from app.domain.splash_pdf import _result_line, _start_line
+from app.domain.splash_pdf import _result_line, _start_line, _text_dates
 
 EVENT_100 = {"num": 36, "dist": 100, "stroke": "free", "gender": "M"}
 EVENT_1500 = {"num": 1, "dist": 1500, "stroke": "free", "gender": "F"}
@@ -37,6 +37,24 @@ def test_start_line_glued_lane_and_licence():
     assert (entry.lane, entry.heat, entry.entry_time_s, entry.session_time) == (3, 1, 1174.53, "9:00")
     assert _start_line("WDR6ENSAIO, Marta Demo 09 900002Colegio Efanor 18:35.1150m___", EVENT_1500, 2, None, None, 2026) is None
 
+
+
+def test_start_line_without_comma_2026_layout():
+    person, entry = _start_line(
+        "3 Afonso Demo EXEMPLO 900005 12 Vilacondense 38.39 25m 38.39", EVENT_100, 1, "2026-10-17", "9:00", 2026
+    )
+    assert (person.first, person.last, person.license, person.year, person.club) == ("Afonso Demo", "Exemplo", "900005", 2012, "Vilacondense")
+    assert (entry.lane, entry.heat, entry.entry_time_s, entry.entry_course) == (3, 1, 38.39, "scm")
+    person, entry = _start_line("1 Leonor Ficticia MODELO-SILVA 900006 12 Lousada Séc.XXI NT NT", EVENT_100, 1, None, None, 2026)
+    assert (person.last, person.club, entry.entry_time_s) == ("Modelo-silva", "Lousada Séc.XXI", None)
+    assert _start_line("5 Rita Demo AMOSTRA 900007 11 Porto 1:12.92 50m 1:10.44 WDR", EVENT_100, 1, None, None, 2026) is None
+
+
+def test_meet_dates_written_out():
+    assert _text_dates("Penafiel, 17 e 18 de outubro de 2026") == ("2026-10-17", "2026-10-18")
+    assert _text_dates("Porto, 31 de outubro e 1 de novembro de 2026") == ("2026-10-31", "2026-11-01")
+    assert _text_dates("Braga, 5 de dezembro de 2026") == ("2026-12-05", "2026-12-05")
+    assert _text_dates("1 - 1ª Jornada - 1ª Sessão 17/10/2026 - 9:00") is None
 
 def test_two_digit_years_stay_in_the_past():
     person, _ = _result_line("1. PADRAO, Sara Exemplo 98 POR Os Belenenses 31.53 +0,85 419", EVENT_100, [], None, 2026)
