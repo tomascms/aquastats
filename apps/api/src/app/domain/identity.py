@@ -336,7 +336,7 @@ def membership(session: Session, user_id: UUID) -> tuple[str, str]:
 def issue_session(session: Session, user: User, request: Request, response: Response) -> str:
     team_id, org_id = membership(session, user.id)
     refresh = issue_refresh(session, user.id, None, request)
-    access = sign_access(str(user.id), user.role, team_id, org_id)
+    access = sign_access(str(user.id), user.role, team_id, org_id, fresh=True)
     set_auth_cookies(response, access, refresh)
     return home_path(user.role)
 

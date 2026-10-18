@@ -69,6 +69,8 @@ def validate_settings(settings: Settings | None = None) -> None:
             errors.append("APP_URL deve ser https:// em produção.")
         if not settings.trust_proxy:
             errors.append("TRUST_PROXY=true em produção (Cloud Run + Cloudflare).")
+        if len(settings.edge_auth_token.strip()) < 32:
+            errors.append("EDGE_AUTH_TOKEN (>=32 caracteres) é obrigatório em produção: sem ele a origem aceita qualquer pedido.")
         if not settings.database_enable_rls:
             errors.append("DATABASE_ENABLE_RLS=true é obrigatório em produção.")
 

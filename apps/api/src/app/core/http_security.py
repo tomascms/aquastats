@@ -120,13 +120,48 @@ _UPLOAD_PREFIXES = ("/api/v1/meet-files/", "/api/v1/hr/")
 UPLOAD_BODY_BYTES = 21 * 1024 * 1024  # 15 MB files, base64-encoded
 
 
-class BodySizeLimitMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        length = request.headers.get("content-length")
-        limit = UPLOAD_BODY_BYTES if request.url.path.startswith(_UPLOAD_PREFIXES) else get_settings().max_request_body_bytes
-        if length and length.isdigit() and int(length) > limit:
-            return JSONResponse({"detail": "Pedido demasiado grande."}, status_code=413)
-        return await call_next(request)
+class _BodyTooLarge(Exception):
+    pass
+
+
+class BodySizeLimitMiddleware:
+    """Caps the body by Content-Length and, for chunked bodies, by the bytes actually received."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        path = scope.get("path", "")
+        limit = UPLOAD_BODY_BYTES if path.startswith(_UPLOAD_PREFIXES) else get_settings().max_request_body_bytes
+        too_large = JSONResponse({"detail": "Pedido demasiado grande."}, status_code=413)
+        length = dict(scope.get("headers") or []).get(b"content-length", b"")
+        if length.isdigit() and int(length) > limit:
+            return await too_large(scope, receive, send)
+        received = 0
+        started = False
+
+        async def capped_receive():
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > limit:
+                    raise _BodyTooLarge
+            return message
+
+        async def tracked_send(message):
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, capped_receive, tracked_send)
+        except _BodyTooLarge:
+            if not started:
+                await too_large(scope, receive, send)
 
 
 _PROBE = (
@@ -166,7 +201,8 @@ class CsrfOriginMiddleware(BaseHTTPMiddleware):
                 return JSONResponse({"detail": "Origem recusada."}, status_code=403)
             return await call_next(request)
         referer = request.headers.get("referer") or ""
-        if any(referer.startswith(item) for item in allowed):
+        # Exact origin, not a prefix: "https://aquastats.net.evil.com/" starts with "https://aquastats.net".
+        if any(referer == item or referer.startswith(f"{item}/") for item in allowed):
             return await call_next(request)
         return JSONResponse({"detail": "Origem recusada."}, status_code=403)
 

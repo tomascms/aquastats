@@ -410,7 +410,12 @@ def reset_password(body: dict, response: Response, session: Session = Depends(ge
     user.is_verified = True  # the link reached the inbox
     user.failed_login_count = 0
     user.locked_until = None
-    row.used_at = stamp
+    # Every outstanding link dies with this one: an older leaked email must not reset the new password.
+    session.execute(
+        update(PasswordResetToken)
+        .where(PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None))
+        .values(used_at=stamp)
+    )
     revoke_user_sessions(session, user.id)
     clear_auth_cookies(response)
     return {"ok": True, "next": "/"}
@@ -520,7 +525,7 @@ def change_password(body: dict, request: Request, response: Response, session: S
         if verify_password(form.newPassword, user.password_hash):
             raise HTTPException(status_code=400, detail="A nova palavra-passe tem de ser diferente.")
     else:
-        iat = int(payload.get("iat") or 0)
+        iat = int(payload.get("auth_time") or 0)
         if time.time() - iat > get_settings().recent_auth_seconds:
             raise HTTPException(
                 status_code=401,
@@ -545,7 +550,7 @@ def delete_account(body: dict, request: Request, response: Response, session: Se
         if not form.password or not verify_password(form.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Palavra-passe incorrecta.")
     else:
-        iat = int(payload.get("iat") or 0)
+        iat = int(payload.get("auth_time") or 0)
         if time.time() - iat > get_settings().recent_auth_seconds:
             raise HTTPException(
                 status_code=401,

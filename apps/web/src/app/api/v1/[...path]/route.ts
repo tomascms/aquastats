@@ -58,6 +58,9 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     headers.set("idempotency-key", crypto.randomUUID());
   }
   if (edgeAuthToken) headers.set("x-edge-auth", edgeAuthToken);
+  // The Worker's own subrequest carries its egress address; the API needs the visitor's for rate limits.
+  const clientIp = request.headers.get("cf-connecting-ip");
+  if (clientIp) headers.set("x-aquastats-client-ip", clientIp);
 
   const init: RequestInit = {
     method: request.method,

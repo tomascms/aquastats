@@ -27,6 +27,13 @@ class ClientIpTest(unittest.TestCase):
         self.assertEqual(stored_ip(request({}, peer=None)), None)
         self.assertEqual(stored_ip(request({}, peer="2001:db8::1")), "2001:db8::1")
 
+    @patch("app.core.client.get_settings", return_value=SimpleNamespace(trust_proxy=True, edge_auth_token="t" * 32))
+    def test_worker_forwarded_ip_needs_the_edge_token(self, _):
+        fwd = {"X-Aquastats-Client-IP": "198.51.100.20", "CF-Connecting-IP": "2a06:98c0:3600::103"}
+        self.assertEqual(client_ip(request({**fwd, "X-Edge-Auth": "t" * 32})), "198.51.100.20")
+        # Without (or with a wrong) edge token the header is the caller's word only.
+        self.assertEqual(client_ip(request({**fwd, "X-Edge-Auth": "wrong"})), "2a06:98c0:3600::103")
+
 
 if __name__ == "__main__":
     unittest.main()
