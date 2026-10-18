@@ -70,7 +70,7 @@ completo também não correu, porque a API foi chamada diretamente.
 ### Atualização 18/10 — Turnstile
 
 - O widget "Aquastats producao" foi criado para `aquastats.net` e `www.aquastats.net`, e a `TURNSTILE_SITE_KEY` foi posta no Worker `aquastats-web`. O widget aparece em `/entrar` e o login continua a funcionar.
-- **A `TURNSTILE_SECRET_KEY` continua por definir, por isso o Worker ainda não verifica os tokens e #20 continua aberta.** O dono tem de a definir com `npx wrangler secret put TURNSTILE_SECRET_KEY`.
+- A `TURNSTILE_SECRET_KEY` foi definida pelo dono a 18/10. Um login sem token, ou com um token falso, dá 403 "Confirma que não és um robô". **#20 está resolvida.**
 - A secret key foi colada numa conversa com o assistente. Recomendo rodá-la no painel antes de a definir; o dono decidiu não o fazer, e isso fica como risco residual.
 
 ## Falhas propostas (não corrigidas, precisam de decisão ou de migração)
