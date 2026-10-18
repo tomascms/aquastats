@@ -60,9 +60,10 @@ RESULT_RE = re.compile(
 # Newer SPLASH results: "1. Joao Exemplo, TESTE 99 900003 Naval Do Funchal 23.04 747 -A" (given names,
 # SURNAME, year, optional licence, club, time, points). Ties are printed without a place.
 # 2026 printouts drop the comma and put the licence before the year, as on their start lists.
+# Some regional meets (Splash 11.85, ANNP) print no year at all: "1. Tomas Macedo EUSEBIO 214368 Vilacondense 28.68 410".
 RESULT_GIVEN_FIRST_RE = re.compile(
     rf"^(?P<status>\d+\.|EXH)?\s*(?P<first>[^\d,]+?)(?:,\s*|\s+)(?P<last>[A-ZÀ-ÖØ-Þ'´`\-][A-ZÀ-ÖØ-Þ'´`\- ]*?)\s+"
-    rf"(?:(?P<lic_first>\d{{4,8}})\s+)?(?P<yob>\d{{2}})\s+"
+    rf"(?:(?P<lic_first>\d{{4,8}})\s+)?(?:(?P<yob>\d{{2}})\s+)?"
     rf"(?:(?P<lic>\d{{3,8}})\s+)?(?P<club>.+?)\s+(?P<time>{TIME})(?P<rest>(?:\s+.*)?)$"
 )
 # "3AMOSTRA, Carla Demo 11 900001Porto 19:34.5350m___:___.___" (lane glued to the name, licence to the club)
@@ -109,7 +110,7 @@ def _fold(text: str) -> str:
 class _Person:
     last: str
     first: str
-    year: int
+    year: int | None
     club: str
     license: str | None = None
     gender: str | None = None
@@ -338,6 +339,8 @@ def _result_line(line: str, event: dict, lap_columns: list[int], event_date: str
     club = match["club"].strip()
     if not first or not club:
         return None
+    if not match["yob"] and not match.groupdict().get("lic_first"):
+        return None  # without a year, only a licence makes the line a swimmer (not a record or header line)
     rest = match["rest"].split()
     reaction = None
     laps: list[float] = []
@@ -364,7 +367,7 @@ def _result_line(line: str, event: dict, lap_columns: list[int], event_date: str
     person = _Person(
         last=_title(match["last"]),
         first=first,
-        year=_year(match["yob"], reference_year),
+        year=_year(match["yob"], reference_year) if match["yob"] else None,
         club=club,
         license=match.groupdict().get("lic") or match.groupdict().get("lic_first"),
         gender=event["gender"],

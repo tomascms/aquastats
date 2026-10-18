@@ -86,3 +86,12 @@ def test_pool_from_record_lines():
 
     assert detect_course("prova 1 masc., 50m mariposa recordes nacionais 25m open 22.48 recorde territorial 25m juv a 25.01") == "scm"
     assert detect_course("prova 1 masc., 50m mariposa recordes nacionais 50m open 23.10") == "lcm"
+
+
+def test_result_line_without_birth_year_annp_2026():
+    # Splash 11.85 (ANNP, Penafiel 17/10/2026): no year of birth, the licence identifies the swimmer.
+    person, result = _result_line("4. Tomas Castro SOUSA 123239 Vitória Sport Clube 34.48 301", EVENT_100, [], None, 2026)
+    assert (person.first, person.last, person.year, person.license, person.club) == ("Tomas Castro", "Sousa", None, "123239", "Vitória Sport Clube")
+    assert result.time_s == 34.48 and result.place == 4
+    # Record lines carry neither year nor licence and stay out.
+    assert _result_line("Recorde Territorial 25m Juv A 25.01 Duarte Santos FERREIRA FCP Porto 20/07/2024", EVENT_100, [], None, 2026) is None

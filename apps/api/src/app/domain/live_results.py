@@ -109,6 +109,12 @@ def sync(session: Session, payload: dict, row: Competition, request, force: bool
     if not force and not _active(row):
         return {"imported": 0, "status": "finished"}
 
+    # Another request is already following this meet (it holds the row while it downloads): skip, don't wait
+    # for the lock to time out into a 500.
+    from sqlalchemy import select
+
+    if session.scalar(select(Competition.id).where(Competition.id == row.id).with_for_update(skip_locked=True)) is None:
+        return {"imported": 0, "status": live.get("status", "waiting")}
     # Claim the run first so concurrent page loads don't import the same files twice.
     live["lastSyncAt"] = now.isoformat()
     _store(row, live)
