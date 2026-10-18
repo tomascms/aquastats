@@ -12,7 +12,7 @@ import hashlib
 import time
 import re
 from datetime import date, timedelta
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import httpx
 from fastapi import HTTPException
@@ -23,7 +23,7 @@ from ..core.ssrf import assert_safe_url
 from .commands import _now
 from .lenex import LenexAthlete, LenexClub, LenexError, LenexMeet, parse_lenex
 from .lenex_import import process_lenex
-from .models import Competition
+from .models import Athlete, Competition
 from .serializers import as_uuid
 from .splash_pdf import parse_splash_pdf
 
@@ -33,7 +33,23 @@ MAX_FILES_PER_RUN = 200
 # ponytail: runs inside the request that opened the app; a background job (Cloud Scheduler) when meets get big.
 RUN_BUDGET_S = 25.0
 MAX_FILE_BYTES = 15 * 1024 * 1024
-LINK_RE = re.compile(r'href="((?:StartList|ResultList)_[0-9A-Za-z]+\.pdf|results\.lxf)"', re.IGNORECASE)
+LINK_RE = re.compile(r'href="([^"#?<>]+\.(?:pdf|lxf))"', re.IGNORECASE)
+PER_EVENT_RE = re.compile(r"(?:^|/)(?P<kind>Start|Result)(?:List|Lists|ados?)?[_ -]?\d+[A-Za-z]?\.pdf$", re.IGNORECASE)
+RESULTS_WORD_RE = re.compile(r"result|classifica", re.IGNORECASE)
+
+
+def live_files(index: str) -> list[str]:
+    """Files to follow, whatever the organiser calls them: a results Lenex first ("results.lxf",
+    "RESULTADOS.lxf"), then per-event start lists and result lists; a single full-results PDF only when
+    there are no per-event lists (it would repeat them)."""
+    names = list(dict.fromkeys(LINK_RE.findall(index)))
+    lenex = [n for n in names if n.lower().endswith(".lxf") and RESULTS_WORD_RE.search(n)]
+    per_event = [(m["kind"].lower(), n) for n in names if (m := PER_EVENT_RE.search(n))]
+    starts = [n for kind, n in per_event if kind == "start"]
+    results = [n for kind, n in per_event if kind == "result"]
+    if not results:
+        results = [n for n in names if n.lower().endswith(".pdf") and RESULTS_WORD_RE.search(n)]
+    return lenex + starts + results
 
 
 def normalize_url(value: str) -> str:
@@ -121,15 +137,11 @@ def sync(session: Session, payload: dict, row: Competition, request, force: bool
     session.flush()
 
     files: dict = dict(live.get("files") or {})
+    athletes = list(session.scalars(select(Athlete).where(Athlete.team_id == row.team_id, Athlete.deleted_at.is_(None))))
     body = {"dryRun": False}
     with httpx.Client(timeout=10.0, follow_redirects=False, headers={"User-Agent": "Aquastats live results follower"}) as client:
         index = _fetch(client, live["url"]).decode("utf-8", "ignore")
-        names = list(dict.fromkeys(LINK_RE.findall(index)))
-        if "results.lxf" in names:
-            names = ["results.lxf"]  # the complete, structured file wins over per-event PDFs
-        else:
-            # Results after start lists; within each, in index order.
-            names = [n for n in names if n.startswith("StartList")] + [n for n in names if n.startswith("ResultList")]
+        names = live_files(index)
         # Every file is read, and all of them are imported together: one event alone may have none of our
         # swimmers, so the club and our swimmers are found across the whole meet, not file by file.
         meets: list = []
@@ -142,16 +154,19 @@ def sync(session: Session, payload: dict, row: Competition, request, force: bool
                 _store(row, live)
                 return {"imported": 0, "status": "slow"}
             try:
-                data = _fetch(client, urljoin(live["url"], name))
+                data = _fetch(client, urljoin(live["url"], quote(name, safe="/%")))
             except (httpx.HTTPError, ValueError):
                 continue
             digest = hashlib.sha256(data).hexdigest()[:16]
             changed = changed or files.get(name) != digest
             files[name] = digest
-            try:
-                meets.append(parse_lenex(data) if name.endswith(".lxf") else parse_splash_pdf(data).meet)
-            except LenexError:
-                continue  # unreadable file: skipped, the rest of the meet still counts
+            meet = _read_file(name, data, athletes, row.course)
+            if meet is None:
+                continue  # an unreadable file (or a page not published yet) is skipped; the rest still counts
+            if name.lower().endswith(".lxf"):
+                meets = [meet]  # the complete, structured file wins over the per-event PDFs
+                break
+            meets.append(meet)
     live["files"] = files
     if not meets or not (changed or force):
         live["status"] = live.get("status", "waiting") if meets else "waiting"
@@ -166,6 +181,35 @@ def sync(session: Session, payload: dict, row: Competition, request, force: bool
     live["status"] = "following"
     _store(row, live)
     return {"imported": len(result.get("athletes") or []), "status": "following"}
+
+
+def _read_file(name: str, data: bytes, athletes: list, course: str | None) -> LenexMeet | None:
+    """Any layout: the fixed parsers first; when they can't read the file, or read it without finding any of
+    our swimmers, the lines that name our swimmers go to our own AI reader (as with a dropped file)."""
+    from .lenex_import import match_athlete
+    from .meet_files_ai import read_meet
+    from .meet_rules import detect_course
+    from .splash_pdf import _meet_header, extract_pages
+
+    meet = None
+    try:
+        meet = parse_lenex(data) if name.lower().endswith(".lxf") else parse_splash_pdf(data).meet
+    except LenexError:
+        pass
+    if name.lower().endswith(".lxf") or not athletes:
+        return meet
+    if meet is not None and any(match_athlete(p, athletes)[0] is not None for c in meet.clubs for p in c.athletes):
+        return meet
+    try:
+        pages = extract_pages(data)
+    except LenexError:
+        return meet
+    try:
+        header = _meet_header(pages)
+    except LenexError:
+        header = None
+    flat = " ".join(" ".join(pages[:3]).split())
+    return read_meet(pages, athletes, header, (meet.course if meet else None) or detect_course(flat) or course or "lcm") or meet
 
 
 def merge_meets(meets: list) -> LenexMeet:
