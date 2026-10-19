@@ -69,7 +69,7 @@ function plannedLogs(workout: Workout, athleteId: string, timeLogs: TimeLog[]): 
     const innerN = flattenInner(block).length;
     for (let round = 1; round <= rounds; round += 1) {
       for (const inner of flattenInner(block, round)) {
-        if (!needsClockTime(inner.intensity, block.type) || inner.stroke === "sub") continue;
+        if (!needsClockTime(inner.intensity, block.type) || inner.stroke === "sub" || inner.stroke === "drill") continue;
         const repNumber = (round - 1) * innerN + inner.index + 1;
         if (done.has(`${block.id}:${repNumber}`)) continue;
         out.push({

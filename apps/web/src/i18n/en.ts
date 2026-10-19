@@ -889,6 +889,7 @@ export const en = {
   "Viragem": "Turn",
   "Chegada": "Finish",
   "Subaquático": "Underwater",
+  "Drills": "Drills",
   "Parcial {n}": "Length {n}",
   "{count} pernadas": "{count} kicks",
   "{count} pernadas|one": "1 kick",
