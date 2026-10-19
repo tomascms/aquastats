@@ -158,16 +158,15 @@ def test_race_session_id_of_another_team_is_not_found(world, api_engine, client_
     assert response.status_code == 404, response.text
 
 
-def test_forgot_password_sends_one_link_per_cooldown(world, team_factory, api_engine, auth_engine):
+def test_forgot_password_sends_one_link_per_cooldown(world, team_factory, api_engine, client_for):
     import psycopg
-
-    from tests.postgres.conftest import make_client
 
     team = team_factory("Forgot")
     # The seed gives every user a fresh link; age it so the next request may send one.
     with psycopg.connect(world.admin_url, autocommit=True) as conn:
         conn.execute("update password_reset_tokens set created_at = now() - interval '1 hour' where user_id = %s", (team.coach,))
-    client = make_client(api_engine, auth_engine)
+    client = client_for(api_engine, team.coach, "coach", team)
+    client.cookies.clear()  # anonymous, as on the forgot page
     email = "treinador.forgot@forgot.test"
     first = client.post("/api/v1/auth/forgot", json={"email": email}, headers={"Origin": "http://localhost:3000"})
     second = client.post("/api/v1/auth/forgot", json={"email": email}, headers={"Origin": "http://localhost:3000"})
