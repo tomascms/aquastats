@@ -57,10 +57,6 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
-  if (!headers.has("origin")) {
-    const origin = process.env.APP_URL || request.nextUrl.origin;
-    if (origin) headers.set("origin", origin);
-  }
   if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "OPTIONS" && !headers.has("idempotency-key")) {
     headers.set("idempotency-key", crypto.randomUUID());
   }
