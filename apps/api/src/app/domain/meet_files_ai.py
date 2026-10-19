@@ -41,10 +41,10 @@ Return one row per swimmer LINE that is an individual swim (skip relays, records
 - birthYear: 4-digit year of birth (a 2-digit "08" means 2008, "96" means 1996); null if not printed.
 - club: club or team as printed (it may be a country or a selection).
 - eventNumber, distance (metres), stroke ("free","back","breast","fly","im"), gender ("M","F" or null), round ("heat" or "final"), date (YYYY-MM-DD): from the EVENT/DATE/HEAT context.
-- heat, lane: numbers if printed.
+- heat, lane: numbers if printed in their own column; null otherwise. A leading "16." on a results line is the place, never the lane.
 - entryTime: the entry/seed time exactly as printed (e.g. "1:05.32"), null if none or NT.
 - time: the swum/final time exactly as printed in a results list, null in a start list.
-- place: finishing position in results, null otherwise.
+- place: finishing position in results (the leading "N." of the line), null otherwise.
 - lineIndex: the [index] of the line.
 Copy times character by character; never compute or invent one."""
 
