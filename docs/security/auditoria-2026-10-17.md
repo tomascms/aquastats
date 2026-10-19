@@ -84,7 +84,7 @@ completo também não correu, porque a API foi chamada diretamente.
 - Link de convite testado de ponta a ponta, com web e API locais ligadas ao staging e as chaves de teste do Turnstile: link → criar conta → confirmar → login → escolher atleta → o atleta fica na equipa do convite.
 - **Ainda abertas**, por decisão ou porque exigem passos manuais em produção:
   - #10 (guard da role falha aberto): decisão do dono.
-  - #11 (RLS WITH CHECK por role): a migração `015_coach_write_check.sql` (PR #39) foi aplicada no staging a 19/10. Foi testada como `aquastats_api` numa transação revertida no fim. Um nadador vê os treinos da equipa, mas o UPDATE e o DELETE afetam 0 linhas e o INSERT é recusado (42501). O treinador continua a escrever. Todos os fluxos de nadador e pending que escrevem nestas tabelas usam a ligação `aquastats_auth`, com bypass, por isso nada parte. Falta autorização para a produção.
+  - #11 (RLS WITH CHECK por role): a migração `015_coach_write_check.sql` (PR #39) foi aplicada no staging a 19/10. Foi testada como `aquastats_api` numa transação revertida no fim. Um nadador vê os treinos da equipa, mas o UPDATE e o DELETE afetam 0 linhas e o INSERT é recusado (42501). O treinador continua a escrever. Todos os fluxos de nadador e pending que escrevem nestas tabelas usam a ligação `aquastats_auth`, com bypass, por isso nada parte. Aplicada em produção a 19/10, com autorização do dono. Políticas confirmadas no catálogo; o site live respondeu 200 em `/entrar` e `/api/v1/health`.
   - #13 (Origin sintetizado pelo proxy): pode partir o callback do Google; é preciso testar no staging.
   - #15 (enumeração no registo): muda a experiência de registo.
   - #16 (access token válido até 15 min após o logout): aceite.
