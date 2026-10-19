@@ -43,6 +43,8 @@ def run_idempotent(
 ) -> tuple[int, dict]:
     now = datetime.now(timezone.utc)
     digest = request_hash(body)
+    # Keys are per user: under RLS another user's row is invisible, so a shared key would only block their write.
+    key = f"{user_id}:{key}"
     existing = session.get(IdempotencyKey, {"key": key, "operation": operation})
     if existing:
         if existing.user_id != user_id:

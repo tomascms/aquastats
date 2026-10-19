@@ -336,7 +336,7 @@ def membership(session: Session, user_id: UUID) -> tuple[str, str]:
 def issue_session(session: Session, user: User, request: Request, response: Response) -> str:
     team_id, org_id = membership(session, user.id)
     refresh = issue_refresh(session, user.id, None, request)
-    access = sign_access(str(user.id), user.role, team_id, org_id)
+    access = sign_access(str(user.id), user.role, team_id, org_id, fresh=True)
     set_auth_cookies(response, access, refresh)
     return home_path(user.role)
 
@@ -543,12 +543,34 @@ def provision_role(
 LOGIN_FAILED = "Email ou palavra-passe incorrectos. Depois de várias tentativas, espera 15 minutos."
 
 
-def lock_or_fail(user: User) -> None:
+def lock_or_fail(user: User, ip: str | None = None) -> None:
+    """8 failures lock the address that failed, so knowing the email isn't enough to lock the owner out;
+    40 across addresses lock the whole account, so rotating addresses doesn't buy unlimited guesses.
+    The count clears on a successful sign-in."""
+    from datetime import timedelta
+
     stamp = now()
     user.failed_login_count = int(user.failed_login_count or 0) + 1
-    if user.failed_login_count >= 8:
-        from datetime import timedelta
-
+    settings = dict(user.settings or {})
+    ips = [item for item in settings.get("login_lock_ips") or [] if item]
+    if user.failed_login_count >= ACCOUNT_LOCK_FAILURES:
         user.locked_until = stamp + timedelta(minutes=15)
         user.failed_login_count = 0
+        ips = []  # empty list = every address
+    elif user.failed_login_count % IP_LOCK_FAILURES == 0:
+        user.locked_until = stamp + timedelta(minutes=15)
+        ips = [*ips, ip or "unknown"][-20:]
+    settings["login_lock_ips"] = ips
+    user.settings = settings
     raise HTTPException(status_code=401, detail=LOGIN_FAILED)
+
+
+IP_LOCK_FAILURES = 8
+ACCOUNT_LOCK_FAILURES = 40
+
+
+def login_locked(user: User, ip: str | None) -> bool:
+    if not (user.locked_until and user.locked_until > now()):
+        return False
+    ips = (user.settings or {}).get("login_lock_ips") or []
+    return not ips or (ip or "unknown") in ips

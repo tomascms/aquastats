@@ -40,7 +40,14 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   // Off until TURNSTILE_SECRET_KEY is set (wrangler secret).
   const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
   if (turnstileSecret && request.method === "POST" && TURNSTILE_PATHS.has(path.join("/"))) {
-    const human = await verifyTurnstile(turnstileSecret, request.headers.get("x-turnstile-token"), request.headers.get("cf-connecting-ip"));
+    const appHost = new URL(process.env.APP_URL || request.nextUrl.origin).hostname;
+    const human = await verifyTurnstile(
+      turnstileSecret,
+      request.headers.get("x-turnstile-token"),
+      request.headers.get("cf-connecting-ip"),
+      fetch,
+      [appHost, `www.${appHost}`],
+    );
     if (!human) return NextResponse.json({ detail: "Confirma que não és um robô e tenta outra vez." }, { status: 403 });
   }
   const target = `${apiOrigin}/api/v1/${path.join("/")}${request.nextUrl.search}`;
@@ -58,6 +65,9 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     headers.set("idempotency-key", crypto.randomUUID());
   }
   if (edgeAuthToken) headers.set("x-edge-auth", edgeAuthToken);
+  // The Worker's own subrequest carries its egress address; the API needs the visitor's for rate limits.
+  const clientIp = request.headers.get("cf-connecting-ip");
+  if (clientIp) headers.set("x-aquastats-client-ip", clientIp);
 
   const init: RequestInit = {
     method: request.method,

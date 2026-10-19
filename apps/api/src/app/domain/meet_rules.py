@@ -139,9 +139,10 @@ def _range_dates(value: str | None) -> tuple[date, date] | None:
 def detect_course(flat: str) -> str | None:
     """Pool length for the meet: "scm" (25 m) or "lcm" (50 m), or None when the text doesn't say."""
     # "tempos obtidos em piscina de 50 metros" talks about entry times, not about this pool.
+    # SPLASH start lists only say it in their record lines: "Recordes Nacionais 25m Open 22.48 ...".
     text = re.sub(r"(?:tempos?|marcas?|times?)[^.]{0,80}?(?:piscina|pool)\s+(?:de\s+)?(?:25|50)\s*m\w*", " ", flat.lower())
-    long_votes = len(re.findall(r"ol[ií]mpic|piscina\s+longa|long\s+course|\blcm\b|\(pl\)|50\s*m(?:etros)?\s*(?:x|×|/|,|-|com)\s*\d+\s*(?:pistas|lanes)|piscina\s+(?:coberta\s+|descoberta\s+)?de\s+50\s*m|50\s*(?:m|metros)\s+pool|pool\s*:?\s*50", text))
-    short_votes = len(re.findall(r"piscina\s+curta|short\s+course|\bscm\b|\(pc\)|25\s*m(?:etros)?\s*(?:x|×|/|,|-|com)\s*\d+\s*(?:pistas|lanes)|piscina\s+(?:coberta\s+|descoberta\s+)?de\s+25\s*m|25\s*(?:m|metros)\s+pool|pool\s*:?\s*25", text))
+    long_votes = len(re.findall(r"ol[ií]mpic|piscina\s+longa|long\s+course|\blcm\b|\(pl\)|50\s*m(?:etros)?\s*(?:x|×|/|,|-|com)\s*\d+\s*(?:pistas|lanes)|piscina\s+(?:coberta\s+|descoberta\s+)?de\s+50\s*m|50\s*(?:m|metros)\s+pool|pool\s*:?\s*50|recordes?\s+\w+\s+50\s*m\b", text))
+    short_votes = len(re.findall(r"piscina\s+curta|short\s+course|\bscm\b|\(pc\)|25\s*m(?:etros)?\s*(?:x|×|/|,|-|com)\s*\d+\s*(?:pistas|lanes)|piscina\s+(?:coberta\s+|descoberta\s+)?de\s+25\s*m|25\s*(?:m|metros)\s+pool|pool\s*:?\s*25|recordes?\s+\w+\s+25\s*m\b", text))
     if long_votes > short_votes:
         return "lcm"
     if short_votes > long_votes:

@@ -41,6 +41,17 @@ EVENT_RE = re.compile(
 DATE_TIME_RE = re.compile(r"(?P<d>\d{2})/(?P<m>\d{2})/(?P<y>\d{4})(?:\s*-\s*(?P<t>\d{1,2}:\d{2}))?")
 HEAT_RE = re.compile(r"^(?:Série|Serie|Heat)\s+(?P<heat>\d+)\s+(?:de|of)\s+\d+", re.IGNORECASE)
 MEET_DATES_RE = re.compile(r"(?P<d1>\d{1,2})(?:/(?P<m1>\d{1,2}))?\s*-\s*(?P<d2>\d{1,2})/(?P<m2>\d{1,2})/(?P<y>\d{4})")
+# "Penafiel, 17 e 18 de outubro de 2026" / "31 de outubro e 1 de novembro de 2026" / "17 de outubro de 2026"
+MEET_DATES_TEXT_RE = re.compile(
+    r"(?P<d1>\d{1,2})(?:\s+de\s+(?P<m1>[a-zç]+))?(?:\s*(?:e|a|-)\s*(?P<d2>\d{1,2}))?\s+de\s+(?P<m2>[a-zç]+)\s+de\s+(?P<y>\d{4})",
+    re.IGNORECASE,
+)
+MONTHS = {
+    name: number
+    for number, name in enumerate(
+        ("janeiro", "fevereiro", "marco", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"), 1
+    )
+}
 # "1. SURNAME, Given 10 POR Club 28.04 +0,72 596 Q 24.65 27.26" (place/nation/reaction/points optional)
 RESULT_RE = re.compile(
     rf"^(?P<status>\d+\.|EXH|WDR)?\s*(?P<last>[A-ZÀ-ÖØ-Þ'´`\-][A-ZÀ-ÖØ-Þ'´`\- ]*?),\s*(?P<first>[^\d,]*?)\s*(?P<yob>\d{{2}})\s+"
@@ -48,8 +59,11 @@ RESULT_RE = re.compile(
 )
 # Newer SPLASH results: "1. Joao Exemplo, TESTE 99 900003 Naval Do Funchal 23.04 747 -A" (given names,
 # SURNAME, year, optional licence, club, time, points). Ties are printed without a place.
+# 2026 printouts drop the comma and put the licence before the year, as on their start lists.
+# Some regional meets (Splash 11.85, ANNP) print no year at all: "1. Tomas Macedo EUSEBIO 214368 Vilacondense 28.68 410".
 RESULT_GIVEN_FIRST_RE = re.compile(
-    rf"^(?P<status>\d+\.|EXH)?\s*(?P<first>[^\d,]+?),\s*(?P<last>[A-ZÀ-ÖØ-Þ'´`\-][A-ZÀ-ÖØ-Þ'´`\- ]*?)\s+(?P<yob>\d{{2}})\s+"
+    rf"^(?P<status>\d+\.|EXH)?\s*(?P<first>[^\d,]+?)(?:,\s*|\s+)(?P<last>[A-ZÀ-ÖØ-Þ'´`\-][A-ZÀ-ÖØ-Þ'´`\- ]*?)\s+"
+    rf"(?:(?P<lic_first>\d{{4,8}})\s+)?(?:(?P<yob>\d{{2}})\s+)?"
     rf"(?:(?P<lic>\d{{3,8}})\s+)?(?P<club>.+?)\s+(?P<time>{TIME})(?P<rest>(?:\s+.*)?)$"
 )
 # "3AMOSTRA, Carla Demo 11 900001Porto 19:34.5350m___:___.___" (lane glued to the name, licence to the club)
@@ -60,8 +74,9 @@ START_RE = re.compile(
 # Newer SPLASH layout: "3 Marco Exemplo, DEMO 900004 06 Abs Penafiel 26.20 25m 27.53 LT" — given names
 # first, SURNAME after the comma, licence before the two-digit year, optional category, then entry time,
 # the pool it was swum in and the converted time. Foreign swimmers may have no licence.
+# 2026 printouts drop the comma: "3 Afonso Santos LEAO 221267 12 Vilacondense 38.39 25m 38.39".
 START_GIVEN_FIRST_RE = re.compile(
-    rf"^(?P<lane>\d{{1,2}})\s+(?P<first>[^\d,]+?),\s*(?P<last>[A-ZÀ-ÖØ-Þ'´`\-][A-ZÀ-ÖØ-Þ'´`\- ]*?)\s+"
+    rf"^(?P<lane>\d{{1,2}})\s+(?P<first>[^\d,]+?)(?:,\s*|\s+)(?P<last>[A-ZÀ-ÖØ-Þ'´`\-][A-ZÀ-ÖØ-Þ'´`\- ]*?)\s+"
     rf"(?:(?P<lic>\d{{4,8}})\s+)?(?P<yob>\d{{2}})\s+"
     rf"(?:(?:Abs\w*|Jun\w*|Juv\w*|Inf\w*|Sen\w*|Cad\w*|Mast\w*|Open|Absol\w*)\.?\s+)?"
     rf"(?P<club>.+?)\s+(?P<entry>{TIME}|NT)(?:\s+(?P<course>25m|50m))?(?:\s+(?:{TIME}|NT))?"
@@ -95,7 +110,7 @@ def _fold(text: str) -> str:
 class _Person:
     last: str
     first: str
-    year: int
+    year: int | None
     club: str
     license: str | None = None
     gender: str | None = None
@@ -136,7 +151,10 @@ def _meet_header(pages: list[str]) -> tuple[str, str, str, str]:
             break
     if not lines:
         raise LenexError("Este PDF não parece uma start list ou resultados do Splash Meet Manager.")
-    place_at = next((i for i, line in enumerate(lines[1:6], start=1) if MEET_DATES_RE.search(line) or DATE_TIME_RE.search(line)), None)
+    place_at = next(
+        (i for i, line in enumerate(lines[1:6], start=1) if MEET_DATES_RE.search(line) or _text_dates(line) or DATE_TIME_RE.search(line)),
+        None,
+    )
     if place_at is None:
         name = lines[1] if len(lines) > 1 else ""
         place = lines[2] if len(lines) > 2 else ""
@@ -149,11 +167,29 @@ def _meet_header(pages: list[str]) -> tuple[str, str, str, str]:
         m1 = int(match["m1"] or m2)
         start = date(year, m1, int(match["d1"])).isoformat()
         end = date(year, m2, int(match["d2"])).isoformat()
+    elif _text_dates(place):
+        start, end = _text_dates(place)
     else:
         single = DATE_TIME_RE.search(place)
         if single:
             start = end = date(int(single["y"]), int(single["m"]), int(single["d"])).isoformat()
     return name, city, start, end
+
+
+def _text_dates(line: str) -> tuple[str, str] | None:
+    match = MEET_DATES_TEXT_RE.search(line)
+    if not match:
+        return None
+    m2 = MONTHS.get(_fold(match["m2"]))
+    m1 = MONTHS.get(_fold(match["m1"])) if match["m1"] else m2
+    if not m1 or not m2:
+        return None
+    try:
+        start = date(int(match["y"]), m1, int(match["d1"]))
+        end = date(int(match["y"]), m2, int(match["d2"] or match["d1"]))
+    except ValueError:
+        return None
+    return start.isoformat(), end.isoformat()
 
 
 def parse_splash_pdf(data: bytes) -> ParsedPdf:
@@ -164,7 +200,9 @@ def parse_splash_pdf(data: bytes) -> ParsedPdf:
     reference_year = int(start[:4]) if start else date.today().year
     joined = "\n".join(pages)
     kind = "results" if re.search(r"\bResultados\b|\bResults\b|\bLugar\b", joined) else "entries"
-    course = "scm" if re.search(r"\b25\s*m\b.*\b(?:piscina|pool)|Piscina de 25|\(25m\)", joined, re.IGNORECASE) else "lcm"
+    # Newer printouts only say it in the record lines: "Recordes Nacionais 25m Open 22.48 …".
+    pool_25 = r"\b25\s*m\b.*\b(?:piscina|pool)|Piscina de 25|\(25m\)|^Recordes?\s+\w+\s+25m\b"
+    course = "scm" if re.search(pool_25, joined, re.IGNORECASE | re.MULTILINE) else "lcm"
 
     people: dict[str, _Person] = {}
     event: dict | None = None
@@ -301,6 +339,8 @@ def _result_line(line: str, event: dict, lap_columns: list[int], event_date: str
     club = match["club"].strip()
     if not first or not club:
         return None
+    if not match["yob"] and not match.groupdict().get("lic_first"):
+        return None  # without a year, only a licence makes the line a swimmer (not a record or header line)
     rest = match["rest"].split()
     reaction = None
     laps: list[float] = []
@@ -327,9 +367,9 @@ def _result_line(line: str, event: dict, lap_columns: list[int], event_date: str
     person = _Person(
         last=_title(match["last"]),
         first=first,
-        year=_year(match["yob"], reference_year),
+        year=_year(match["yob"], reference_year) if match["yob"] else None,
         club=club,
-        license=match.groupdict().get("lic"),
+        license=match.groupdict().get("lic") or match.groupdict().get("lic_first"),
         gender=event["gender"],
     )
     result = LenexResult(

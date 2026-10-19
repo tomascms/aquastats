@@ -19,3 +19,35 @@ class LoginHardeningTest(unittest.TestCase):
     def test_one_message_for_every_failed_sign_in(self):
         self.assertNotIn("Google", LOGIN_FAILED)
         self.assertNotIn("bloqueada", LOGIN_FAILED)
+
+
+class LoginLockTest(unittest.TestCase):
+    def _fail(self, user, ip, times):
+        from fastapi import HTTPException
+
+        from app.domain.identity import lock_or_fail
+
+        for _ in range(times):
+            with self.assertRaises(HTTPException):
+                lock_or_fail(user, ip)
+
+    def test_lock_holds_only_for_the_address_that_failed(self):
+        from types import SimpleNamespace
+
+        from app.domain.identity import login_locked
+
+        user = SimpleNamespace(failed_login_count=0, locked_until=None, settings={})
+        self._fail(user, "198.51.100.1", 8)
+        self.assertTrue(login_locked(user, "198.51.100.1"))
+        # The owner, from another address, still signs in: knowing the email is not enough to lock them out.
+        self.assertFalse(login_locked(user, "203.0.113.5"))
+
+    def test_rotating_addresses_still_hits_an_account_wide_lock(self):
+        from types import SimpleNamespace
+
+        from app.domain.identity import login_locked
+
+        user = SimpleNamespace(failed_login_count=0, locked_until=None, settings={})
+        for n in range(5):
+            self._fail(user, f"198.51.100.{n}", 8)
+        self.assertTrue(login_locked(user, "203.0.113.5"))

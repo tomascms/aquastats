@@ -40,7 +40,7 @@ export const GEAR_LABEL = localizedMap<Gear>({
   suit: "Fato",
 });
 
-export const WORKOUT_STROKES: WorkoutStroke[] = ["free", "back", "breast", "fly", "im", "sub"];
+export const WORKOUT_STROKES: WorkoutStroke[] = ["free", "back", "breast", "fly", "im", "sub", "drill"];
 
 export const WORKOUT_STROKE_LABEL = localizedMap<WorkoutStroke>({
   free: "Livres",
@@ -49,6 +49,7 @@ export const WORKOUT_STROKE_LABEL = localizedMap<WorkoutStroke>({
   fly: "Mariposa",
   im: "Estilos",
   sub: "Subaquático",
+  drill: "Drills",
 });
 
 function cleanStroke(stroke: WorkoutStroke | "" | undefined): WorkoutStroke | "" {

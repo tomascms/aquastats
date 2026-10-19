@@ -1219,7 +1219,7 @@ export function generateDataset(name: ScenarioName | ScenarioConfig, seed: numbe
                 let offset = 0;
                 for (const segment of block.segments) {
                 for (let item = 0; item < segment.reps; item += 1) {
-                  const stroke: Stroke = primary ? p.primaryStroke : segment.stroke && segment.stroke !== "sub" ? segment.stroke : "free";
+                  const stroke: Stroke = primary ? p.primaryStroke : segment.stroke && segment.stroke !== "sub" && segment.stroke !== "drill" ? segment.stroke : "free";
                   const rep: RepSpec = { distanceM: segment.distanceM, intensity: segment.intensity, fromBlock: segment.fromBlock, gear: segment.gear, stroke };
                   const structural = structuralTime(p, rep, course, day);
                   // Critical speed in this pool: a 25 m pool is faster through the walls, not through the engine.

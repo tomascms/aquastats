@@ -40,7 +40,8 @@ def _b64d(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + pad)
 
 
-def sign_access(user_id: str, role: str, team_id: str, org_id: str) -> str:
+def sign_access(user_id: str, role: str, team_id: str, org_id: str, *, fresh: bool = False) -> str:
+    """fresh=True only right after a login; a refreshed token never counts as recent authentication."""
     payload = {
         "sub": user_id,
         "role": role,
@@ -49,6 +50,8 @@ def sign_access(user_id: str, role: str, team_id: str, org_id: str) -> str:
         "exp": int(time.time()) + get_settings().access_ttl_seconds,
         "iat": int(time.time()),
     }
+    if fresh:
+        payload["auth_time"] = payload["iat"]
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
     sig = _b64(hmac.new(_secret(), body.encode(), hashlib.sha256).digest())
     return f"{body}.{sig}"

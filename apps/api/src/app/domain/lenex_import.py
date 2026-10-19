@@ -183,11 +183,12 @@ def _find_competition(session: Session, team_id: UUID, meet: LenexMeet) -> Compe
         select(Competition).where(
             Competition.team_id == team_id,
             Competition.deleted_at.is_(None),
-            Competition.course == meet.course,
             Competition.meet_date >= date.fromisoformat(meet.start) - _days(3),
             Competition.meet_date <= date.fromisoformat(meet.end) + _days(3),
         )
     ).all()
+    # The pool is often not printed (or misread): it only breaks ties, it never hides the coach's meet.
+    candidates = [c for c in candidates if c.course == meet.course] or candidates
     if not candidates:
         return None
     exact = [c for c in candidates if normalize_name(c.title) == normalize_name(meet.name)]
@@ -260,6 +261,11 @@ def process_lenex(session: Session, payload: dict, body: dict, request, meet: Le
             if athlete is not None and all(athlete.id != mine.id for _, mine in matched):
                 matched.append((person, athlete))
 
+    if target is None and body.get("competitionId"):
+        # Dropped on a competition's page: that competition, whatever name/date/pool the file prints.
+        target = session.get(Competition, as_uuid(body["competitionId"], "competitionId"))
+        if not target or target.team_id != team_id or target.deleted_at:
+            raise HTTPException(status_code=404, detail="Competição não encontrada.")
     competition = target or _find_competition(session, team_id, meet)
     summary = {
         **base,

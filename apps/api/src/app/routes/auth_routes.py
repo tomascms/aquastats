@@ -13,6 +13,7 @@ RESEND_CONFIRM_COOLDOWN = timedelta(minutes=5)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..core.client import stored_ip
 from ..core.config import get_settings
 from ..core.db import get_auth_session
 from ..schemas import ChangePasswordBody, DeleteAccountBody, parse_body
@@ -52,6 +53,7 @@ from ..domain.identity import (
     join_team,
     LOGIN_FAILED,
     lock_or_fail,
+    login_locked,
     membership,
     normalize_email,
     now,
@@ -347,17 +349,19 @@ def login(body: dict, request: Request, response: Response, session: Session = D
     if not user or not user.password_hash:
         verify_password(password, None)
         raise HTTPException(status_code=401, detail=LOGIN_FAILED)
-    if user.locked_until and user.locked_until > stamp:
+    ip = stored_ip(request)
+    if login_locked(user, ip):
         verify_password(password, None)
         raise HTTPException(status_code=401, detail=LOGIN_FAILED)
     if not verify_password(password, user.password_hash):
-        lock_or_fail(user)
+        lock_or_fail(user, ip)
     if not user.is_verified:
         raise HTTPException(status_code=403, detail="Confirma o email antes de entrar.")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Conta desactivada.")
     user.failed_login_count = 0
     user.locked_until = None
+    user.settings = {k: v for k, v in (user.settings or {}).items() if k != "login_lock_ips"}
     user.last_login_at = stamp
     invite = remember_invite(response, _body_invite(body))
     next_path = invite_next_path(request, issue_session(session, user, request, response), invite)
@@ -371,9 +375,21 @@ def forgot_password(body: dict, session: Session = Depends(get_auth_session)):
     email = normalize_email(clean_text(str(body.get("email") or ""), 254))
     user = find_user_by_email(session, email)
     payload = {"ok": True}
-    if user and user.is_active and not user.deleted_at:
+    stamp = now()
+    last = (
+        session.scalar(
+            select(PasswordResetToken)
+            .where(PasswordResetToken.user_id == user.id)
+            .order_by(PasswordResetToken.created_at.desc())
+            .limit(1)
+        )
+        if user
+        else None
+    )
+    # One email per few minutes per account, silently: the same answer either way, so no inbox flooding and no hint.
+    recent = last is not None and stamp - last.created_at < RESEND_CONFIRM_COOLDOWN
+    if user and user.is_active and not user.deleted_at and not recent:
         raw = new_token(32)
-        stamp = now()
         session.add(
             PasswordResetToken(
                 id=uuid4(),
@@ -410,7 +426,12 @@ def reset_password(body: dict, response: Response, session: Session = Depends(ge
     user.is_verified = True  # the link reached the inbox
     user.failed_login_count = 0
     user.locked_until = None
-    row.used_at = stamp
+    # Every outstanding link dies with this one: an older leaked email must not reset the new password.
+    session.execute(
+        update(PasswordResetToken)
+        .where(PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None))
+        .values(used_at=stamp)
+    )
     revoke_user_sessions(session, user.id)
     clear_auth_cookies(response)
     return {"ok": True, "next": "/"}
@@ -520,7 +541,7 @@ def change_password(body: dict, request: Request, response: Response, session: S
         if verify_password(form.newPassword, user.password_hash):
             raise HTTPException(status_code=400, detail="A nova palavra-passe tem de ser diferente.")
     else:
-        iat = int(payload.get("iat") or 0)
+        iat = int(payload.get("auth_time") or 0)
         if time.time() - iat > get_settings().recent_auth_seconds:
             raise HTTPException(
                 status_code=401,
@@ -545,7 +566,7 @@ def delete_account(body: dict, request: Request, response: Response, session: Se
         if not form.password or not verify_password(form.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Palavra-passe incorrecta.")
     else:
-        iat = int(payload.get("iat") or 0)
+        iat = int(payload.get("auth_time") or 0)
         if time.time() - iat > get_settings().recent_auth_seconds:
             raise HTTPException(
                 status_code=401,

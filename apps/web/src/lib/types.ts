@@ -10,8 +10,9 @@ export type Intensity = "SUAVE" | "A1" | "A2" | "A3" | "PROG" | "PA" | "MAX" | "
 
 export type Gear = "legs" | "arms" | "paddles" | "pullbuoy" | "parachute" | "fins" | "suit";
 
-/** What's being swum in a set: the five race strokes, plus "sub" (underwater) for training-only sets. */
-export type WorkoutStroke = Stroke | "sub";
+/** What's being swum in a set: the five race strokes, plus "sub" (underwater) and "drill" (technique) for
+ * training-only sets. */
+export type WorkoutStroke = Stroke | "sub" | "drill";
 
 export type TimeParts = {
   mm: string;

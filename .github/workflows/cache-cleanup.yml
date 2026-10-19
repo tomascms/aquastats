@@ -1,0 +1,26 @@
+name: Cache cleanup
+
+# PR caches are the bulk of Actions storage; delete a PR's caches when it closes so storage
+# doesn't fill up (the alert at 2 GB). main caches stay — they expire after 7 days unused.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete caches for the closed PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          REF: refs/pull/${{ github.event.pull_request.number }}/merge
+        run: |
+          ids=$(gh api -X GET "repos/$REPO/actions/caches?ref=$REF&per_page=100" -q '.actions_caches[].id')
+          for id in $ids; do
+            gh api -X DELETE "repos/$REPO/actions/caches/$id" && echo "deleted $id"
+          done
