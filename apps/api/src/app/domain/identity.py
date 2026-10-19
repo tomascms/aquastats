@@ -543,7 +543,7 @@ def provision_role(
 LOGIN_FAILED = "Email ou palavra-passe incorrectos. Depois de várias tentativas, espera 15 minutos."
 
 
-def lock_or_fail(user: User) -> None:
+def lock_or_fail(user: User, ip: str | None = None) -> None:
     stamp = now()
     user.failed_login_count = int(user.failed_login_count or 0) + 1
     if user.failed_login_count >= 8:
@@ -551,4 +551,13 @@ def lock_or_fail(user: User) -> None:
 
         user.locked_until = stamp + timedelta(minutes=15)
         user.failed_login_count = 0
+        # The lock holds for the address that failed, so someone who only knows the email can't lock the owner out.
+        user.settings = {**(user.settings or {}), "login_lock_ip": ip}
     raise HTTPException(status_code=401, detail=LOGIN_FAILED)
+
+
+def login_locked(user: User, ip: str | None) -> bool:
+    if not (user.locked_until and user.locked_until > now()):
+        return False
+    locked_ip = (user.settings or {}).get("login_lock_ip")
+    return not locked_ip or not ip or locked_ip == ip

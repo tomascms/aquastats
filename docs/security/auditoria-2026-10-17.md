@@ -73,6 +73,23 @@ completo também não correu, porque a API foi chamada diretamente.
 - A `TURNSTILE_SECRET_KEY` foi definida pelo dono a 18/10. Um login sem token, ou com um token falso, dá 403 "Confirma que não és um robô". **#20 está resolvida.**
 - A secret key foi colada numa conversa com o assistente. Recomendo rodá-la no painel antes de a definir; o dono decidiu não o fazer, e isso fica como risco residual.
 
+### Atualização 19/10 — correções seguintes
+
+- #9 Lockout: o bloqueio de 15 min passou a valer só para o IP que falhou (`identity.py` `login_locked`). Quem só sabe o email já não tranca o dono fora da conta. Teste: `test_login_hardening.py`.
+- #14 `/forgot`: no máximo um link por conta a cada 5 min, e a resposta é igual nos dois casos. Teste Postgres: `test_forgot_password_sends_one_link_per_cooldown`.
+- #18 Race-session: um id de outra equipa dá 404 em vez de 500. Teste Postgres: `test_race_session_id_of_another_team_is_not_found`.
+- #19 ai-worker: só aceita os modelos da lista `MODELS`.
+- #12 Turnstile: o `hostname` do token tem de ser `aquastats.net` ou `www.aquastats.net`; as chaves de teste continuam a passar. Teste: `turnstile.test.ts`.
+- Suite Postgres corrida localmente (pgserver 16): 51 passaram.
+- Link de convite testado de ponta a ponta, com web e API locais ligadas ao staging e as chaves de teste do Turnstile: link → criar conta → confirmar → login → escolher atleta → o atleta fica na equipa do convite.
+- **Ainda abertas**, por decisão ou porque exigem passos manuais em produção:
+  - #10 (guard da role falha aberto): decisão do dono.
+  - #11 (RLS WITH CHECK por role): é preciso uma migração aplicada à mão em produção.
+  - #13 (Origin sintetizado pelo proxy): pode partir o callback do Google; é preciso testar no staging.
+  - #15 (enumeração no registo): muda a experiência de registo.
+  - #16 (access token válido até 15 min após o logout): aceite.
+  - #17 (DNS rebinding no live): baixa.
+
 ## Falhas propostas (não corrigidas, precisam de decisão ou de migração)
 
 | # | Gravidade | Falha | Onde | Proposta |

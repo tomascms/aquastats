@@ -19,3 +19,19 @@ class LoginHardeningTest(unittest.TestCase):
     def test_one_message_for_every_failed_sign_in(self):
         self.assertNotIn("Google", LOGIN_FAILED)
         self.assertNotIn("bloqueada", LOGIN_FAILED)
+
+
+class LoginLockTest(unittest.TestCase):
+    def test_lock_holds_only_for_the_address_that_failed(self):
+        from types import SimpleNamespace
+
+        from fastapi import HTTPException
+
+        from app.domain.identity import lock_or_fail, login_locked
+
+        user = SimpleNamespace(failed_login_count=7, locked_until=None, settings={})
+        with self.assertRaises(HTTPException):
+            lock_or_fail(user, "198.51.100.1")
+        self.assertTrue(login_locked(user, "198.51.100.1"))
+        # The owner, from another address, still signs in: knowing the email is not enough to lock them out.
+        self.assertFalse(login_locked(user, "203.0.113.5"))

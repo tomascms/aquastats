@@ -13,6 +13,7 @@ RESEND_CONFIRM_COOLDOWN = timedelta(minutes=5)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..core.client import stored_ip
 from ..core.config import get_settings
 from ..core.db import get_auth_session
 from ..schemas import ChangePasswordBody, DeleteAccountBody, parse_body
@@ -52,6 +53,7 @@ from ..domain.identity import (
     join_team,
     LOGIN_FAILED,
     lock_or_fail,
+    login_locked,
     membership,
     normalize_email,
     now,
@@ -347,11 +349,12 @@ def login(body: dict, request: Request, response: Response, session: Session = D
     if not user or not user.password_hash:
         verify_password(password, None)
         raise HTTPException(status_code=401, detail=LOGIN_FAILED)
-    if user.locked_until and user.locked_until > stamp:
+    ip = stored_ip(request)
+    if login_locked(user, ip):
         verify_password(password, None)
         raise HTTPException(status_code=401, detail=LOGIN_FAILED)
     if not verify_password(password, user.password_hash):
-        lock_or_fail(user)
+        lock_or_fail(user, ip)
     if not user.is_verified:
         raise HTTPException(status_code=403, detail="Confirma o email antes de entrar.")
     if not user.is_active:
@@ -371,9 +374,21 @@ def forgot_password(body: dict, session: Session = Depends(get_auth_session)):
     email = normalize_email(clean_text(str(body.get("email") or ""), 254))
     user = find_user_by_email(session, email)
     payload = {"ok": True}
-    if user and user.is_active and not user.deleted_at:
+    stamp = now()
+    last = (
+        session.scalar(
+            select(PasswordResetToken)
+            .where(PasswordResetToken.user_id == user.id)
+            .order_by(PasswordResetToken.created_at.desc())
+            .limit(1)
+        )
+        if user
+        else None
+    )
+    # One email per few minutes per account, silently: the same answer either way, so no inbox flooding and no hint.
+    recent = last is not None and stamp - last.created_at < RESEND_CONFIRM_COOLDOWN
+    if user and user.is_active and not user.deleted_at and not recent:
         raw = new_token(32)
-        stamp = now()
         session.add(
             PasswordResetToken(
                 id=uuid4(),

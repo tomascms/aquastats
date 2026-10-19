@@ -144,3 +144,33 @@ def test_recent_and_older_windows_add_up_to_the_full_snapshot(world, api_engine,
     assert ids(recent["workouts"]) | ids(older["workouts"]) == ids(full["workouts"])
     assert ids(recent["timeLogs"]) | ids(older["timeLogs"]) == ids(full["timeLogs"])
     assert str(old) in ids(older["workouts"]) and str(old) not in ids(recent["workouts"])
+
+
+def test_race_session_id_of_another_team_is_not_found(world, api_engine, client_for):
+    body = {"athleteId": str(world.b.athletes[0]), "distanceM": 100, "stroke": "free", "date": "2026-10-18"}
+    coach_b = client_for(api_engine, world.b.coach, "coach", world.b)
+    created = coach_b.put("/api/v1/race-sessions", json=body, headers={"Idempotency-Key": uuid.uuid4().hex})
+    assert created.status_code == 200, created.text
+    # Team A reuses that id for its own athlete: RLS hides B's row, the insert collides, the answer is 404 (not 500).
+    coach_a = client_for(api_engine, world.a.coach, "coach", world.a)
+    reuse = {**body, "id": created.json()["id"], "athleteId": str(world.a.athletes[0])}
+    response = coach_a.put("/api/v1/race-sessions", json=reuse, headers={"Idempotency-Key": uuid.uuid4().hex})
+    assert response.status_code == 404, response.text
+
+
+def test_forgot_password_sends_one_link_per_cooldown(world, team_factory, api_engine, auth_engine):
+    import psycopg
+
+    from tests.postgres.conftest import make_client
+
+    team = team_factory("Forgot")
+    # The seed gives every user a fresh link; age it so the next request may send one.
+    with psycopg.connect(world.admin_url, autocommit=True) as conn:
+        conn.execute("update password_reset_tokens set created_at = now() - interval '1 hour' where user_id = %s", (team.coach,))
+    client = make_client(api_engine, auth_engine)
+    email = "treinador.forgot@forgot.test"
+    first = client.post("/api/v1/auth/forgot", json={"email": email}, headers={"Origin": "http://localhost:3000"})
+    second = client.post("/api/v1/auth/forgot", json={"email": email}, headers={"Origin": "http://localhost:3000"})
+    assert first.status_code == second.status_code == 200
+    # Same answer shape for the caller; only the first request created a link.
+    assert "resetUrl" in first.json() and "resetUrl" not in second.json()

@@ -4,6 +4,7 @@ from datetime import date, datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
@@ -992,8 +993,13 @@ def save_race_session(session: Session, payload: dict, body: dict, request) -> d
             created_at=now,
             updated_at=now,
         )
-        session.add(row)
-        session.flush()
+        try:
+            with session.begin_nested():
+                session.add(row)
+                session.flush()
+        except IntegrityError:
+            # The id belongs to another team's session (hidden by RLS): the same answer as any unknown id.
+            raise HTTPException(status_code=404, detail="Sessão de prova não encontrada.")
     _audit(session, payload, "race.save", "race_session", row.id, request)
     return race_session_out(row)
 

@@ -60,7 +60,9 @@ export default {
     const plain = (body.text ?? "").slice(0, MAX_MARKDOWN);
     if (!markdown.trim() && !plain.trim()) return Response.json({ error: "no text" }, { status: 422 });
 
-    const models = body.models?.length ? body.models.filter((m) => m.startsWith("@cf/")).slice(0, 3) : [...MODELS];
+    // Only our own models: the key must not open every Workers AI model (and its cost) to whoever holds it.
+    const allowed = (body.models ?? []).filter((m): m is (typeof MODELS)[number] => (MODELS as readonly string[]).includes(m));
+    const models = allowed.length ? allowed.slice(0, 3) : [...MODELS];
     for (const model of models) {
       try {
         const output = await env.AI.run(model, {
