@@ -82,13 +82,12 @@ completo também não correu, porque a API foi chamada diretamente.
 - #12 Turnstile: o `hostname` do token tem de ser `aquastats.net` ou `www.aquastats.net`; as chaves de teste continuam a passar. Teste: `turnstile.test.ts`.
 - Suite Postgres corrida localmente (pgserver 16): 51 passaram.
 - Link de convite testado de ponta a ponta, com web e API locais ligadas ao staging e as chaves de teste do Turnstile: link → criar conta → confirmar → login → escolher atleta → o atleta fica na equipa do convite.
-- **Ainda abertas**, por decisão ou porque exigem passos manuais em produção:
-  - #10 (guard da role falha aberto): decisão do dono.
-  - #11 (RLS WITH CHECK por role): a migração `015_coach_write_check.sql` (PR #39) foi aplicada no staging a 19/10. Foi testada como `aquastats_api` numa transação revertida no fim. Um nadador vê os treinos da equipa, mas o UPDATE e o DELETE afetam 0 linhas e o INSERT é recusado (42501). O treinador continua a escrever. Todos os fluxos de nadador e pending que escrevem nestas tabelas usam a ligação `aquastats_auth`, com bypass, por isso nada parte. Aplicada em produção a 19/10, com autorização do dono. Políticas confirmadas no catálogo; o site live respondeu 200 em `/entrar` e `/api/v1/health`.
-  - #13 (Origin sintetizado pelo proxy): pode partir o callback do Google; é preciso testar no staging.
-  - #15 (enumeração no registo): muda a experiência de registo.
-  - #16 (access token válido até 15 min após o logout): aceite.
-  - #17 (DNS rebinding no live): baixa.
+- **Estado final (19/10)**:
+  - #11 (RLS WITH CHECK por role): a migração `015_coach_write_check.sql` (PR #39) foi testada no staging como `aquastats_api`, numa transação revertida no fim. Um nadador vê os treinos da equipa, mas o UPDATE e o DELETE afetam 0 linhas e o INSERT é recusado (42501). O treinador continua a escrever. Os fluxos de nadador e pending que escrevem nestas tabelas usam a ligação `aquastats_auth`, com bypass, por isso nada parte. Foi aplicada em produção a 19/10, com autorização do dono. O dono confirmou que criar e editar treinos como treinador continua a funcionar.
+  - #13 (Origin sintetizado pelo proxy): corrigida no PR #40. O login Google usa rotas próprias com GET e não passa pelo proxy.
+  - Leitor de IA dos resultados live: testado com PDFs reais da ANL e da ARNN, que os parsers fixos não leem. Tempos, anos e clubes saíram certos. O lugar ia parar ao campo da pista; corrigido no PR #38.
+  - #10, #15, #16 e #17: o dono decidiu deixá-las como estão.
+  - As contas `audit-*` de teste foram apagadas do staging, com as respetivas equipas e dados.
 
 ## Falhas propostas (não corrigidas, precisam de decisão ou de migração)
 
@@ -135,9 +134,9 @@ completo também não correu, porque a API foi chamada diretamente.
 
 ## Risco residual
 
-- **O Turnstile está desligado em produção (#20)**: hoje não há proteção contra bots no login e no registo.
 - A role da BD em produção foi inferida pela data do build, e não por uma query (#8).
-- O lockout pode ser abusado para negação de serviço por conta (#9).
+- O lockout por conta só dispara às 40 falhas, vindas de qualquer IP; até lá, cada IP é bloqueado ao fim de 8 (#9).
+- #10, #15, #16 e #17 ficam abertas por decisão do dono (ver tabela).
 - O Turnstile reduz bots, mas não os humanos/fazendas de resolução.
 - Os testes de isolamento entre rotas cobrem só 5 rotas, e só como treinador. Faltam meet-entries, results, race-sessions, season-plans, attendance, goals, hr, predictions, swimrankings, live e lenex, e os casos de atleta→colega e atleta→rotas de treinador. A Fase 4 deve cobrir isto.
 - A Fase 4 cobriu as rotas principais, mas não todas (`season-plans`, `attendance`, `meet-results`, `hr/delete`, `predictions` GET). Esses casos ficam para a suite de Postgres, que ainda não os cobre.
