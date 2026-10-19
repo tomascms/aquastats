@@ -188,6 +188,31 @@ def test_swimmer_cannot_write_for_a_teammate(world, api_engine):
         assert "row-level security" in str(err.value)
 
 
+@pytest.mark.parametrize("table,column,team_col", [
+    ("workouts", "title", "team_id"), ("competitions", "title", "team_id"), ("season_plans", "name", "team_id"),
+    ("attendance_sessions", "group_name", "team_id"), ("teams", "name", "id"),
+])
+def test_swimmer_cannot_write_own_teams_plans(world, api_engine, table, column, team_col):
+    actor = actors(world)["swimmer A1"]
+    with api_engine.connect() as api:
+        trans = api.begin()
+        try:
+            set_context(api, actor)
+            seen = api.execute(text(f"select count(*) from {table} where {team_col} = '{world.a.team}'")).scalar()
+            changed = api.execute(text(f"update {table} set {column} = 'x' where {team_col} = '{world.a.team}'")).rowcount
+            removed = api.execute(text(f"delete from {table} where {team_col} = '{world.a.team}'")).rowcount
+        finally:
+            trans.rollback()
+    assert seen > 0 and (changed, removed) == (0, 0)
+    with api_engine.connect() as api:
+        with pytest.raises(Exception) as err, api.begin():
+            set_context(api, actor)
+            api.execute(text(
+                "insert into season_plans (team_id, name, start_date, end_date, created_by) "
+                f"values ('{world.a.team}', 'do nadador', current_date, current_date, '{world.a.swimmers[0]}')"))
+        assert "row-level security" in str(err.value)
+
+
 def test_ledger_is_append_only_for_the_api(world, api_engine):
     actor = actors(world)["coach A"]
     for statement in ("update prediction_ledger set mean_s = 1", "delete from prediction_ledger"):
