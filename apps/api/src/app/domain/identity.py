@@ -544,20 +544,33 @@ LOGIN_FAILED = "Email ou palavra-passe incorrectos. Depois de várias tentativas
 
 
 def lock_or_fail(user: User, ip: str | None = None) -> None:
+    """8 failures lock the address that failed, so knowing the email isn't enough to lock the owner out;
+    40 across addresses lock the whole account, so rotating addresses doesn't buy unlimited guesses.
+    The count clears on a successful sign-in."""
+    from datetime import timedelta
+
     stamp = now()
     user.failed_login_count = int(user.failed_login_count or 0) + 1
-    if user.failed_login_count >= 8:
-        from datetime import timedelta
-
+    settings = dict(user.settings or {})
+    ips = [item for item in settings.get("login_lock_ips") or [] if item]
+    if user.failed_login_count >= ACCOUNT_LOCK_FAILURES:
         user.locked_until = stamp + timedelta(minutes=15)
         user.failed_login_count = 0
-        # The lock holds for the address that failed, so someone who only knows the email can't lock the owner out.
-        user.settings = {**(user.settings or {}), "login_lock_ip": ip}
+        ips = []  # empty list = every address
+    elif user.failed_login_count % IP_LOCK_FAILURES == 0:
+        user.locked_until = stamp + timedelta(minutes=15)
+        ips = [*ips, ip or "unknown"][-20:]
+    settings["login_lock_ips"] = ips
+    user.settings = settings
     raise HTTPException(status_code=401, detail=LOGIN_FAILED)
+
+
+IP_LOCK_FAILURES = 8
+ACCOUNT_LOCK_FAILURES = 40
 
 
 def login_locked(user: User, ip: str | None) -> bool:
     if not (user.locked_until and user.locked_until > now()):
         return False
-    locked_ip = (user.settings or {}).get("login_lock_ip")
-    return not locked_ip or not ip or locked_ip == ip
+    ips = (user.settings or {}).get("login_lock_ips") or []
+    return not ips or (ip or "unknown") in ips

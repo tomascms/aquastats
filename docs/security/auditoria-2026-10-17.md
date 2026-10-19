@@ -75,7 +75,7 @@ completo também não correu, porque a API foi chamada diretamente.
 
 ### Atualização 19/10 — correções seguintes
 
-- #9 Lockout: o bloqueio de 15 min passou a valer só para o IP que falhou (`identity.py` `login_locked`). Quem só sabe o email já não tranca o dono fora da conta. Teste: `test_login_hardening.py`.
+- #9 Lockout: 8 falhas bloqueiam 15 min só o IP que falhou (`identity.py` `login_locked`), por isso quem só sabe o email já não tranca o dono fora da conta. 40 falhas acumuladas, de qualquer IP, bloqueiam a conta inteira, para quem muda de IP não ter tentativas ilimitadas. Teste: `test_login_hardening.py`.
 - #14 `/forgot`: no máximo um link por conta a cada 5 min, e a resposta é igual nos dois casos. Teste Postgres: `test_forgot_password_sends_one_link_per_cooldown`.
 - #18 Race-session: um id de outra equipa dá 404 em vez de 500. Teste Postgres: `test_race_session_id_of_another_team_is_not_found`.
 - #19 ai-worker: só aceita os modelos da lista `MODELS`.

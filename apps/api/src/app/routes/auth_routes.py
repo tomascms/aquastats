@@ -361,6 +361,7 @@ def login(body: dict, request: Request, response: Response, session: Session = D
         raise HTTPException(status_code=403, detail="Conta desactivada.")
     user.failed_login_count = 0
     user.locked_until = None
+    user.settings = {k: v for k, v in (user.settings or {}).items() if k != "login_lock_ips"}
     user.last_login_at = stamp
     invite = remember_invite(response, _body_invite(body))
     next_path = invite_next_path(request, issue_session(session, user, request, response), invite)
