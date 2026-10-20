@@ -276,10 +276,10 @@ export function predictTrainingTargets(rows: TrainingRep[]): Map<string, Trainin
 }
 
 /** What the model has learned so far for this athlete, fitted on all their history. */
-export function learnedPatterns(rows: TrainingRep[]): { effects: LearnedEffect[]; n: number } {
+export function learnedPatterns(rows: TrainingRep[]): { effects: LearnedEffect[]; n: number; residualSd: number } {
   const samples = buildSamples(rows);
   const lastDate = samples.reduce((max, s) => (s.row.date > max ? s.row.date : max), "");
-  if (!lastDate) return { effects: [], n: 0 };
+  if (!lastDate) return { effects: [], n: 0, residualSd: 0 };
   const asOf = new Date(Date.parse(`${lastDate}T12:00:00Z`) + DAY_MS).toISOString().slice(0, 10);
   const fit = fitPatterns(samples, asOf);
   const support = FEATURES.map((spec, i) => samples.filter((s) => s.x[i + 1] !== 0).length);
@@ -294,7 +294,96 @@ export function learnedPatterns(rows: TrainingRep[]): { effects: LearnedEffect[]
     return { key: spec.key, label: spec.key.startsWith("weekday-") ? tx("{day} face à média da semana", { day: tx(spec.label) }) : tx(spec.label), pct, support: support[i] };
   }).filter((effect) => effect.support >= 5 && (effect.key !== "sendoff" || effect.support >= 5));
 
-  return { effects, n: fit.n };
+  return { effects, n: fit.n, residualSd: fit.residualSd };
+}
+
+export type FactorShare = {
+  key: string;
+  label: string;
+  /** Share of the level, in % (negative = faster). */
+  pct: number;
+  seconds: number;
+  /** Earlier reps where the factor was present (what it was learned from). */
+  support: number;
+};
+
+export type RepExplanation = {
+  levelS: number;
+  /** Context terms; level + Σ seconds = expectedS exactly (the ±8 % cap is spread over them). */
+  factors: FactorShare[];
+  expectedS: number;
+  actualS: number;
+  /** Half-width of the band predictTrainingTargets shows, in seconds. */
+  marginS: number;
+  capped: boolean;
+  fitN: number;
+};
+
+export const MIN_FACTOR_SUPPORT = 8;
+
+/**
+ * The same estimate as predictTrainingTargets, split into its parts: level, one term per context
+ * factor and the intercept (drift of the level). Weekday terms are shown against the mean of the
+ * weekdays seen, the mean going to the intercept, so the sum is unchanged. Factors learned from
+ * fewer than 8 reps are pooled into one term and never named.
+ */
+export function explainTrainingTargets(rows: TrainingRep[]): Map<string, RepExplanation> {
+  const samples = buildSamples(rows);
+  const fits = new Map<string, { fit: Fit; support: number[] }>();
+  const out = new Map<string, RepExplanation>();
+  for (const sample of samples) {
+    const date = sample.row.date;
+    let entry = fits.get(date);
+    if (!entry) {
+      const before = samples.filter((s) => s.row.date < date);
+      entry = { fit: fitPatterns(samples, date), support: FEATURES.map((_, i) => before.filter((s) => s.x[i + 1] !== 0).length) };
+      fits.set(date, entry);
+    }
+    const { fit, support } = entry;
+    const levelS = sample.level.levelS;
+    const factors: FactorShare[] = [];
+    let clamped = 0;
+    if (fit.n >= 8) {
+      const terms = sample.x.map((value, i) => value * fit.beta[i]);
+      const raw = terms.reduce((sum, term) => sum + term, 0);
+      clamped = Math.max(-0.08, Math.min(0.08, raw));
+      const scale = raw ? clamped / raw : 1;
+      const seen = FEATURES.map((spec, i) => (spec.key.startsWith("weekday-") && support[i] > 0 ? i : -1)).filter((i) => i >= 0);
+      const dayMean = seen.length ? seen.reduce((sum, i) => sum + fit.beta[i + 1], 0) / seen.length : 0;
+      const day = FEATURES.findIndex((spec, i) => spec.key.startsWith("weekday-") && sample.x[i + 1] !== 0);
+      if (day >= 0) {
+        terms[0] += dayMean;
+        terms[day + 1] -= dayMean;
+      }
+      const add = (key: string, label: string, term: number, n: number) => {
+        const pct = term * scale * 100;
+        const existing = factors.find((factor) => factor.key === key);
+        if (existing) {
+          existing.pct += pct;
+          existing.seconds += (levelS * pct) / 100;
+          existing.support = Math.min(existing.support, n);
+        } else factors.push({ key, label, pct, seconds: (levelS * pct) / 100, support: n });
+      };
+      add("trend", tx("Tendência recente face ao nível"), terms[0], fit.n);
+      FEATURES.forEach((spec, i) => {
+        if (!terms[i + 1]) return;
+        if (support[i] < MIN_FACTOR_SUPPORT) add("few-data", tx("Fatores com menos de 8 reps"), terms[i + 1], support[i]);
+        else add(spec.key, spec.key.startsWith("weekday-") ? tx("{day} face à média da semana", { day: tx(spec.label) }) : tx(spec.label), terms[i + 1], support[i]);
+      });
+    }
+    const expectedS = levelS * (1 + clamped);
+    const relSpread = fit.n >= 8 ? fit.residualSd : sample.level.spread / levelS;
+    out.set(sample.row.log.id, {
+      levelS,
+      factors,
+      expectedS,
+      actualS: sample.row.timeS,
+      marginS: Math.max(expectedS * 0.005, expectedS * relSpread),
+      capped: Math.abs(clamped) === 0.08,
+      fitN: fit.n,
+    });
+  }
+  return out;
 }
 
 export type RaceForm = {

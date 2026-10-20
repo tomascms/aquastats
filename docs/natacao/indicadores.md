@@ -37,3 +37,19 @@ unidades e uma incerteza qualitativa; o ecrã junta o raciocínio, a alternativa
 | Queda de ritmo acumulada | Queda média das séries principais em 14 dias > habitual (15–70 dias) + 1,5 pp | média |
 
 Nenhum sinal usa probabilidades, prevê lesões ou dá conselho médico.
+
+## Tempos explicados (perfil do atleta, treinador)
+
+Código: [`apps/web/src/lib/explained-times.ts`](../../apps/web/src/lib/explained-times.ts) e `explainTrainingTargets` em
+`training-prediction.ts` (testes em `explained-times.test.ts`). Usa o modelo v1.0 tal como está: só o expõe.
+
+| Indicador | Definição | Limites — o que NÃO concluir |
+|---|---|---|
+| **Desvio face ao nível** (%) | Real ÷ nível habitual − 1; nível = mediana ponderada (meia-vida 28 dias) das reps iguais anteriores | Abaixo de 1 % (arredondado a uma casa) é ruído e não se explica |
+| **Peso de cada fator** (s e %) | Termo da regressão ridge de cada fator × nível; os dias da semana contra a média dos dias vistos; nível + pesos = esperado do modelo | Associação, não causa: a parte de contexto não passou no backtest. Fatores com < 8 reps não aparecem com nome |
+| **Parte sem explicação** | Real − esperado, com a margem do modelo (± 1 desvio residual) | Numa soma (treino, semana) a margem é a soma das margens |
+| **Índice de queda e irregularidade face ao habitual** | Índice de queda (acima) e coeficiente de variação da série contra a mediana das séries iguais anteriores (mesmo grupo e n.º de reps) | Diferença abaixo de 1 pp é ruído |
+| **Tempos vs carga** | Declive dos mínimos quadrados do desvio semanal sobre km/semana, por +10 km, margem ± 2 erros-padrão, ≥ 6 semanas | Entre semanas mudam também a forma e a fase |
+| **Perfil de fatores** | Coeficientes de `learnedPatterns`, margem ≈ ± 2 desvios residuais ÷ √(sessões com o fator) | Margem aproximada (ignora a contração da ridge) |
+
+Capturas da demo sintética: `docs/img/tempos-*.jpg`.

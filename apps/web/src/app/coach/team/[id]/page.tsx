@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { GoalsPanel } from "@/components/goals/goals-panel";
+import { TemposExplicados } from "@/components/analise/tempos-explicados";
 import { LoadResponse } from "@/components/season/load-response";
 import { Modal } from "@/components/ui/modal";
 import { AthleteProfile } from "@/components/team/athlete-profile";
@@ -155,6 +156,8 @@ export default function AthletePage() {
       <GoalsPanel athleteId={athlete.id} role="coach" />
 
       <LoadResponse athlete={athlete} />
+
+      <TemposExplicados athlete={athlete} />
 
       <div className="grid gap-5 lg:grid-cols-2">
         <section className="overflow-hidden rounded-2xl border border-line bg-panel">
