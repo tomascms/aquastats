@@ -252,7 +252,8 @@ function AthleteEvents({
           + {t("Adicionar prova")}
         </button>
       </header>
-      <div className="overflow-x-auto">
+      {/* relative: without it the sr-only header cells escape the scroll box and widen the page on phones. */}
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-[860px] text-sm tabular">
           <thead>
             <tr className="bg-panel-2 text-left text-[11px] font-semibold uppercase tracking-wide text-mute">
