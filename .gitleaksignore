@@ -1,0 +1,3 @@
+# Falsos positivos do gitleaks (CI: scan de todo o histórico). Só valores sintéticos de testes, nunca segredos reais.
+9c368af3b1c564676ec5df2feff268d185b0b9dd:apps/api/tests/test_client_errors.py:generic-api-key:30
+6d9beb54f7cb1c6e9f955d9ab0e090c371d64ca2:apps/api/tests/postgres/test_session_revocation.py:generic-api-key:7
