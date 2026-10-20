@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AthleteChips, type ChipMark } from "@/components/analise/athlete-chips";
 import { useSay } from "@/components/analise/coach-text";
 import { ReportPoints } from "@/components/analise/report-points";
+import { explainSession, StateLegend, type SessionExplain } from "@/components/analise/tempos-reps";
 import { SetCard } from "@/components/workouts/set-card";
 import type { MessageKey } from "@/i18n";
 import { useT } from "@/i18n/provider";
@@ -19,7 +20,7 @@ import type { Athlete, Competition, MeetEntry, MeetResult, TimeLog, Workout } fr
 type State = { workouts: Workout[]; timeLogs: TimeLog[]; competitions: Competition[]; meetEntries: MeetEntry[]; meetResults: MeetResult[] };
 
 /** One athlete's session read: report + per-rep model estimate. 90 days before is enough (targets look back 42). */
-export function readSession(athlete: Athlete, workout: Workout, state: State, audience: Audience, withPrediction: boolean, days = 90): { report: SessionReport; predicted: Map<string, TrainingTarget> } {
+export function readSession(athlete: Athlete, workout: Workout, state: State, audience: Audience, withPrediction: boolean, days = 90): { report: SessionReport; predicted: Map<string, TrainingTarget>; explain: SessionExplain | null } {
   const wellness = athlete.wellness ?? [];
   const from = addDays(workout.date, -days);
   // Annotation only needs the same week before each rep, so a week of margin is enough.
@@ -33,9 +34,11 @@ export function readSession(athlete: Athlete, workout: Workout, state: State, au
   }
   const expected = expectedTimes(rows, bests);
   const mine = rows.filter((r) => r.workoutId === workout.id);
+  const report = sessionReport(mine, expected, { workouts: state.workouts, wellness, athleteId: athlete.id }, audience);
   return {
-    report: sessionReport(mine, expected, { workouts: state.workouts, wellness, athleteId: athlete.id }, audience),
+    report,
     predicted: withPrediction ? predictTrainingTargets(rows) : new Map(),
+    explain: withPrediction ? explainSession(rows, workout.id, report.sets, wellness, athlete.gender ?? "") : null,
   };
 }
 
@@ -95,7 +98,7 @@ export function SessionAnalysis({ workout, athletes, audience = "coach" }: { wor
   }, [athleteIds, workout, workouts, windowLogs, competitions, meetEntries, meetResults, audience, t]);
 
   if (!athlete || !data) return null;
-  const { report, predicted } = data;
+  const { report, predicted, explain } = data;
   const toneClass = report.tone === "good" ? "border-good" : report.tone === "improve" ? "border-slower" : "border-line-strong";
 
   return (
@@ -112,6 +115,7 @@ export function SessionAnalysis({ workout, athletes, audience = "coach" }: { wor
       {report.sets.length ? (
         <>
           <p className={`mt-3 border-l-4 pl-3 text-base font-semibold text-mist ${toneClass}`}>{say(report.headline)}</p>
+          {explain?.line ? <p className="mt-2 text-sm text-mist">{say(explain.line)}</p> : null}
           <ReportPoints points={report.points} />
 
           <h3 className="mt-4 text-sm font-semibold text-mist">{t("Série a série")}</h3>
@@ -122,9 +126,15 @@ export function SessionAnalysis({ workout, athletes, audience = "coach" }: { wor
           </p>
           <div className="mt-2 space-y-2">
             {report.sets.map((set) => (
-              <SetCard key={set.key} set={set} predicted={predicted} showPredicted={audience === "coach"} />
+              <SetCard key={set.key} set={set} predicted={predicted} showPredicted={audience === "coach"} explain={explain?.sets.get(set.key)} />
             ))}
           </div>
+          {explain ? (
+            <div className="mt-3">
+              <StateLegend who={explain.who} />
+              <p className="mt-1 text-xs text-mute">{t("Associações nos registos do atleta, não causas.")}</p>
+            </div>
+          ) : null}
         </>
       ) : (
         <p className="mt-3 text-sm text-mute">{audience === "athlete" ? t("Ainda sem tempos teus neste treino.") : t("Ainda sem tempos registados para este atleta neste treino.")}</p>

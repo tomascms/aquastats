@@ -38,18 +38,19 @@ unidades e uma incerteza qualitativa; o ecrã junta o raciocínio, a alternativa
 
 Nenhum sinal usa probabilidades, prevê lesões ou dá conselho médico.
 
-## Tempos explicados (perfil do atleta, treinador)
+## Tempos explicados (treino e perfil do atleta, treinador)
 
 Código: [`apps/web/src/lib/explained-times.ts`](../../apps/web/src/lib/explained-times.ts) e `explainTrainingTargets` em
-`training-prediction.ts` (testes em `explained-times.test.ts`). Usa o modelo v1.0 tal como está: só o expõe.
+`training-prediction.ts` (testes em `explained-times.test.ts`). Usa o modelo v1.0 tal como está: só o expõe, em palavras de treinador.
 
-| Indicador | Definição | Limites — o que NÃO concluir |
+| Onde | O que mostra | Regra |
 |---|---|---|
-| **Desvio face ao nível** (%) | Real ÷ nível habitual − 1; nível = mediana ponderada (meia-vida 28 dias) das reps iguais anteriores | Abaixo de 1 % (arredondado a uma casa) é ruído e não se explica |
-| **Peso de cada fator** (s e %) | Termo da regressão ridge de cada fator × nível; os dias da semana contra a média dos dias vistos; nível + pesos = esperado do modelo | Associação, não causa: a parte de contexto não passou no backtest. Fatores com < 8 reps não aparecem com nome |
-| **Parte sem explicação** | Real − esperado, com a margem do modelo (± 1 desvio residual) | Numa soma (treino, semana) a margem é a soma das margens |
-| **Índice de queda e irregularidade face ao habitual** | Índice de queda (acima) e coeficiente de variação da série contra a mediana das séries iguais anteriores (mesmo grupo e n.º de reps) | Diferença abaixo de 1 pp é ruído |
-| **Tempos vs carga** | Declive dos mínimos quadrados do desvio semanal sobre km/semana, por +10 km, margem ± 2 erros-padrão, ≥ 6 semanas | Entre semanas mudam também a forma e a fase |
-| **Perfil de fatores** | Coeficientes de `learnedPatterns`, margem ≈ ± 2 desvios residuais ÷ √(sessões com o fator) | Margem aproximada (ignora a contração da ridge) |
+| Treino, cada série | Cada tempo é um chip: verde mais rápido, cinzento normal, laranja mais lento do que costuma. Tocar abre a caixa "1:03,9 · 1,9 s mais rápida do que costuma" e até 3 motivos | Normal = diferença abaixo de 1 % face ao habitual (mediana ponderada, meia-vida 28 dias, das reps iguais anteriores); um tempo normal não leva explicação |
+| Treino, cada série | Curva numa frase ("Começou como costuma e quebrou nas últimas 2 (mais do que costuma)") e "Esta vez vs a última" com o que foi diferente (máx. 3 linhas) | Índice de queda comparado com séries iguais anteriores; diferenças abaixo de 1 pp são ruído. "O que foi diferente" são só dados |
+| Treino, topo | Uma linha de resumo ("3 reps mais lentas do que costuma, quase todas no fim das séries; 4.º dia seguido de treino") | |
+| Perfil | Cartão da semana (s por 100 m e etiquetas dos motivos), uma bola por semana na época, e até 4 frases do que costuma coincidir com os tempos | Frases só para associações fora da margem (≈ ± 2 desvios residuais ÷ √sessões; volume semanal: declive ± 2 erros-padrão, ≥ 6 semanas) |
 
-Capturas da demo sintética: `docs/img/tempos-*.jpg`.
+Motivos = fatores do modelo com o mesmo sentido do tempo, aprendidos em ≥ 8 reps e com peso ≥ 0,2 %, ditos com os dados do dia
+("dormiu 6 h", "voltou de 10 dias sem treinar"). Sempre "nos registos dele/dela, isto costuma coincidir com…": associação, nunca
+causa, porque a parte de contexto não passou no backtest. Sem sono registado, a frase diz-o. Os números (s, %, n, margem) ficam em
+"Ver detalhes". Capturas da demo sintética: `docs/img/tempos-*.jpg`.

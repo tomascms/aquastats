@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { addDays } from "./dates";
-import { breakdown, formDays, loadSlope, setCurve, setsOf, type ExplainedRep } from "./explained-times";
+import { breakdown, curveLine, isNoise, loadSlope, readRep, readWeeks, setFade, setsOf, whyMsg, type ExplainedRep } from "./explained-times";
 import type { TrainingRep } from "./training-context";
 import { explainTrainingTargets, predictTrainingTargets } from "./training-prediction";
 
@@ -79,32 +79,43 @@ describe("tempos explicados: decomposição", () => {
   it("manhã associa-se a tempos mais lentos; desvios < 1 % são ruído", () => {
     const late = list.filter((r) => r.row.date > "2026-08-20" && r.row.shift === "morning");
     assert.ok(late.every((r) => (r.factors.find((f) => f.key === "morning")?.pct ?? 0) > 0.5));
-    const flat = breakdown(list.filter((r) => Math.abs(r.actualS / r.levelS - 1) < 0.005))!;
-    assert.equal(flat.noise, true);
+    assert.equal(isNoise(0.94), true);
+    assert.equal(isNoise(0.96), false);
   });
 });
 
-describe("tempos explicados: época, série e carga", () => {
-  it("forma diária com média de 7 dias", () => {
-    const days = formDays(list);
-    assert.ok(days.length > 50);
-    const last = days.at(-1)!;
-    const window = list.filter((r) => r.row.date > addDays(last.date, -7));
-    close(last.rollingPct, (window.reduce((s, r) => s + r.actualS / r.levelS - 1, 0) / window.length) * 100);
+describe("tempos explicados: em palavras de treinador", () => {
+  const days = new Set(rows.map((r) => r.date));
+
+  it("rep normal não leva explicação; rep lenta de manhã diz 'treino de manhã'", () => {
+    const normal = list.find((r) => Math.abs(r.actualS / r.levelS - 1) < 0.005)!;
+    assert.deepEqual(readRep(normal, days, "F"), { state: "normal", line: { key: "dentro do habitual, nada a explicar" }, why: null });
+    const slow = list.find((r) => r.row.date > "2026-08-20" && r.row.shift === "morning" && r.actualS / r.levelS - 1 > 0.012)!;
+    const read = readRep(slow, days, "F");
+    assert.equal(read.state, "slower");
+    assert.match(JSON.stringify(read.why), /treino de manhã/);
+    assert.match(JSON.stringify(read.why), /Nos registos dela/);
   });
 
-  it("curva da série contra séries iguais anteriores", () => {
+  it("sem dado de sono, a frase diz que não está registado", () => {
+    assert.equal(whyMsg([], "M", true).key, "{why} Sono não registado.");
+    assert.equal((whyMsg([], "M", true).vars!.why as { key: string }).key, "Nos registos dele, nada costuma coincidir com isto.");
+  });
+
+  it("semanas com estado e segundos por 100 m; série com curva e queda habitual", () => {
+    const weeks = readWeeks(list, days);
+    assert.ok(weeks.length >= 9 && weeks.every((w) => w.reasons.length <= 3));
     const sets = setsOf(list);
-    const curve = setCurve(sets.at(-1)!, sets);
-    assert.equal(curve.times.length, 4);
-    assert.ok(curve.usualN > 30);
-    assert.ok(curve.usual.every((v) => v != null && v > 69));
-    assert.ok(curve.usualFadePct! > 0);
+    const last = sets.at(-1)!;
+    assert.equal(last.reps.length, 4);
+    const fade = setFade(last, sets);
+    assert.ok(fade.usualN > 30 && fade.usualPct! > 0);
+    assert.ok(curveLine(last, sets));
   });
 
   it("declive da carga: precisa de 6 semanas", () => {
-    assert.equal(loadSlope([1, 2, 3].map((i) => ({ week: `w${i}`, km: i * 10, devPct: i, n: 5, phase: null }))), null);
-    const s = loadSlope([10, 20, 30, 40, 50, 60].map((km, i) => ({ week: `w${i}`, km, devPct: km / 10 + (i % 2) * 0.1, n: 5, phase: null })))!;
+    assert.equal(loadSlope([1, 2, 3].map((i) => ({ week: `w${i}`, km: i * 10, devPct: i, n: 5 }))), null);
+    const s = loadSlope([10, 20, 30, 40, 50, 60].map((km, i) => ({ week: `w${i}`, km, devPct: km / 10 + (i % 2) * 0.1, n: 5 })))!;
     assert.ok(Math.abs(s.per10Pct - 1) < 0.05 && s.marginPct > 0 && s.n === 6);
   });
 });

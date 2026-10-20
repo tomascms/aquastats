@@ -6,6 +6,9 @@
 export const pt: Partial<Record<string, string>> = {
   "{count} tempos por sincronizar|one": "1 tempo por sincronizar",
   "{count} atletas|one": "1 atleta",
+  "{count} reps mais lentas do que costuma|one": "1 rep mais lenta do que costuma",
+  "{count} reps mais rápidas do que costuma|one": "1 rep mais rápida do que costuma",
+  "quebrou nas últimas {count}|one": "quebrou na última",
   "{count} treinos agendados|one": "1 treino agendado",
   "{count} competições por vir|one": "1 competição por vir",
   "{count} convocados|one": "1 convocado",

@@ -1,6 +1,7 @@
 "use client";
 
 import { POSITION, PositionLegend, VerdictTag, diffS, swimClock } from "@/components/analise/coach-text";
+import { RepChips, SetStory, type SetExplain } from "@/components/analise/tempos-reps";
 import { useT } from "@/i18n/provider";
 import { TE_PRIOR, repPosition } from "@/lib/coach-verdict";
 import type { SetSummary } from "@/lib/session-report";
@@ -13,7 +14,7 @@ import type { TrainingTarget } from "@/lib/training-prediction";
  * swimmer's normal, two simple numbers (regularity, end vs start), every rep as a dot against the normal band,
  * and the exact times behind "ver reps".
  */
-export function SetCard({ set, predicted, showPredicted = true, openReps = false }: { set: SetSummary; predicted?: Map<string, TrainingTarget>; showPredicted?: boolean; openReps?: boolean }) {
+export function SetCard({ set, predicted, showPredicted = true, openReps = false, explain }: { set: SetSummary; predicted?: Map<string, TrainingTarget>; showPredicted?: boolean; openReps?: boolean; explain?: SetExplain }) {
   const t = useT();
   const easy = set.intensity === "SUAVE";
   const due = set.dueS;
@@ -34,7 +35,14 @@ export function SetCard({ set, predicted, showPredicted = true, openReps = false
         {set.reps >= 3 ? ` · ${t("regularidade {s}", { s: diffS(set.spreadS) })}` : ""}
         {set.endDeltaS != null && !easy ? ` · ${set.endDeltaS > te / 2 ? t("no fim {s} mais lento", { s: diffS(set.endDeltaS) }) : set.endDeltaS < -te / 2 ? t("no fim {s} mais rápido", { s: diffS(set.endDeltaS) }) : t("ritmo mantido")}` : ""}
       </p>
-      {due != null && !easy && set.reps >= 2 ? <RepStrip set={set} /> : null}
+      {explain ? (
+        <>
+          <RepChips chips={explain.chips} />
+          <SetStory explain={explain} />
+        </>
+      ) : due != null && !easy && set.reps >= 2 ? (
+        <RepStrip set={set} />
+      ) : null}
       <details className="mt-2" open={openReps}>
         <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-pool">{set.reps === 1 ? t("Ver o tempo") : t("Ver as {n} reps", { n: set.reps })}</summary>
         <table className="mt-1 w-full text-sm tabular-nums">
