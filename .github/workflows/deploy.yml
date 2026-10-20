@@ -31,6 +31,8 @@ env:
   SHA: ${{ github.sha }}
   GCP_PROJECT: gen-lang-client-0997549665
   GCP_REGION: europe-west3
+  # Read at build time by layout.tsx and sitemap.ts (static pages); without it they would point at 127.0.0.1.
+  APP_URL: https://aquastats.net
 
 jobs:
   ensaio:
@@ -175,6 +177,7 @@ jobs:
           [ "$tag" = "${SHA::12}" ] || { echo "::error::A versão servida ($v) não é a deste commit."; exit 1; }
           code=$(curl -s -o /dev/null -w '%{http_code}' --retry 5 --retry-all-errors https://aquastats.net/entrar)
           [ "$code" = 200 ] || { echo "::error::/entrar devolveu $code."; exit 1; }
+          curl -sf --retry 5 --retry-all-errors https://aquastats.net/sitemap.xml | grep -q '<loc>https://aquastats.net/'
           curl -sf --retry 5 --retry-all-errors https://aquastats.net/api/v1/health | grep -q '"aquastats-api"'
           echo "Site $v no ar, commit $SHA." >> "$GITHUB_STEP_SUMMARY"
       - name: Como reverter
