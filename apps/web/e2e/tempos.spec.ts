@@ -22,7 +22,17 @@ test("coach: training chips open the box by keyboard and by touch", async ({ pag
   const latest = data.workouts.filter((w) => timed.has(w.id)).sort((a, b) => b.date.localeCompare(a.date))[0];
   await page.goto(`/coach/workouts/${latest.id}`);
 
-  const chips = page.getByRole("group", { name: "Tempos da série" }).first().getByRole("button");
+  // The page opens on the first swimmer present, who may have no times here: pick swimmers until one has chips.
+  await expect(page.getByRole("heading", { name: "Como correu o treino?" })).toBeVisible();
+  const group = page.getByRole("group", { name: "Tempos da série" }).first();
+  const none = page.getByText("Ainda sem tempos registados para este atleta neste treino.");
+  const swimmers = page.getByRole("navigation", { name: "Escolher atleta" }).getByRole("button");
+  for (let i = 0; ; i++) {
+    await expect(group.or(none)).toBeVisible();
+    if (await group.count()) break;
+    await swimmers.nth(i).click();
+  }
+  const chips = group.getByRole("button");
   await expect(chips.nth(1)).toBeVisible();
   const box = page.locator(`[id="${await chips.first().getAttribute("aria-controls")}"]`);
 
@@ -73,7 +83,10 @@ test("coach: the meet page says what the race says about training", async ({ pag
   const meet = data.competitions.filter((item) => meets.has(item.id)).sort((a, b) => b.date.localeCompare(a.date))[0];
   await page.goto(`/coach/competicoes/${meet.id}`);
 
-  await expect(page.getByText("O que a prova diz do treino").first()).toBeVisible();
+  const stories = page.getByText("O que a prova diz do treino").first();
+  await expect(stories).toBeVisible();
+  // Each race is a closed <details>; opening the first shows its story.
+  await stories.locator("..").locator("summary").first().click();
   await expect(page.getByRole("heading", { name: "Como chegou à prova" }).first()).toBeVisible();
   expect(csp).toEqual([]);
 });
