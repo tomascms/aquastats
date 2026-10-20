@@ -52,6 +52,7 @@ class User(Base):
     failed_login_count: Mapped[int] = mapped_column(SmallInteger, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_version: Mapped[int] = mapped_column(Integer, default=0)
     settings: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

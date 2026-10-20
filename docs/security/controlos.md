@@ -10,7 +10,7 @@ Legenda: ✅ em vigor em produção · 🟡 feito na branch, à espera da Fase G
 | Mínimo 12 caracteres com letras e números nas passwords novas; lista de comuns (PT incluídas) | 🟡 |
 | Mensagem única em qualquer falha de login (sem enumeração) | 🟡 |
 | Bloqueio de 15 min após 8 falhas | ✅ (Turnstile no login trava o abuso automático, quando ligado) |
-| Access token HMAC-SHA256 de 15 min; refresh rotativo com deteção de reutilização (revoga a família) | ✅ |
+| Access token HMAC-SHA256 de 15 min, invalidado no logout e na mudança ou reposição da palavra-passe (`token_version`); refresh rotativo com deteção de reutilização (revoga a família) | ✅ |
 | Cookies `HttpOnly`, `Secure`, `SameSite=Lax`, `path=/` | ✅ |
 | Eliminar conta exige "ELIMINAR" + password ou login recente (< 5 min) | ✅ |
 | Links de aprovação de treinador assinados com validade | ✅ |

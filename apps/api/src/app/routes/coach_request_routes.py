@@ -22,7 +22,7 @@ from ..core.config import get_settings
 from ..core.db import get_auth_session
 from ..core.mail import send_mail
 from ..core.passwords import clean_text
-from ..core.sessions import current_user_payload
+from ..core.sessions import current_user_payload, token_is_current
 from ..domain.identity import provision_role
 from ..domain.models import Profile, User
 
@@ -68,7 +68,7 @@ def _current_user(request: Request, session: Session) -> User:
         user = session.get(User, UUID(str(payload["sub"])))
     except (KeyError, ValueError):
         user = None
-    if not user or not user.is_active or user.deleted_at:
+    if not user or not user.is_active or user.deleted_at or not token_is_current(payload, user):
         raise HTTPException(status_code=401, detail="Sessão inválida.")
     return user
 
