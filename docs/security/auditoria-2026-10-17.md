@@ -96,7 +96,7 @@ O dono pediu para corrigir as três. A #15 (registo) fica com a sessão que trat
 | # | Correção | Teste |
 |---|---|---|
 | 10 | Em produção, o guard da role tenta 3 vezes (esperas de 3 s e 7 s, ~10 s) e depois recusa arrancar, com um log `ERROR` "refusing to start". Em desenvolvimento e teste não consulta a BD, como antes. Contrapartida aceite: um soluço longo do Neon impede uma instância nova de arrancar, e o Cloud Run tenta outra. | `tests/test_startup_guard.py` (`RoleCheckRetryTest`) |
-| 16 | `users.token_version` (migração `016_token_version.sql`) vai no access token (`tv`) e é comparado com a linha do utilizador que cada pedido já lê (`require_user`, `/auth/me` e as outras rotas de conta). O logout, o "terminar todas as sessões" (`revoke_user_sessions`: mudança de palavra-passe, reset e eliminação da conta) incrementam-no. Os tokens anteriores à migração não têm `tv` e contam como 0, por isso o deploy não termina sessões. Os outros dispositivos do utilizador recebem 401 depois de um logout, renovam com o refresh e continuam. | `tests/test_token_version.py`; Postgres: `tests/postgres/test_session_revocation.py` (token antigo dá 401 depois do logout e da mudança de palavra-passe; falha sem a correção) |
+| 16 | `users.token_version` (migração `017_token_version.sql`; a 016 é a do RGPD) vai no access token (`tv`) e é comparado com a linha do utilizador que cada pedido já lê (`require_user`, `/auth/me` e as outras rotas de conta). O logout, o "terminar todas as sessões" (`revoke_user_sessions`: mudança de palavra-passe, reset e eliminação da conta) incrementam-no. Os tokens anteriores à migração não têm `tv` e contam como 0, por isso o deploy não termina sessões. Os outros dispositivos do utilizador recebem 401 depois de um logout, renovam com o refresh e continuam. | `tests/test_token_version.py`; Postgres: `tests/postgres/test_session_revocation.py` (token antigo dá 401 depois do logout e da mudança de palavra-passe; falha sem a correção) |
 | 17 | `PinnedTransport` (`core/ssrf.py`) resolve e verifica o nome uma vez por pedido e liga-se a esse IP. O `Host` mantém o nome original e o TLS envia-o como SNI e valida o certificado contra ele. Os redirects continuam desligados. Os resultados live usam-no. | `tests/test_ssrf_rebinding.py` (resolver simulado que muda de IP entre chamadas) |
 
 Impacto da #16, medido com a suite Postgres local (pgserver 16), 100 pedidos, main vs este ramo:
@@ -108,7 +108,7 @@ com o certificado validado; sem o SNI, a ligação ao mesmo IP falha a validaç�
 
 Suites: `pytest tests/ -q` 132 passed, 58 skipped; suite Postgres local 58 passed.
 
-Staging (20/10, com autorização do dono): a migração 016 foi aplicada como `neondb_owner` no branch
+Staging (20/10, com autorização do dono): a migração do token_version (então 016, renumerada para 017) foi aplicada como `neondb_owner` no branch
 `br-raspy-leaf-b1wvhlo5` (coluna `integer not null default 0`; `aquastats_api` e `aquastats_auth` com SELECT e
 UPDATE). Com a API deste ramo ligada ao staging, RLS ativa: conta nova → login → `/auth/me` 200 → logout →
 `/auth/me` com o token antigo 401; novo login → mudança da palavra-passe → token antigo 401, token novo 200 →

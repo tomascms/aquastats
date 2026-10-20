@@ -1,4 +1,4 @@
--- Migration 016: a version on each account, carried in the access token and checked on every request.
+-- Migration 017: a version on each account, carried in the access token and checked on every request.
 -- Logout, "end all sessions" and a password change or reset bump it, so a 15-minute access token stops
 -- working at once instead of when it expires. Tokens signed before this migration carry no version and
 -- count as 0, the default here: nobody is logged out by the deploy.
