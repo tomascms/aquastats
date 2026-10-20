@@ -48,11 +48,12 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
         working-directory: apps/web
+      # opennextjs-cloudflare passes these flags on to wrangler unquoted: values must have no spaces.
       - name: Web
         working-directory: apps/web
         run: |
           npx opennextjs-cloudflare build
-          npx opennextjs-cloudflare deploy --dry-run --tag "${SHA::12}" --message "ensaio ${{ github.run_id }}"
+          npx opennextjs-cloudflare deploy --dry-run --tag "${SHA::12}" --message "ensaio-${{ github.run_id }}"
       - name: Worker de IA
         working-directory: apps/ai-worker
         run: ../web/node_modules/.bin/wrangler deploy --dry-run --outdir "$RUNNER_TEMP/ai" --tag "${SHA::12}"
@@ -168,7 +169,7 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
       - run: npx opennextjs-cloudflare build
-      - run: npx opennextjs-cloudflare deploy --tag "${SHA::12}" --message "GitHub Actions ${{ github.run_id }}"
+      - run: npx opennextjs-cloudflare deploy --tag "${SHA::12}" --message "github-actions-${{ github.run_id }}"
       - name: Verificar no site
         run: |
           v=$(npx wrangler deployments status --json | jq -r '.versions[] | select(.percentage == 100) | .version_id')
