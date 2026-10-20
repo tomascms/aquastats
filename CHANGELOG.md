@@ -2,6 +2,20 @@
 
 ## [Por lançar]
 
+### RGPD: menores, termos, retenção e direitos do titular
+- Atletas com menos de 13 anos (Lei 58/2019, art. 16.º): o registo, a escolha de perfil e o convite pedem a data de
+  nascimento e, abaixo dos 13, o email de um responsável parental, que recebe um link assinado (7 dias) para
+  autorizar ou recusar. Até lá, a API não guarda sono, RPE, recuperação nem frequência cardíaca (bem-estar, upload
+  de FC e Polar respondem 403 com uma mensagem clara). Retirar a autorização apaga esses dados. Migração 016
+  (`parental_consents`, com RLS).
+- Termos e condições novos (`/termos`) e política de privacidade revista (`/privacidade`), em PT e EN, marcados
+  para revisão jurídica; o registo exige aceitar os termos e guarda a versão e a data.
+- Exportar os meus dados (JSON) nas definições; eliminar conta já existia (o texto passa a dizer que apaga tudo).
+- Retenção: as contas inativas há 3 anos são apagadas, com aviso por email 30 dias antes
+  (`POST /api/v1/auth/internal/retention`, chamado pelo Cloud Scheduler).
+- Auditoria #15: o registo responde sempre o mesmo; o dono de uma conta existente recebe um email a avisar.
+- Modelo de acordo de tratamento de dados para clubes em `docs/legal/`. Licença: titular "Tomás Sousa".
+
 ### Tempos explicados: treino e competição
 - Treino: cada tempo é um chip nos três estados (mais rápido do que costuma, normal ou mais lento), com até 3
   motivos ao tocar, a curva da série numa frase e "Esta vez vs a última". As séries deixam de usar "provavelmente",

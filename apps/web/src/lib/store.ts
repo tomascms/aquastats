@@ -1078,10 +1078,10 @@ export const actions = {
     });
     return saved;
   },
-  async chooseRole(role: "coach" | "swimmer", teamName = "", invite = "") {
+  async chooseRole(role: "coach" | "swimmer", teamName = "", invite = "", extra: Record<string, unknown> = {}) {
     const result = await api<{ role: "coach" | "swimmer"; next: string }>("/api/v1/auth/choose-role", {
       method: "POST",
-      body: JSON.stringify({ role, teamName, invite }),
+      body: JSON.stringify({ role, teamName, invite, ...extra }),
     });
     await hydrate();
     return result.next;

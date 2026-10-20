@@ -182,5 +182,5 @@ Changes per version: [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 
-Proprietary, all rights reserved ([LICENSE](LICENSE)). The code is public to read, not to reuse
+Copyright (c) 2026 Tomás Sousa. Proprietary, all rights reserved ([LICENSE](LICENSE)). The code is public to read, not to reuse
 ([ADR 0001](docs/adr/0001-licenca-e-autoria.md)).

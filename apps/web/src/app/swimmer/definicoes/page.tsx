@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChangePasswordSection } from "@/components/settings/change-password";
 import { DeleteAccountSection } from "@/components/settings/delete-account";
+import { MyDataSection } from "@/components/settings/my-data";
 import { PolarConnect } from "@/components/settings/polar-connect";
 import { SwimRankingsCard } from "@/components/team/swimrankings-card";
 import { SeedRecordsEditor } from "@/components/team/seed-records";
@@ -207,6 +208,7 @@ export default function SwimmerDefinicoesPage() {
       <LeaveTeamDialog open={leaving} onClose={() => setLeaving(false)} onConfirm={leaveTeam} />
 
       <ChangePasswordSection hasPassword={hasPassword} onPasswordSet={() => setHasPassword(true)} />
+      <MyDataSection />
       <DeleteAccountSection hasPassword={hasPassword} />
     </div>
   );

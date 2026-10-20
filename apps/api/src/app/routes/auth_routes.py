@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import secrets
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select, update
 
@@ -30,7 +31,7 @@ from ..core.google_oauth import (
     sign_oauth_state,
 )
 from ..core.http_security import compare, new_token, sha256
-from ..core.mail import send_password_reset, send_signup_confirmation
+from ..core.mail import send_password_reset, send_signup_attempt, send_signup_confirmation
 from ..core.passwords import clean_text, hash_password, is_honeypot, valid_email, valid_password, verify_password
 from ..core.sessions import (
     REFRESH_COOKIE,
@@ -65,6 +66,7 @@ from ..domain.identity import (
     team_by_join_code,
 )
 from ..domain.models import Athlete, EmailVerificationToken, OAuthAccount, PasswordResetToken, Profile, RefreshToken, Team, User
+from ..domain import privacy
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -301,6 +303,35 @@ def _send_signup_confirmation(session: Session, user: User) -> str | None:
     return None
 
 
+def _terms_and_birth(body: dict, own_email: str | None, *, birth_required: bool) -> tuple[date | None, str]:
+    """Validated before any write (an HTTPException still commits the session)."""
+    if not body.get("acceptTerms"):
+        raise HTTPException(status_code=400, detail="Aceita os termos e a política de privacidade para continuar.")
+    if not birth_required and not body.get("birthDate"):
+        return None, ""
+    birth = privacy.parse_birth_date(body.get("birthDate"))
+    guardian = normalize_email(clean_text(str(body.get("guardianEmail") or ""), 254)) or ""
+    if privacy.needs_guardian(birth):
+        if not valid_email(guardian):
+            raise HTTPException(status_code=400, detail="Tens menos de 13 anos: indica o email de um responsável parental.")
+        if guardian == normalize_email(own_email):
+            raise HTTPException(status_code=400, detail="O email do responsável parental tem de ser diferente do teu.")
+    return birth, guardian
+
+
+def _warn_existing_account(user: User) -> None:
+    """Audit #15: the signup answer is the same either way; the owner hears about the attempt, at most every few minutes."""
+    stamp = now()
+    settings = dict(user.settings or {})
+    last = settings.get("signup_attempt_at")
+    if last and stamp - datetime.fromisoformat(last) < RESEND_CONFIRM_COOLDOWN:
+        return
+    settings["signup_attempt_at"] = stamp.isoformat()
+    user.settings = settings
+    if user.email and get_settings().is_production:
+        send_signup_attempt(user.email, f"{get_settings().app_url.rstrip('/')}/repor")
+
+
 @router.post("/register")
 def register(body: dict, request: Request, response: Response, session: Session = Depends(get_auth_session)):
     email = normalize_email(clean_text(str(body.get("email") or ""), 254))
@@ -308,33 +339,37 @@ def register(body: dict, request: Request, response: Response, session: Session 
     name = clean_text(str(body.get("name") or ""), 80) or (email.split("@")[0] if email else "")
     if not email or not valid_email(email) or not valid_password(password):
         raise HTTPException(status_code=400, detail="Email inválido ou palavra-passe fraca (mínimo 12, letras e números).")
+    birth, guardian = _terms_and_birth(body, email, birth_required=True)
+    # One answer whether or not the email has an account (audit #15), after the same argon2 work.
+    payload = {"ok": True, "needsConfirmation": True, "next": "/confirmar-pendente"}
+    password_hash = hash_password(password)
+    remember_invite(response, _body_invite(body))
     existing = find_user_by_email(session, email)
+    if existing and (existing.password_hash or existing.is_verified):
+        _warn_existing_account(existing)
+        return payload
     if existing:
-        # Checked before any write: HTTPException still commits the session.
-        if existing.password_hash or existing.is_verified:
-            raise HTTPException(status_code=409, detail="Este email já tem conta. Entra, ou usa Google.")
-        existing.password_hash = hash_password(password)
+        existing.password_hash = password_hash
         existing.last_login_at = now()
         if name and existing.id:
             profile = session.get(Profile, existing.id)
             if profile and (not profile.full_name or profile.full_name == "Utilizador"):
                 profile.full_name = name[:80]
-        remember_invite(response, _body_invite(body))
-        confirm = _send_signup_confirmation(session, existing)
-        payload = {"ok": True, "needsConfirmation": True, "next": "/confirmar-pendente"}
-        if confirm:
-            payload["confirmUrl"] = confirm
-        return payload
-    try:
-        user = create_pending_user(session, email=email, name=name, verified=False, password_hash=hash_password(password))
-        session.flush()
-    except IntegrityError:
-        raise HTTPException(status_code=409, detail="Este email já tem conta. Entra, ou usa Google.")
-    remember_invite(response, _body_invite(body))
+        user = existing
+    else:
+        try:
+            with session.begin_nested():
+                user = create_pending_user(session, email=email, name=name, verified=False, password_hash=password_hash)
+                session.flush()
+        except IntegrityError:  # the same email registered a moment ago
+            return payload
+    privacy.accept_terms(user)
+    guardian_link = privacy.declare_birth(session, user, birth, guardian)
     confirm = _send_signup_confirmation(session, user)
-    payload = {"ok": True, "needsConfirmation": True, "next": "/confirmar-pendente"}
     if confirm:
         payload["confirmUrl"] = confirm
+    if guardian_link:
+        payload["guardianUrl"] = guardian_link
     return payload
 
 
@@ -461,11 +496,28 @@ def choose_role(body: dict, request: Request, response: Response, session: Sessi
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Sessão inválida.")
     invite = remember_invite(response, _body_invite(body) or request.cookies.get(INVITE_COOKIE))
+    guardian_link = _swimmer_basics(session, user, body) if user.role == "pending" and body.get("role") == "swimmer" else None
     user = provision_role(session, user, str(body.get("role") or ""), request, team_name=str(body.get("teamName") or ""))
     next_path = issue_session(session, user, request, response)
     if user.role == "swimmer":
         next_path = invite_next_path(request, next_path, invite)
-    return {"role": user.role, "next": safe_app_path(next_path)}
+    result = {"role": user.role, "next": safe_app_path(next_path)}
+    if guardian_link:
+        result["guardianUrl"] = guardian_link
+    return result
+
+
+def _swimmer_basics(session: Session, user: User, body: dict) -> str | None:
+    """Accepted terms and a birth date, asked once from accounts that came without them (e.g. Google)."""
+    profile = session.get(Profile, user.id)
+    needs_birth = not (profile and profile.date_of_birth) and not session.get(privacy.ParentalConsent, user.id)
+    if user.terms_accepted_at and not needs_birth:
+        return None
+    checked = body if not user.terms_accepted_at else {**body, "acceptTerms": True}
+    birth, guardian = _terms_and_birth(checked, user.email, birth_required=needs_birth)
+    if not user.terms_accepted_at:
+        privacy.accept_terms(user)
+    return privacy.declare_birth(session, user, birth, guardian) if needs_birth else None
 
 
 @router.get("/join/{code}")
@@ -482,12 +534,23 @@ def join_details(code: str, user: User = Depends(require_user), session: Session
 
 
 @router.post("/join/{code}")
-def accept_join(code: str, request: Request, response: Response, user: User = Depends(require_user), session: Session = Depends(get_auth_session)):
+def accept_join(
+    code: str,
+    request: Request,
+    response: Response,
+    body: dict = Body(default_factory=dict),
+    user: User = Depends(require_user),
+    session: Session = Depends(get_auth_session),
+):
+    guardian_link = _swimmer_basics(session, user, body) if user.role in {"pending", "swimmer"} else None
     path = join_team(session, user, code, request)
     session.flush()
     issue_session(session, user, request, response)
     response.delete_cookie(INVITE_COOKIE, path="/")
-    return {"role": user.role, "next": safe_app_path(path), "teamName": team_by_join_code(session, code).name}
+    result = {"role": user.role, "next": safe_app_path(path), "teamName": team_by_join_code(session, code).name}
+    if guardian_link:
+        result["guardianUrl"] = guardian_link
+    return result
 
 
 @router.post("/leave-team")
@@ -628,4 +691,60 @@ def me(request: Request, session: Session = Depends(get_auth_session)):
         "joinCode": team.join_code if team else None,
         "athleteId": str(athlete.id) if athlete else None,
         "next": home_path(user.role),
+        "termsAccepted": bool(user.terms_accepted_at),
+        # Same rule as _swimmer_basics: a birth date is asked once, before joining a team.
+        "needsBirthDate": not (profile and profile.date_of_birth) and not session.get(privacy.ParentalConsent, user.id),
+        "birthDate": (athlete.date_of_birth if athlete else None) or (profile.date_of_birth if profile else None),
+        # "not_required", "missing", "pending", "granted" or "withdrawn" (parental consent for health data).
+        "consent": privacy.consent_state(
+            session, user.id, (athlete.date_of_birth if athlete else None) or (profile.date_of_birth if profile else None)
+        ),
     }
+
+
+@router.post("/guardian-consent")
+def ask_guardian(body: dict, request: Request, session: Session = Depends(get_auth_session)):
+    """The athlete asks (again) for a guardian's consent, e.g. a new email or a link that expired."""
+    payload = current_user_payload(request)
+    user = session.get(User, payload["sub"])
+    if not user or not user.is_active or user.deleted_at:
+        raise HTTPException(status_code=401, detail="Sessão inválida.")
+    row = session.get(privacy.ParentalConsent, user.id)
+    profile = session.get(Profile, user.id)
+    birth = row.birth_date if row else (profile.date_of_birth if profile else None)
+    if not privacy.needs_guardian(birth):
+        raise HTTPException(status_code=409, detail="Esta conta não precisa de autorização parental.")
+    guardian = normalize_email(clean_text(str(body.get("guardianEmail") or ""), 254)) or ""
+    link = privacy.request_consent(session, user, birth, guardian)
+    return {"ok": True, "status": "pending", **({"guardianUrl": link} if link else {})}
+
+
+@router.get("/guardian/{token}")
+def guardian_view(token: str, session: Session = Depends(get_auth_session)):
+    return privacy.guardian_view(session, clean_text(token, 600))
+
+
+@router.post("/guardian/{token}")
+def guardian_decide(token: str, body: dict, session: Session = Depends(get_auth_session)):
+    return privacy.guardian_decide(session, clean_text(token, 600), str(body.get("decision") or ""))
+
+
+@router.get("/export")
+def export_my_data(request: Request, session: Session = Depends(get_auth_session)):
+    payload = current_user_payload(request)
+    user = session.get(User, payload["sub"])
+    if not user or not user.is_active or user.deleted_at:
+        raise HTTPException(status_code=401, detail="Sessão inválida.")
+    return Response(
+        content=json.dumps(privacy.export_user_data(session, user), ensure_ascii=False, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="aquastats-dados.json"', "Cache-Control": "no-store"},
+    )
+
+
+@router.post("/internal/retention", include_in_schema=False)
+def retention_job(request: Request, session: Session = Depends(get_auth_session)):
+    """Daily, from Cloud Scheduler (docs/runbooks.md): warns, then deletes accounts inactive for 3 years."""
+    if not privacy.cron_allowed(request.headers.get("x-cron-key")):
+        raise HTTPException(status_code=404)
+    return privacy.run_retention(session)

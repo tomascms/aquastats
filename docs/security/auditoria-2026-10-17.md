@@ -87,6 +87,10 @@ completo também não correu, porque a API foi chamada diretamente.
   - #13 (Origin sintetizado pelo proxy): corrigida no PR #40. O login Google usa rotas próprias com GET e não passa pelo proxy.
   - Leitor de IA dos resultados live: testado com PDFs reais da ANL e da ARNN, que os parsers fixos não leem. Tempos, anos e clubes saíram certos. O lugar ia parar ao campo da pista; corrigido no PR #38.
   - #10, #15, #16 e #17: o dono decidiu deixá-las como estão.
+  - **20/10:** o dono pediu a correção de #10, #15, #16 e #17. #15 corrigida no PR do RGPD: o registo devolve
+    sempre `{"ok": true, "needsConfirmation": true, "next": "/confirmar-pendente"}`, depois do mesmo trabalho
+    argon2, e o dono da conta existente recebe "alguém tentou registar-se com este email" (no máximo um email por
+    5 min). Testes: `test_account_linking.py`, `tests/postgres/test_privacy_flows.py`.
   - As contas `audit-*` de teste foram apagadas do staging, com as respetivas equipas e dados.
 
 ## Falhas propostas (não corrigidas, precisam de decisão ou de migração)
@@ -100,7 +104,7 @@ completo também não correu, porque a API foi chamada diretamente.
 | 12 | Baixa | O Turnstile só verifica `success`, sem hostname nem action. | `apps/web/src/lib/turnstile.ts:17` | Verificar `hostname`. Mitigado porque a sitekey está restrita a domínios no painel. As chaves de teste devolvem `example.com`, por isso não pode partir o staging. |
 | 13 | Baixa | O proxy inventa `Origin = APP_URL` quando o pedido não tem Origin. A API nunca recusa um pedido sem Origin que venha do Worker. | `route.ts:53-56` | Remover o fallback. É preciso confirmar no staging que nenhum fluxo legítimo (ex.: o form POST do Google) fica sem Origin. |
 | 14 | Baixa | O `/forgot` não tem cooldown por email (flood da caixa de correio). | `auth_routes.py:367-391` | O mesmo cooldown do `resend-confirmation`. |
-| 15 | Baixa | O registo revela se um email já tem conta (409). | `auth_routes.py:311-313` | Resposta uniforme, e email ao dono existente. |
+| 15 | ~~Baixa~~ corrigida (20/10) | O registo revela se um email já tem conta (409). | `auth_routes.py:311-313` | Resposta uniforme, e email ao dono existente. Feito. |
 | 16 | Baixa | O access token (15 min) continua válido depois do logout ou da mudança de palavra-passe. | `core/sessions.py:57-70` | Aceitar, ou `token_version` no utilizador. |
 | 17 | Baixa | DNS rebinding no SSRF dos resultados live: a verificação resolve o nome, mas o httpx resolve-o de novo. | `core/ssrf.py:33-37`, `domain/live_results.py:89` | Fixar o IP resolvido num transport do httpx. Os redirects já estão desligados. |
 | 18 | Baixa | Um id de race-session de outra equipa dá 500 em vez de 404 (confirma que o UUID existe). | `domain/commands.py:976` | `uuid4()` quando a linha não existe. É preciso confirmar que o cliente usa o id devolvido. |
@@ -136,7 +140,7 @@ completo também não correu, porque a API foi chamada diretamente.
 
 - A role da BD em produção foi inferida pela data do build, e não por uma query (#8).
 - O lockout por conta só dispara às 40 falhas, vindas de qualquer IP; até lá, cada IP é bloqueado ao fim de 8 (#9).
-- #10, #15, #16 e #17 ficam abertas por decisão do dono (ver tabela).
+- #15 corrigida a 20/10. #10, #16 e #17 estão a ser corrigidas noutra branch (ver tabela).
 - O Turnstile reduz bots, mas não os humanos/fazendas de resolução.
 - Os testes de isolamento entre rotas cobrem só 5 rotas, e só como treinador. Faltam meet-entries, results, race-sessions, season-plans, attendance, goals, hr, predictions, swimrankings, live e lenex, e os casos de atleta→colega e atleta→rotas de treinador. A Fase 4 deve cobrir isto.
 - A Fase 4 cobriu as rotas principais, mas não todas (`season-plans`, `attendance`, `meet-results`, `hr/delete`, `predictions` GET). Esses casos ficam para a suite de Postgres, que ainda não os cobre.

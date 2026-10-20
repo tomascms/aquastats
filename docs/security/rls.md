@@ -31,6 +31,7 @@ Variáveis `SET LOCAL` (transação): não passam de um pedido para outro na poo
 | `audit_logs`, `outbox_events`, `team_invites` | da equipa | **nada** | nada |
 | `users` | a própria + contas da equipa | a própria + treinadores | nada |
 | `profiles`, `refresh_tokens`, `password_reset_tokens`, `email_verification_tokens`, `oauth_accounts`, `idempotency_keys` | só as suas | só as suas | nada |
+| `parental_consents` (016) | as da equipa, só leitura | só a sua, só leitura | nada (escreve só `aquastats_auth`) |
 | `oauth_states`, `saga_instances`, `saga_logs` | nada (só `aquastats_auth`) | nada | nada |
 | `schema_migrations` | sem permissão | sem permissão | — |
 

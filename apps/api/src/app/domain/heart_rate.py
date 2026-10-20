@@ -21,7 +21,8 @@ from sqlalchemy.orm import Session
 from defusedxml import ElementTree as SafeET
 
 from .commands import _audit, _now, _owned_athlete
-from .models import HrSession, Workout
+from .models import Athlete, HrSession, Workout
+from .privacy import require_athlete_health_consent
 from .serializers import as_uuid
 
 MAX_FILE_BYTES = 10 * 1024 * 1024
@@ -288,6 +289,7 @@ def upload(session: Session, payload: dict, body: dict, request) -> dict:
     except (binascii.Error, ValueError):
         raise HTTPException(status_code=400, detail="Ficheiro do relógio inválido.")
     athlete_id = _target_athlete(session, payload, body)
+    require_athlete_health_consent(session, session.get(Athlete, athlete_id))
     try:
         parsed = parse_file(str(body.get("filename") or ""), data)
     except HrFileError as exc:

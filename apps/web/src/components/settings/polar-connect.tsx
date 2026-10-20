@@ -30,6 +30,7 @@ export function PolarConnect() {
     const result = new URLSearchParams(window.location.search).get("polar");
     if (result === "ok") toast.success(t("Conta Polar ligada."), t("Os treinos novos aparecem sozinhos no treino certo."));
     else if (result === "error") toast.error(t("Não foi possível ligar a conta Polar."));
+    else if (result === "consent") toast.error(t("Falta a autorização do responsável parental para ligar a Polar."));
     if (result) window.history.replaceState(null, "", window.location.pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

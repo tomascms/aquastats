@@ -29,6 +29,7 @@ from ..core.ssrf import assert_safe_url
 from .commands import _now
 from .heart_rate import HrFileError, parse_fit, store_session
 from .models import Athlete, HrSession, PolarLink
+from .privacy import consent_state
 
 AUTH_URL = "https://flow.polar.com/oauth2/authorization"
 TOKEN_URL = "https://polarremote.com/v2/oauth2/token"
@@ -165,6 +166,8 @@ def sync_link(session: Session, link: PolarLink, force: bool = False) -> int:
     athlete = session.get(Athlete, link.athlete_id)
     if not athlete or athlete.deleted_at:
         return 0
+    if consent_state(session, athlete.user_id, athlete.date_of_birth) not in {"not_required", "granted"}:
+        return 0  # under 13 without a guardian's consent: no heart rate
     # Claim the slot first so parallel requests (two tabs, coach + athlete) do not import twice.
     link.last_sync_at = _now()
     session.flush()

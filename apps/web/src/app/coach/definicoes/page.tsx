@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChangePasswordSection } from "@/components/settings/change-password";
 import { DeleteAccountSection } from "@/components/settings/delete-account";
+import { MyDataSection } from "@/components/settings/my-data";
 import { api } from "@/lib/api";
 import { actions, useAppState } from "@/lib/store";
 import { useT } from "@/i18n/provider";
@@ -99,6 +100,7 @@ export default function DefinicoesPage() {
       </section>
 
       <ChangePasswordSection hasPassword={hasPassword} onPasswordSet={() => setHasPassword(true)} />
+      <MyDataSection />
       <DeleteAccountSection hasPassword={hasPassword} />
     </div>
   );

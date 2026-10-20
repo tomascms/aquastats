@@ -66,6 +66,9 @@ def expected_sql(table: str, actor: dict) -> str | None:
         return None
     if table in USER_OWNED:
         return f"user_id = '{actor['user']}'"
+    if table == "parental_consents":  # yourself; a coach also the team's athletes (heart-rate uploads check it)
+        team = f" or user_id in (select user_id from team_members where team_id = '{actor['team']}')" if actor["role"] == "coach" else ""
+        return f"user_id = '{actor['user']}'{team}"
     if table == "users":
         statuses = "('owner', 'coach')" if actor["role"] == "swimmer" else "('owner', 'coach', 'swimmer')"
         return f"id = '{actor['user']}' or id in (select user_id from team_members where team_id = '{actor['team']}' and status in {statuses})"
@@ -91,7 +94,7 @@ def test_every_table_is_classified(admin_engine):
     """A new table must be classified here (and get RLS + grants in a migration) before it ships."""
     with admin_engine.connect() as conn:
         tables = set(public_tables(conn))
-    known = set(TEAM_OF) | USER_OWNED | SYSTEM_ONLY | NOT_FOR_THE_API | {"users"}
+    known = set(TEAM_OF) | USER_OWNED | SYSTEM_ONLY | NOT_FOR_THE_API | {"users", "parental_consents"}
     assert tables - known == set(), f"unclassified tables: {sorted(tables - known)}"
 
 
