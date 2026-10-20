@@ -1,4 +1,4 @@
--- Migration 016: GDPR for minors — parental consent, accepted terms, inactive-account retention.
+-- Migration 017: GDPR for minors — parental consent, accepted terms, inactive-account retention.
 --
 -- * parental_consents: an athlete under 13 (Lei 58/2019, art. 16.º) needs someone with parental responsibility
 --   to authorise the processing of health and wellbeing data (sleep, RPE, recovery, heart rate). Until then

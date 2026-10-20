@@ -44,7 +44,7 @@ para parar o desafiante.
 3. Aplicar na produção, numa transação, como `neondb_owner`; registar em `schema_migrations`.
 4. Verificar no catálogo (roles, políticas, colunas).
 
-A migração 016 (RGPD) tem de ser aplicada **antes** do deploy da API que a usa: o modelo `User` lê
+A migração 017 (RGPD) tem de ser aplicada **antes** do deploy da API que a usa: o modelo `User` lê
 `terms_version`, `terms_accepted_at` e `inactivity_notice_at`, e sem essas colunas qualquer login falha.
 
 ## Retenção (contas inativas há 3 anos)
