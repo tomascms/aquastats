@@ -24,7 +24,8 @@ test("coach: training chips open the box by keyboard and by touch", async ({ pag
 
   // The page opens on the first swimmer present, who may have no times here: pick swimmers until one has chips.
   await expect(page.getByRole("heading", { name: "Como correu o treino?" })).toBeVisible();
-  const group = page.getByRole("group", { name: "Tempos da série" }).first();
+  // The first set with two times or more (a warm-up can be a single rep).
+  const group = page.getByRole("group", { name: "Tempos da série" }).filter({ has: page.locator("button:nth-of-type(2)") }).first();
   const none = page.getByText("Ainda sem tempos registados para este atleta neste treino.");
   const swimmers = page.getByRole("navigation", { name: "Escolher atleta" }).getByRole("button");
   for (let i = 0; ; i++) {
@@ -85,6 +86,8 @@ test("coach: the meet page says what the race says about training", async ({ pag
 
   const stories = page.getByText("O que a prova diz do treino").first();
   await expect(stories).toBeVisible();
+  // Nothing may widen the page past the phone (it zooms out and taps land elsewhere).
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   // Each race is a closed <details>; opening the first shows its story.
   await stories.locator("..").locator("summary").first().click();
   await expect(page.getByRole("heading", { name: "Como chegou à prova" }).first()).toBeVisible();
