@@ -54,3 +54,17 @@ Motivos = fatores do modelo com o mesmo sentido do tempo, aprendidos em ≥ 8 re
 ("dormiu 6 h", "voltou de 10 dias sem treinar"). Sempre "nos registos dele/dela, isto costuma coincidir com…": associação, nunca
 causa, porque a parte de contexto não passou no backtest. Sem sono registado, a frase diz-o. Os números (s, %, n, margem) ficam em
 "Ver detalhes". Capturas da demo sintética: `docs/img/tempos-*.jpg`.
+
+### Competição: o que a prova diz do treino
+
+Código: [`apps/web/src/lib/race-story.ts`](../../apps/web/src/lib/race-story.ts) (testes em `race-story.test.ts`), na página da
+competição, uma linha por prova nadada (abre ao tocar). Só factos e comparações, sem estatística; cores nos 3 estados.
+
+| Parte | Regra |
+|---|---|
+| Resultado | Contra o melhor tempo anterior na mesma prova e piscina: verde se bateu, cinzento se ficou a menos de 1 %, laranja se mais longe |
+| Como chegou | Volume das 2 semanas antes contra as 4 anteriores (etiqueta com ±10 % ou mais), sono dos 3 dias antes (≥ 8 h verde, < 7 h laranja), paragem de 10+ dias nas 3 semanas antes, forma dos tempos explicados nas 3 semanas antes; dado em falta dito como "não registado" |
+| Treino vs prova | Média por 50 da prova contra a mediana por 50 das reps de ritmo de prova (P50–P400; senão PA/MAX ≥ 50 m) das 4 semanas antes, mesma piscina e estilo, sem material; diferença abaixo de 1 % = igual |
+| Parciais | Cada 50 contra o 50 do recorde (ou o plano de parciais de referência sobre o tempo do recorde); abaixo de 1 % = como no recorde |
+| Contra a melhor | Até 3 diferenças de preparação (volume na semana antes, semanas de taper, sono, paragem), lado a lado |
+| Perfil | Por distância com 6+ provas: terço melhor contra terço pior (tempo ÷ melhor da prova) em taper (≥ 10 pontos), sono (≥ 0,5 h) e paragens; "costuma coincidir", nunca causa |

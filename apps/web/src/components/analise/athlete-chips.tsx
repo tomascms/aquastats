@@ -20,7 +20,7 @@ export function AthleteChips({
   const t = useT();
   if (athletes.length === 0) return null;
   return (
-    <nav aria-label={t("Escolher atleta")} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+    <nav aria-label={t("Escolher atleta")} className="relative -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
       {athletes.map((item) => {
         const active = item.id === selectedId;
         return (

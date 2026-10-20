@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Fragment, useEffect, useState } from "react";
 import { MeetFilesDrop } from "@/components/competicoes/meet-files-drop";
 import { MeetInfoPanel } from "@/components/competicoes/meet-info-panel";
+import { RaceStories } from "@/components/competicoes/race-story";
 import { ConfirmButton } from "@/components/ui/confirm-button";
 import { DateField } from "@/components/ui/date-field";
 import { formatApiError, type ApiError } from "@/lib/api";
@@ -370,6 +371,7 @@ function AthleteEvents({
           </tbody>
         </table>
       </div>
+      <RaceStories meet={meet} athlete={athlete} entries={sorted} results={results} />
     </article>
   );
 }

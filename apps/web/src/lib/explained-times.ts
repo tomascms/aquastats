@@ -47,7 +47,6 @@ export const secText = (value: number) => (Math.abs(value) < 0.005 ? "< 0,01 s" 
 
 export type Reason = { key: string; slower: boolean; seconds: number; msg: Msg };
 
-const WEEKDAY_WHEN: MessageKey[] = ["treino à segunda", "treino à terça", "treino à quarta", "treino à quinta", "treino à sexta", "treino ao sábado", "treino ao domingo"];
 const GYM_DAY: Record<string, MessageKey> = { gymStrength: "ginásio de força nesse dia", gymExplosive: "ginásio explosivo nesse dia", gymMobility: "mobilidade nesse dia" };
 
 /** Consecutive training days before `date`. */
@@ -68,19 +67,12 @@ function lastBreak(date: string, sorted: string[]): number | null {
   return null;
 }
 
-/** One factor of one rep, said the way a coach would. */
+/** One factor of one rep, said the way a coach would: only break, sleep, days in a row, volume, morning, gym, send-off. */
 function reasonMsg(key: string, row: TrainingRep, days: Set<string>, sorted: string[]): Msg | null {
-  if (key.startsWith("weekday-")) return { key: WEEKDAY_WHEN[Number(key.slice(8))] };
   if (GYM_DAY[key]) return { key: GYM_DAY[key] };
   switch (key) {
     case "morning":
       return { key: "treino de manhã" };
-    case "second":
-      return { key: "2.º treino do dia" };
-    case "position":
-      return { key: "fim da série" };
-    case "block":
-      return { key: "partida do bloco" };
     case "sendoff":
       return row.restLabel ? { key: "saída de {rest}", vars: { rest: row.restLabel } } : null;
     case "loadBefore":
@@ -96,7 +88,8 @@ function reasonMsg(key: string, row: TrainingRep, days: Set<string>, sorted: str
     case "sleep":
       return row.sleepHours == null ? null : { key: "dormiu {h} h", vars: { h: r1(row.sleepHours) } };
     default:
-      return null; // "trend" and pooled low-data factors are not reasons a coach can act on or check.
+      // Weekday, set position, 2nd session, block start, "trend" and pooled low-data factors: not reasons a coach controls.
+      return null;
   }
 }
 
@@ -385,9 +378,6 @@ export function loadSlope(points: LoadPoint[]): { per10Pct: number; marginPct: n
 
 const WHEN: Record<string, MessageKey> = {
   morning: "de manhã",
-  second: "no 2.º treino do dia",
-  position: "no fim das séries",
-  block: "a partir do bloco",
   sendoff: "por cada 10 s a mais de saída",
   loadBefore: "por cada km já nadado no treino",
   streak: "por cada dia seguido de treino",
@@ -396,25 +386,18 @@ const WHEN: Record<string, MessageKey> = {
   gymStrength: "nos dias de ginásio de força",
   gymExplosive: "nos dias de ginásio explosivo",
   gymMobility: "nos dias de mobilidade",
-  "weekday-0": "às segundas",
-  "weekday-1": "às terças",
-  "weekday-2": "às quartas",
-  "weekday-3": "às quintas",
-  "weekday-4": "às sextas",
-  "weekday-5": "aos sábados",
-  "weekday-6": "aos domingos",
 };
 const WHOSE: Record<Who, MessageKey> = { F: "da {name}", M: "do {name}", "": "de {name}" };
+export const whoseMsg = (who: Who, name: string): Msg => ({ key: WHOSE[who] ?? WHOSE[""], vars: { name } });
 
 export type ProfileEffect = LearnedEffect & { marginPct: number };
 
 /**
- * C and F as sentences: "Os tempos da Ana costumam ser cerca de 1 s mais lentos por 100 m de manhã."
+ * C and F as short sentences under a title naming the athlete: "Cerca de 1 s mais devagar por 100 m de manhã."
  * Only associations clear of their margin, at most 4, largest first; the weekly-volume one from the
  * weeks' slope ("costumam manter-se / piorar / melhorar").
  */
-export function profileLines(effects: ProfileEffect[], points: LoadPoint[], paceS: number, who: Who, name: string): Msg[] {
-  const whose: Msg = { key: WHOSE[who] ?? WHOSE[""], vars: { name } };
+export function profileLines(effects: ProfileEffect[], points: LoadPoint[], paceS: number): Msg[] {
   const lines: { weight: number; msg: Msg }[] = effects
     .filter((effect) => WHEN[effect.key] && Math.abs(effect.pct) > effect.marginPct)
     .map((effect) => ({ weight: Math.abs(effect.pct), s: r1(Math.abs((effect.pct / 100) * paceS)), effect }))
@@ -422,14 +405,14 @@ export function profileLines(effects: ProfileEffect[], points: LoadPoint[], pace
     .map(({ weight, s, effect }) => ({
       weight,
       msg: {
-        key: (effect.pct > 0 ? "Os tempos {whose} costumam ser cerca de {s} s mais lentos por 100 m {when}." : "Os tempos {whose} costumam ser cerca de {s} s mais rápidos por 100 m {when}.") as MessageKey,
-        vars: { whose, s, when: { key: WHEN[effect.key] } },
+        key: (effect.pct > 0 ? "Cerca de {s} s mais devagar por 100 m {when}." : "Cerca de {s} s mais depressa por 100 m {when}.") as MessageKey,
+        vars: { s, when: { key: WHEN[effect.key] } },
       },
     }));
   const slope = loadSlope(points);
   if (slope) {
     const verb: MessageKey = Math.abs(slope.per10Pct) <= slope.marginPct ? "costumam manter-se" : slope.per10Pct > 0 ? "costumam piorar" : "costumam melhorar";
-    lines.push({ weight: Math.abs(slope.per10Pct), msg: { key: "Com semanas de mais volume, os tempos {whose} {verb}.", vars: { whose, verb: { key: verb } } } });
+    lines.push({ weight: Math.abs(slope.per10Pct), msg: { key: "Com semanas de mais volume, os tempos {verb}.", vars: { verb: { key: verb } } } });
   }
   return lines
     .sort((a, b) => b.weight - a.weight)

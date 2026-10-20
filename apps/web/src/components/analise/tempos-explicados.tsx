@@ -15,12 +15,14 @@ import {
   secText,
   sessionKey,
   weeklyKm,
+  whoseMsg,
   type ExplainedRep,
   type WeekRead,
   type Who,
 } from "@/lib/explained-times";
 import { formatDatePt } from "@/lib/labels";
 import { formatSeconds } from "@/lib/race";
+import { leadIn, raceProfileLines } from "@/lib/race-story";
 import { raceRecords } from "@/lib/rankings";
 import { useAppState } from "@/lib/store";
 import { annotateTrainingReps, isPlausibleRep } from "@/lib/training-context";
@@ -36,11 +38,6 @@ const WEEK_TITLE: Record<WeekRead["state"], Record<Who, MessageKey>> = {
   slower: { F: "Semana mais lenta do que o costume", M: "Semana mais lenta do que o costume", "": "Semana mais lenta do que o costume" },
   faster: { F: "Semana mais rápida do que o costume", M: "Semana mais rápida do que o costume", "": "Semana mais rápida do que o costume" },
   normal: { F: "Semana normal para ela", M: "Semana normal para ele", "": "Semana normal para o atleta" },
-};
-const WHAT_GOES: Record<Who, MessageKey> = {
-  F: "O que costuma coincidir com os tempos dela",
-  M: "O que costuma coincidir com os tempos dele",
-  "": "O que costuma coincidir com os tempos do atleta",
 };
 const TAGS_NOTE: Record<Who, MessageKey> = {
   F: "Nos registos dela, a laranja o que costuma coincidir com tempos mais lentos; a verde, com mais rápidos.",
@@ -74,15 +71,18 @@ export function TemposExplicados({ athlete }: { athlete: Athlete }) {
       .map((effect) => ({ ...effect, marginPct: (200 * residualSd) / Math.sqrt(Math.max(1, effect.support / repsPerSession)) }));
     const paces = shown.map((row) => (row.timeS / row.distanceM) * 100).sort((a, b) => a - b);
     const name = athlete.name.trim();
+    const allRaces = raceRecords(competitions, meetEntries, meetResults, raceSessions, athlete.id, athlete.seedRecords).filter((race) => race.date && race.timeS > 0);
     return {
       list,
       weeks: readWeeks(list, days),
       abnormal: abnormalDays(list),
       profile,
-      lines: profileLines(profile, loadPoints(list, weeklyKm(workouts, athlete.id)), paces[Math.floor(paces.length / 2)] ?? 0, who, name),
-      races: raceRecords(competitions, meetEntries, meetResults, raceSessions, athlete.id, athlete.seedRecords).filter((race) => race.date >= from && race.date <= last),
+      name,
+      lines: profileLines(profile, loadPoints(list, weeklyKm(workouts, athlete.id)), paces[Math.floor(paces.length / 2)] ?? 0),
+      races: allRaces.filter((race) => race.date >= from && race.date <= last),
+      raceLines: raceProfileLines(allRaces.map((record) => ({ record, leadIn: leadIn(record.date, athlete.id, workouts, wellness) }))),
     };
-  }, [athlete, workouts, timeLogs, competitions, meetEntries, meetResults, raceSessions, who]);
+  }, [athlete, workouts, timeLogs, competitions, meetEntries, meetResults, raceSessions]);
 
   const [picked, setPicked] = useState<string | null>(null);
 
@@ -135,7 +135,7 @@ export function TemposExplicados({ athlete }: { athlete: Athlete }) {
       </div>
 
       <div className="mt-5">
-        <h3 className="font-display text-lg font-bold">{t(WHAT_GOES[who])}</h3>
+        <h3 className="font-display text-lg font-bold">{say({ key: "O que costuma coincidir com os tempos {whose}", vars: { whose: whoseMsg(who, data.name) } })}</h3>
         {data.lines.length ? (
           <ul className="mt-2 space-y-1.5 text-[15px] text-mist">
             {data.lines.map((line, i) => (
@@ -152,6 +152,22 @@ export function TemposExplicados({ athlete }: { athlete: Athlete }) {
         )}
         <p className="mt-2 text-xs text-mute">{t("Associações nos registos do atleta, não causas.")}</p>
       </div>
+
+      {data.raceLines.length ? (
+        <div className="mt-5">
+          <h3 className="font-display text-lg font-bold">{say({ key: "O que costuma coincidir com as melhores provas {whose}", vars: { whose: whoseMsg(who, data.name) } })}</h3>
+          <ul className="mt-2 space-y-1.5 text-[15px] text-mist">
+            {data.raceLines.map((line, i) => (
+              <li key={i} className="flex gap-2">
+                <span aria-hidden className="text-mute">
+                  •
+                </span>
+                {say(line)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <details className="mt-4 overflow-x-auto text-sm">
         <summary className="inline-flex min-h-11 cursor-pointer items-center text-mute">{t("Ver detalhes")}</summary>

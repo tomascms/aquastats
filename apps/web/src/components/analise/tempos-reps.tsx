@@ -7,6 +7,8 @@ import { useT } from "@/i18n/provider";
 import type { Msg } from "@/lib/coach-analysis";
 import {
   curveLine,
+  gapPct,
+  stateOf,
   lastTime,
   readRep,
   sessionLine,
@@ -32,7 +34,7 @@ export const STATE_DOT: Record<RepState, string> = { faster: "bg-good", normal: 
 const NORMAL_FOR: Record<Who, MessageKey> = { F: "normal para ela", M: "normal para ele", "": "normal para o atleta" };
 
 export type ChipRep = { id: string; timeS: number; read: RepRead | null };
-export type SetExplain = { chips: ChipRep[]; curve: Msg | null; last: LastTime | null };
+export type SetExplain = { state: RepState | null; chips: ChipRep[]; curve: Msg | null; last: LastTime | null };
 export type SessionExplain = { who: Who; line: Msg | null; sets: Map<string, SetExplain> };
 
 /** The model's read of one session, per set of the session report (coach only). */
@@ -45,7 +47,9 @@ export function explainSession(rows: TrainingRep[], workoutId: string, sets: Set
   const out = new Map<string, SetExplain>();
   for (const set of sets) {
     const info = history.find((item) => item.reps.some((rep) => rep.row.log.id === set.rows[0]?.log.id));
+    const reps = set.rows.map((row) => byId.get(row.log.id)).filter((rep): rep is ExplainedRep => rep != null);
     out.set(set.key, {
+      state: reps.length ? stateOf(reps.reduce((sum, rep) => sum + gapPct(rep), 0) / reps.length) : null,
       chips: set.rows.map((row) => {
         const rep = byId.get(row.log.id);
         return { id: row.log.id, timeS: row.timeS, read: rep ? readRep(rep, days, who) : null };
@@ -117,6 +121,18 @@ export function RepChips({ chips }: { chips: ChipRep[] }) {
 }
 
 const STATE_TEXT: Record<RepState, string> = { faster: "text-good", normal: "text-mist", slower: "text-slower" };
+const STATE_WORDS: Record<RepState, MessageKey> = { faster: "mais rápido do que costuma", normal: "dentro do habitual", slower: "mais lento do que costuma" };
+
+/** The set's state in the three colours, in place of the old verdict tag. */
+export function StateTag({ state }: { state: RepState }) {
+  const t = useT();
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${STATE_TEXT[state]}`}>
+      <span aria-hidden className={`inline-block h-2.5 w-2.5 rounded-full ${STATE_DOT[state]}`} />
+      {t(STATE_WORDS[state])}
+    </span>
+  );
+}
 
 /** E (the curve in one sentence) and B (this time against the last time of the same set). */
 export function SetStory({ explain }: { explain: SetExplain }) {
