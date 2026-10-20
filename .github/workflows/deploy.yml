@@ -1,0 +1,218 @@
+# Deploy to production, started only by hand (Actions → Deploy → Run workflow, or `gh workflow run deploy.yml`).
+# The manual start is the owner's approval: GitHub Free has no required reviewers on private repositories.
+# Off by default: "publicar" unticked = rehearsal (build + `--dry-run`, nothing is published). Ticked: publishes
+# only the parts changed since the last successful publish, API before web, and checks each one live.
+# Official commands only (wrangler, opennextjs-cloudflare, gcloud), no deploy scripts of our own. Guide: docs/runbooks.md.
+name: Deploy
+run-name: ${{ inputs.publicar && 'Publicar' || 'Ensaio' }} ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      publicar:
+        description: "Publicar em produção (desligado = ensaio, nada é publicado)"
+        type: boolean
+        default: false
+      tudo:
+        description: "Publicar as três partes, mesmo as que não mudaram"
+        type: boolean
+        default: false
+  pull_request:
+    paths: [.github/workflows/deploy.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.publicar && 'producao' || github.ref }}
+  cancel-in-progress: false
+
+env:
+  SHA: ${{ github.sha }}
+  GCP_PROJECT: gen-lang-client-0997549665
+  GCP_REGION: europe-west3
+
+jobs:
+  ensaio:
+    name: Ensaio (build + dry-run, nada é publicado)
+    if: ${{ !inputs.publicar }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+        working-directory: apps/web
+      - name: Web
+        working-directory: apps/web
+        run: |
+          npx opennextjs-cloudflare build
+          npx opennextjs-cloudflare deploy --dry-run --tag "${SHA::12}" --message "ensaio ${{ github.run_id }}"
+      - name: Worker de IA
+        working-directory: apps/ai-worker
+        run: ../web/node_modules/.bin/wrangler deploy --dry-run --outdir "$RUNNER_TEMP/ai" --tag "${SHA::12}"
+      # Cloud Run builds the same Dockerfile from source; building it here proves the image still builds.
+      - name: API
+        run: docker build -q apps/api
+
+  alteracoes:
+    name: O que publicar
+    if: ${{ inputs.publicar }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      api: ${{ steps.partes.outputs.api }}
+      web: ${{ steps.partes.outputs.web }}
+      ai: ${{ steps.partes.outputs.ai }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Só main com o CI verde
+        run: |
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::Só se publica a partir de main."; exit 1; }
+          ci=$(gh run list --workflow ci.yml --commit "$SHA" --event push --json conclusion -q '.[0].conclusion')
+          [ "$ci" = success ] || { echo "::error::O CI de $SHA não está verde ('$ci'). Espera pelo CI ou corrige-o."; exit 1; }
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: partes
+        run: |
+          base=$(gh run list --workflow deploy.yml --event workflow_dispatch --status success -L 100 \
+            --json displayTitle,headSha -q '[.[] | select(.displayTitle | startswith("Publicar"))][0].headSha // ""')
+          if [ "${{ inputs.tudo }}" = true ] || [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "Publicar tudo (pedido, ou sem publicação anterior conhecida)."
+            files=$'apps/api/src/\napps/web/src/\napps/ai-worker/src/'
+          else
+            echo "Última publicação: $base"
+            files=$(git diff --name-only "$base" "$SHA")
+          fi
+          has() { grep -E "$1" <<<"$files" | grep -qvE "${2:-^$}" && echo true || echo false; }
+          {
+            echo "api=$(has '^apps/api/(src/|db/|Dockerfile$|requirements\.txt$|\.dockerignore$|\.gcloudignore$)')"
+            echo "web=$(has '^apps/web/' '^apps/web/(e2e/|scripts/|[^/]+\.md$|playwright\.config\.ts$)|\.test\.tsx?$')"
+            echo "ai=$(has '^apps/ai-worker/(src/|wrangler\.jsonc$)')"
+          } | tee -a "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY"
+
+  api:
+    name: Publicar API (Cloud Run)
+    needs: alteracoes
+    if: needs.alteracoes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      # Workload Identity Federation: no key; the provider only accepts this workflow, from main, started by hand.
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/445938662978/locations/global/workloadIdentityPools/github/providers/aquastats-privado
+          service_account: github-deploy@gen-lang-client-0997549665.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Deploy
+        run: |
+          gcloud run services describe aquastats-api --region "$GCP_REGION" --project "$GCP_PROJECT" --format json \
+            | jq -r '.status.traffic[] | select(.percent == 100) | .revisionName' > "$RUNNER_TEMP/anterior"
+          gcloud run deploy aquastats-api --source apps/api --region "$GCP_REGION" --project "$GCP_PROJECT" \
+            --update-labels "commit-sha=$SHA" --quiet
+      - name: Verificar no site
+        run: |
+          rev=$(gcloud run services describe aquastats-api --region "$GCP_REGION" --project "$GCP_PROJECT" --format json \
+            | jq -r '.status.traffic[] | select(.percent == 100) | .revisionName')
+          label=$(gcloud run revisions describe "$rev" --region "$GCP_REGION" --project "$GCP_PROJECT" \
+            --format 'value(metadata.labels.commit-sha)')
+          echo "Revisão com 100 % do tráfego: $rev (commit $label)"
+          [ "$label" = "$SHA" ] || { echo "::error::A revisão servida ($rev) não é a deste commit."; exit 1; }
+          curl -sf --retry 5 --retry-all-errors https://aquastats.net/api/v1/health | grep -q '"aquastats-api"'
+          curl -sf --retry 5 --retry-all-errors https://aquastats.net/api/v1/health/ready | grep -q '"ok":true'
+          echo "API $rev no ar, commit $SHA." >> "$GITHUB_STEP_SUMMARY"
+      - name: Como reverter
+        if: failure()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ### A publicação da API falhou
+          Reverter para a revisão anterior ($(cat "$RUNNER_TEMP/anterior" 2>/dev/null || echo '<REVISÃO_ANTERIOR>')):
+          \`\`\`bash
+          gcloud run revisions list --service aquastats-api --region $GCP_REGION --project $GCP_PROJECT
+          gcloud run services update-traffic aquastats-api --to-revisions <REVISÃO_ANTERIOR>=100 --region $GCP_REGION --project $GCP_PROJECT
+          \`\`\`
+          Se o tráfego estava preso a uma revisão (reversão antiga), a nova não recebe tráfego: \`update-traffic --to-latest\`.
+          EOF
+
+  web:
+    name: Publicar site (Worker aquastats-web)
+    needs: [alteracoes, api]
+    if: ${{ !cancelled() && needs.alteracoes.outputs.web == 'true' && needs.api.result != 'failure' }}
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npx opennextjs-cloudflare build
+      - run: npx opennextjs-cloudflare deploy --tag "${SHA::12}" --message "GitHub Actions ${{ github.run_id }}"
+      - name: Verificar no site
+        run: |
+          v=$(npx wrangler deployments status --json | jq -r '.versions[] | select(.percentage == 100) | .version_id')
+          tag=$(npx wrangler versions view "$v" --json | jq -r '.annotations["workers/tag"] // ""')
+          echo "Versão com 100 % do tráfego: $v (tag $tag)"
+          [ "$tag" = "${SHA::12}" ] || { echo "::error::A versão servida ($v) não é a deste commit."; exit 1; }
+          code=$(curl -s -o /dev/null -w '%{http_code}' --retry 5 --retry-all-errors https://aquastats.net/entrar)
+          [ "$code" = 200 ] || { echo "::error::/entrar devolveu $code."; exit 1; }
+          curl -sf --retry 5 --retry-all-errors https://aquastats.net/api/v1/health | grep -q '"aquastats-api"'
+          echo "Site $v no ar, commit $SHA." >> "$GITHUB_STEP_SUMMARY"
+      - name: Como reverter
+        if: failure()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ### A publicação do site falhou
+          A partir de `apps/web`: `npx wrangler deployments list` e `npx wrangler rollback` (volta à versão anterior).
+          EOF
+
+  ai:
+    name: Publicar Worker de IA (aquastats-ai)
+    needs: alteracoes
+    if: needs.alteracoes.outputs.ai == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    defaults:
+      run:
+        working-directory: apps/ai-worker
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      # The ai-worker has no package.json of its own; it uses the wrangler pinned in apps/web.
+      - run: npm ci
+        working-directory: apps/web
+      - run: ../web/node_modules/.bin/wrangler deploy --tag "${SHA::12}" --message "GitHub Actions ${{ github.run_id }}"
+      - name: Verificar
+        run: |
+          v=$(../web/node_modules/.bin/wrangler deployments status --json | jq -r '.versions[] | select(.percentage == 100) | .version_id')
+          tag=$(../web/node_modules/.bin/wrangler versions view "$v" --json | jq -r '.annotations["workers/tag"] // ""')
+          echo "Versão com 100 % do tráfego: $v (tag $tag)"
+          [ "$tag" = "${SHA::12}" ] || { echo "::error::A versão servida ($v) não é a deste commit."; exit 1; }
+          echo "Worker de IA $v no ar, commit $SHA." >> "$GITHUB_STEP_SUMMARY"
+      - name: Como reverter
+        if: failure()
+        run: echo 'A partir de `apps/ai-worker`: `../web/node_modules/.bin/wrangler rollback`.' >> "$GITHUB_STEP_SUMMARY"

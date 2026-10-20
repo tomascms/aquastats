@@ -2,6 +2,15 @@
 
 ## [Por lançar]
 
+### Deploy pelo GitHub
+- Workflow `Deploy` (`.github/workflows/deploy.yml`): arranca à mão em `main` com o CI verde, publica só as partes
+  que mudaram (API no Cloud Run, site e Worker de IA na Cloudflare) e verifica cada uma no site (commit servido,
+  `/api/v1/health`, `/entrar`). Se falhar, diz como reverter. Sem marcar "Publicar" é um ensaio (build e
+  `--dry-run`). Autenticação sem chaves longas: Workload Identity Federation no GCP e um token Cloudflare só com
+  Workers Scripts:Edit. Guia em `docs/runbooks.md`; o deploy manual a partir do PC fica como alternativa.
+- Testes E2E dos tempos explicados: chips do treino (caixa por teclado e por toque), cartão da semana no perfil e
+  "o que a prova diz do treino" na competição.
+
 ### Tempos explicados: treino e competição
 - Treino: cada tempo é um chip nos três estados (mais rápido do que costuma, normal ou mais lento), com até 3
   motivos ao tocar, a curva da série numa frase e "Esta vez vs a última". As séries deixam de usar "provavelmente",
