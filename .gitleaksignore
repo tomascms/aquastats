@@ -1,0 +1,2 @@
+# Synthetic test password (removed in the next commit), not a secret: tests/postgres/test_session_revocation.py
+6d9beb54f7cb1c6e9f955d9ab0e090c371d64ca2:apps/api/tests/postgres/test_session_revocation.py:generic-api-key:7

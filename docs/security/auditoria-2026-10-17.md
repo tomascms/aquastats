@@ -108,6 +108,12 @@ com o certificado validado; sem o SNI, a ligação ao mesmo IP falha a validaç�
 
 Suites: `pytest tests/ -q` 132 passed, 58 skipped; suite Postgres local 58 passed.
 
+Staging (20/10, com autorização do dono): a migração 016 foi aplicada como `neondb_owner` no branch
+`br-raspy-leaf-b1wvhlo5` (coluna `integer not null default 0`; `aquastats_api` e `aquastats_auth` com SELECT e
+UPDATE). Com a API deste ramo ligada ao staging, RLS ativa: conta nova → login → `/auth/me` 200 → logout →
+`/auth/me` com o token antigo 401; novo login → mudança da palavra-passe → token antigo 401, token novo 200 →
+conta eliminada. As contas `audit-tv-*` das tentativas ficaram apagadas; o staging ficou sem utilizadores, como estava.
+
 ## Falhas propostas (não corrigidas, precisam de decisão ou de migração)
 
 | # | Gravidade | Falha | Onde | Proposta |

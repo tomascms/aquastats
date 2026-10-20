@@ -4,7 +4,7 @@ from __future__ import annotations
 from app.core.sessions import ACCESS_COOKIE
 
 PASSWORD = "Teste-sintetico-2026"
-NEW_PASSWORD = "Outra-sintetica-2026"
+NEW_PASSWORD = PASSWORD + "-nova"
 
 
 def _login(client, email: str, password: str = PASSWORD) -> str:
