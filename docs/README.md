@@ -12,7 +12,8 @@ Most documents are in European Portuguese; the [root README](../README.md) is th
 | Operate, deploy, roll back, restore | [runbooks.md](runbooks.md) |
 | Check performance and accessibility measurements | [release/desempenho.md](release/desempenho.md), [release/acessibilidade.md](release/acessibilidade.md) |
 | Follow the v1.0 release history | [release/checklist.md](release/checklist.md), [release/fase-a-diagnostico.md](release/fase-a-diagnostico.md), [release/fase-g-plano.md](release/fase-g-plano.md) |
-| See what comes next | [roadmap.md](roadmap.md) |
+| Understand "tempos explicados" (why a rep, week or race came out as it did) | [natacao/tempos-explicados.md](natacao/tempos-explicados.md) |
+| See what comes next | [roadmap.md](roadmap.md) (plan and future improvements) |
 | Read short portfolio summaries | [portfolio/](portfolio/) |
 | See changes per version | [../CHANGELOG.md](../CHANGELOG.md) |
 

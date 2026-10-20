@@ -2,6 +2,25 @@
 
 ## [Por lançar]
 
+### Tempos explicados: treino e competição
+- Treino: cada tempo é um chip nos três estados (mais rápido do que costuma, normal ou mais lento), com até 3
+  motivos ao tocar, a curva da série numa frase e "Esta vez vs a última". As séries deixam de usar "provavelmente",
+  "quase de certeza" e "devia".
+- Perfil do atleta: cartão da semana com os motivos, a época semana a semana e frases do que costuma coincidir com
+  os tempos e com as melhores provas.
+- Competição: cada prova abre "o que a prova diz do treino" (resultado, como chegou, treino vs prova, parciais e o
+  que foi diferente do recorde).
+- Associações, nunca causas; o dia da semana não é motivo. O modelo v1.0 só é exposto, sem alterações.
+  Documentação em `docs/natacao/tempos-explicados.md`.
+
+### Segurança: auditoria de 17/10/2026
+- RLS: só o treinador escreve treinos, provas, épocas, presenças e a equipa (migração 015, aplicada em produção).
+- O proxy da web deixa de inventar o `Origin`; a API volta a recusar mutações sem Origin nem Referer.
+- Lockout por IP e por conta, cooldown no "esqueci-me da palavra-passe", hostname validado no Turnstile e
+  Turnstile ligado em produção.
+- Leitor de IA dos resultados live: o lugar deixa de ser confundido com a pista. Relatório em
+  `docs/security/auditoria-2026-10-17.md`.
+
 ### Época no telemóvel, testes E2E, CSP com nonces, Turnstile e custo
 - Época: no telemóvel, um cartão por semana com os 7 dias lado a lado (km por dia, competições a vermelho, hoje
   marcado); a tabela fica para ecrãs largos.

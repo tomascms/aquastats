@@ -265,3 +265,61 @@ pelo treinador durante pelo menos uma semana antes de avançar.
 | Wearables | Polar, Firstbeat | ✅ Polar, Whoop, .FIT (qualquer relógio, incl. Garmin) — FC dentro do treino |
 | Offline na piscina | ? | ✅ |
 | Rede social / IA entre clubes | Prometido (visão de longo prazo) | Não para já — precisa de escala |
+
+---
+
+## Melhorias futuras (revisto a 20/10/2026)
+
+O estado em 20/10/2026: estão em produção a auditoria de segurança de 17/10 e os tempos explicados no treino e na
+competição ([`natacao/tempos-explicados.md`](natacao/tempos-explicados.md)). A lista segue por ordem de impacto.
+
+### 1. Provar com dados reais (prioridade máxima)
+- **Piloto com 2 ou 3 clubes durante uma época.** O modelo v1.0 e os tempos explicados só foram validados com a
+  demo sintética. Medir o acerto com o `prediction_ledger`, que já guarda cada previsão.
+- **Opinião do treinador em cada explicação:** um toque "útil / não bate certo". Diz quais os motivos que coincidem
+  com o que se vê na piscina e serve de base para a v1.1.
+- **Registo mais rápido no cais:** testar num telemóvel real, com as mãos molhadas, e um modo offline com
+  sincronização (as piscinas têm má rede).
+
+### 2. Tempos explicados: próximos passos
+- **Linguagem igual em toda a app.** Os ecrãs anteriores ainda usam "provavelmente", "quase de certeza" e "devia
+  fazer" (`components/analise/coach-text.tsx`, `lib/session-report.ts`, `components/season/load-response.tsx`).
+  Passá-los para os três estados.
+- **"O treino batia com a prova?"** Escolher as séries pelo ritmo-alvo da prova em causa, não só pela zona.
+  Distinguir um 400 de um 50.
+- **Versão para o atleta:** os mesmos chips com frases escritas para o nadador, sem críticas à carga.
+- **Novos motivos quando houver dados:** frequência cardíaca no treino (Polar), técnica (frequência e distância por
+  braçada) e viragens.
+- **Relatório semanal automático para o treinador:** um email curto com as semanas fora do costume.
+- **Exportar a análise de uma prova** (PDF de uma página) para reuniões com o atleta ou os pais.
+- **Previsão de provas futuras** (modelo v1.1), só depois de validada com dados reais.
+- **Comparação por escalão** só contra a média do próprio clube, para não desmotivar os mais novos.
+
+### 3. Confiança
+- **RGPD com dados de menores:** consentimento parental, revisão da política de privacidade, prazos de retenção e
+  acordo de tratamento de dados com os clubes.
+- **Backups:** um teste de restauro real (restauro de um momento no Neon para um branch) documentado em
+  [`runbooks.md`](runbooks.md), repetido a cada trimestre.
+- **Monitorização com alertas:** disponibilidade, erros 5xx e latência da API (alertas do Cloud Run) e erros do
+  browser. Hoje os health checks são manuais.
+- **Fecho da Fase G:** rodar a password de `neondb_owner` e revogar a role antiga `aquastats_app`, se ainda não
+  estiver feito.
+- **Falhas da auditoria abertas por decisão** (#10, #15, #16 e #17 em
+  [`security/auditoria-2026-10-17.md`](security/auditoria-2026-10-17.md)): reavaliar antes de abrir a outros clubes.
+- **Testes de isolamento entre rotas** em falta (meet-results, season-plans, attendance, hr, predictions), já
+  listados como risco residual.
+
+### 4. Credibilidade desportiva
+- **Revisão da metodologia** (indicadores, zonas, tempos explicados) por um treinador de alto nível ou pela FPN, e
+  publicação dessa revisão em `docs/natacao/`.
+
+### 5. Abrir ao mundo
+- Interface completa em inglês (o `en.ts` já existe) e depois em espanhol; piscinas em jardas.
+- Importação LENEX e Meet Manager de outros países (a base já existe).
+- Integrações com Garmin, Apple Watch e FORM.
+
+### 6. Engenharia
+- Builds automáticos ligados ao git (Cloudflare Workers Builds e Cloud Build), sem perder a autorização manual
+  para produção.
+- Testes E2E para os chips, os cartões e a análise da prova.
+- Decidir a licença, o nome do autor e os 3 ficheiros só com CRLF (pendentes desde a Fase A).
