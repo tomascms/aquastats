@@ -219,4 +219,5 @@ jobs:
           echo "Worker de IA $v no ar, commit $SHA." >> "$GITHUB_STEP_SUMMARY"
       - name: Como reverter
         if: failure()
-        run: echo 'A partir de `apps/ai-worker`: `../web/node_modules/.bin/wrangler rollback`.' >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo 'A partir de `apps/ai-worker`: `../web/node_modules/.bin/wrangler rollback`.' >> "$GITHUB_STEP_SUMMARY"
