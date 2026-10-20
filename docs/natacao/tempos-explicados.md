@@ -58,7 +58,7 @@ Como ler cada ecrã: [`guia-do-treinador.md`](guia-do-treinador.md).
 
 ![Competição: uma prova aberta](../img/tempos-prova-aberta.jpg)
 
-Uma linha por prova nadada, que se abre ao tocar. Mostra só factos e comparações, sem estatística.
+Uma linha por prova nadada, que se abre ao tocar ([vista no telemóvel](../img/tempos-prova-telemovel.jpg)). Mostra só factos e comparações, sem estatística.
 
 | Parte | Pergunta a que responde | Exemplo |
 |---|---|---|
