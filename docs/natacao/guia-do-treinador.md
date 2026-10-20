@@ -96,6 +96,23 @@ Por baixo: o nível (melhor prova e pontos World Aquatics) e, no máximo, 3 sina
   - treinos e perfil nas 2 semanas antes;
   - sono, recuperação e ginásio.
 
+## Treino, Atleta e Competição › "Tempos explicados"
+
+Detalhe e limites: [`tempos-explicados.md`](tempos-explicados.md).
+
+- **No treino**, cada tempo é um chip: verde **mais rápido do que costuma**, cinzento **normal para ele/ela**,
+  laranja **mais lento do que costuma**. Um toque abre a frase com até 3 motivos, por exemplo "Nos registos dele,
+  isto costuma coincidir com: 4.º dia seguido de treino e dormiu 6,5 h." Por baixo de cada série ficam a curva numa
+  frase e "Esta vez vs a última".
+- **No perfil do atleta**:
+  - o cartão da semana ("Semana mais lenta do que o costume", com os motivos em etiquetas);
+  - a época com uma bola por semana;
+  - até 4 frases do que costuma coincidir com os tempos dele.
+- **Na competição**, cada prova abre-se em cinco partes: resultado, como chegou, "o treino batia com a prova?",
+  parciais e "o que foi diferente do recorde". São só factos lado a lado.
+- **Como ler:** um tempo cinzento não precisa de explicação. Um motivo é uma coincidência nos registos do atleta, não
+  um diagnóstico. Sem sono ou RPE registados, há menos motivos.
+
 ## O que vê o atleta
 
 ![Último treino do atleta](../img/mobile-swimmer.webp)

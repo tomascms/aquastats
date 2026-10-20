@@ -1,6 +1,7 @@
 "use client";
 
 import { POSITION, PositionLegend, VerdictTag, diffS, swimClock } from "@/components/analise/coach-text";
+import { RepChips, SetStory, StateTag, type SetExplain } from "@/components/analise/tempos-reps";
 import { useT } from "@/i18n/provider";
 import { TE_PRIOR, repPosition } from "@/lib/coach-verdict";
 import type { SetSummary } from "@/lib/session-report";
@@ -13,12 +14,21 @@ import type { TrainingTarget } from "@/lib/training-prediction";
  * swimmer's normal, two simple numbers (regularity, end vs start), every rep as a dot against the normal band,
  * and the exact times behind "ver reps".
  */
-export function SetCard({ set, predicted, showPredicted = true, openReps = false }: { set: SetSummary; predicted?: Map<string, TrainingTarget>; showPredicted?: boolean; openReps?: boolean }) {
+export function SetCard({ set, predicted, showPredicted = true, openReps = false, explain }: { set: SetSummary; predicted?: Map<string, TrainingTarget>; showPredicted?: boolean; openReps?: boolean; explain?: SetExplain }) {
   const t = useT();
   const easy = set.intensity === "SUAVE";
   const due = set.dueS;
   // Without history, the training prior (coach-verdict TE_PRIOR) keeps "2.ª metade mais lenta" from firing on noise.
   const te = set.te ?? TE_PRIOR * set.meanS;
+  // With the coach's explanation shown, these numbers move into the reps' details.
+  const numbers = (
+    <p className="mt-1 text-sm tabular-nums text-mute">
+      {t("Média {time}", { time: swimClock(set.meanS) })}
+      {due != null ? ` · ${t("devia {time}", { time: swimClock(due) })}` : ""}
+      {set.reps >= 3 ? ` · ${t("regularidade {s}", { s: diffS(set.spreadS) })}` : ""}
+      {set.endDeltaS != null && !easy ? ` · ${set.endDeltaS > te / 2 ? t("no fim {s} mais lento", { s: diffS(set.endDeltaS) }) : set.endDeltaS < -te / 2 ? t("no fim {s} mais rápido", { s: diffS(set.endDeltaS) }) : t("ritmo mantido")}` : ""}
+    </p>
+  );
   return (
     <article className="rounded-xl border border-line p-3">
       <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -26,17 +36,20 @@ export function SetCard({ set, predicted, showPredicted = true, openReps = false
           {set.reps}×{set.distanceM} {INTENSITY_LABEL[set.intensity as Intensity] ?? set.intensity}
           {set.gearLabel ? <span className="font-normal text-mute"> · {set.gearLabel}</span> : null}
         </h4>
-        {!easy ? <VerdictTag verdict={set.verdict} size="xs" /> : null}
+        {explain ? explain.state ? <StateTag state={explain.state} /> : null : !easy ? <VerdictTag verdict={set.verdict} size="xs" /> : null}
       </header>
-      <p className="mt-1 text-sm tabular-nums text-mute">
-        {t("Média {time}", { time: swimClock(set.meanS) })}
-        {due != null ? ` · ${t("devia {time}", { time: swimClock(due) })}` : ""}
-        {set.reps >= 3 ? ` · ${t("regularidade {s}", { s: diffS(set.spreadS) })}` : ""}
-        {set.endDeltaS != null && !easy ? ` · ${set.endDeltaS > te / 2 ? t("no fim {s} mais lento", { s: diffS(set.endDeltaS) }) : set.endDeltaS < -te / 2 ? t("no fim {s} mais rápido", { s: diffS(set.endDeltaS) }) : t("ritmo mantido")}` : ""}
-      </p>
-      {due != null && !easy && set.reps >= 2 ? <RepStrip set={set} /> : null}
+      {explain ? null : numbers}
+      {explain ? (
+        <>
+          <RepChips chips={explain.chips} />
+          <SetStory explain={explain} />
+        </>
+      ) : due != null && !easy && set.reps >= 2 ? (
+        <RepStrip set={set} />
+      ) : null}
       <details className="mt-2" open={openReps}>
-        <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-pool">{set.reps === 1 ? t("Ver o tempo") : t("Ver as {n} reps", { n: set.reps })}</summary>
+        <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-pool">{explain ? t("Ver detalhes") : set.reps === 1 ? t("Ver o tempo") : t("Ver as {n} reps", { n: set.reps })}</summary>
+        {explain ? numbers : null}
         <table className="mt-1 w-full text-sm tabular-nums">
           <thead>
             <tr className="text-left text-xs text-mute">

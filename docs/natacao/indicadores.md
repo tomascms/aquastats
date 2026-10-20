@@ -37,3 +37,34 @@ unidades e uma incerteza qualitativa; o ecrã junta o raciocínio, a alternativa
 | Queda de ritmo acumulada | Queda média das séries principais em 14 dias > habitual (15–70 dias) + 1,5 pp | média |
 
 Nenhum sinal usa probabilidades, prevê lesões ou dá conselho médico.
+
+## Tempos explicados (treino e perfil do atleta, treinador)
+
+Código: [`apps/web/src/lib/explained-times.ts`](../../apps/web/src/lib/explained-times.ts) e `explainTrainingTargets` em
+`training-prediction.ts` (testes em `explained-times.test.ts`). Usa o modelo v1.0 tal como está: só o expõe, em palavras de treinador.
+
+| Onde | O que mostra | Regra |
+|---|---|---|
+| Treino, cada série | Cada tempo é um chip: verde mais rápido, cinzento normal, laranja mais lento do que costuma. Tocar abre a caixa "1:03,9 · 1,9 s mais rápida do que costuma" e até 3 motivos | Normal = diferença abaixo de 1 % face ao habitual (mediana ponderada, meia-vida 28 dias, das reps iguais anteriores); um tempo normal não leva explicação |
+| Treino, cada série | Curva numa frase ("Começou como costuma e quebrou nas últimas 2 (mais do que costuma)") e "Esta vez vs a última" com o que foi diferente (máx. 3 linhas) | Índice de queda comparado com séries iguais anteriores; diferenças abaixo de 1 pp são ruído. "O que foi diferente" são só dados |
+| Treino, topo | Uma linha de resumo ("3 reps mais lentas do que costuma, quase todas no fim das séries; 4.º dia seguido de treino") | |
+| Perfil | Cartão da semana (s por 100 m e etiquetas dos motivos), uma bola por semana na época, e até 4 frases do que costuma coincidir com os tempos | Frases só para associações fora da margem (≈ ± 2 desvios residuais ÷ √sessões; volume semanal: declive ± 2 erros-padrão, ≥ 6 semanas) |
+
+Motivos = fatores do modelo com o mesmo sentido do tempo, aprendidos em ≥ 8 reps e com peso ≥ 0,2 %, ditos com os dados do dia
+("dormiu 6 h", "voltou de 10 dias sem treinar"). Sempre "nos registos dele/dela, isto costuma coincidir com…": associação, nunca
+causa, porque a parte de contexto não passou no backtest. Sem sono registado, a frase diz-o. Os números (s, %, n, margem) ficam em
+"Ver detalhes". Capturas da demo sintética: `docs/img/tempos-*.jpg`.
+
+### Competição: o que a prova diz do treino
+
+Código: [`apps/web/src/lib/race-story.ts`](../../apps/web/src/lib/race-story.ts) (testes em `race-story.test.ts`), na página da
+competição, uma linha por prova nadada (abre ao tocar). Só factos e comparações, sem estatística; cores nos 3 estados.
+
+| Parte | Regra |
+|---|---|
+| Resultado | Contra o melhor tempo anterior na mesma prova e piscina: verde se bateu, cinzento se ficou a menos de 1 %, laranja se mais longe |
+| Como chegou | Volume das 2 semanas antes contra as 4 anteriores (etiqueta com ±10 % ou mais), sono dos 3 dias antes (≥ 8 h verde, < 7 h laranja), paragem de 10+ dias nas 3 semanas antes, forma dos tempos explicados nas 3 semanas antes; dado em falta dito como "não registado" |
+| Treino vs prova | Média por 50 da prova contra a mediana por 50 das reps de ritmo de prova (P50–P400; senão PA/MAX ≥ 50 m) das 4 semanas antes, mesma piscina e estilo, sem material; diferença abaixo de 1 % = igual |
+| Parciais | Cada 50 contra o 50 do recorde (ou o plano de parciais de referência sobre o tempo do recorde); abaixo de 1 % = como no recorde |
+| Contra a melhor | Até 3 diferenças de preparação (volume na semana antes, semanas de taper, sono, paragem), lado a lado |
+| Perfil | Por distância com 6+ provas: terço melhor contra terço pior (tempo ÷ melhor da prova) em taper (≥ 10 pontos), sono (≥ 0,5 h) e paragens; "costuma coincidir", nunca causa |
