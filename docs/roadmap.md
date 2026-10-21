@@ -325,4 +325,4 @@ ordem de impacto e é trabalho futuro.
 - Os 3 ficheiros só com CRLF: resolvido. No repositório estão em LF e o `.gitattributes` (`* text=auto eol=lf`)
   impede que voltem; o CRLF era só da cópia local (`core.autocrlf`).
 - ~~Decidir a licença e o nome do autor.~~ Feito: licença proprietária, titular Tomás Sousa.
-- Token da Cloudflare no GitHub (opcional) para publicar também o site e o Worker de IA pelo workflow.
+- ~~Token da Cloudflare no GitHub.~~ Feito (21/10): o workflow publica as três partes.
