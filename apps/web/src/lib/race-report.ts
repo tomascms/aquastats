@@ -145,7 +145,7 @@ export function raceReport(
         next: { key: "No polimento, manter algum trabalho rápido e curto." },
       });
   }
-  // Same ±0.5 % band as the panel ("no devido"): no sentence when both weeks read "no devido".
+  // Same ±0.5 % band as the panel ("dentro do habitual"): no sentence when both weeks read so.
   if (prep.trend && Math.abs(prep.trend.recentPct - prep.trend.beforePct) >= 0.5 && Math.max(Math.abs(prep.trend.recentPct), Math.abs(prep.trend.beforePct)) > 0.5) {
     if (prep.trend.recentPct < prep.trend.beforePct) good.push({ tone: "good", what: { key: athlete ? "Chegaste à prova a nadar mais rápido nos treinos." : "Chegou à prova a nadar mais rápido nos treinos da última semana." } });
     else {

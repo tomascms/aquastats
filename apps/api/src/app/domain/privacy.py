@@ -279,7 +279,8 @@ def _last_seen():
     return func.greatest(User.created_at, User.last_login_at, refreshed)  # greatest() skips NULLs
 
 
-def run_retention(session: Session, stamp: datetime | None = None, limit: int = 200) -> dict:
+def run_retention(session: Session, stamp: datetime | None = None, limit: int = 200, dry_run: bool = False) -> dict:
+    """dry_run: sends no email, lists the account ids it would warn or delete, and rolls everything back."""
     from .identity import delete_user_account
 
     stamp = stamp or _now()
@@ -296,9 +297,10 @@ def run_retention(session: Session, stamp: datetime | None = None, limit: int = 
         .where(User.deleted_at.is_(None), User.inactivity_notice_at.is_(None), last_seen < stamp - INACTIVE_AFTER + NOTICE_BEFORE)
         .limit(limit)
     ).all()
+    listed: dict[str, list[str]] = {"warn": [str(u.id) for u in due]}
     for user in due:
         when = (stamp + NOTICE_BEFORE).date()
-        if user.email and not send_inactivity_notice(user.email, when.strftime("%d/%m/%Y")) and get_settings().is_production:
+        if not dry_run and user.email and not send_inactivity_notice(user.email, when.strftime("%d/%m/%Y")) and get_settings().is_production:
             continue  # mail down: warn on the next run, never delete unwarned
         user.inactivity_notice_at = stamp
         counts["warned"] += 1
@@ -309,6 +311,7 @@ def run_retention(session: Session, stamp: datetime | None = None, limit: int = 
         .where(User.inactivity_notice_at <= stamp - NOTICE_BEFORE, last_seen <= User.inactivity_notice_at)
         .limit(limit)
     ).all()
+    listed["delete"] = [str(u.id) for u in expired]
     for user in expired:
         try:
             with session.begin_nested():
@@ -317,6 +320,9 @@ def run_retention(session: Session, stamp: datetime | None = None, limit: int = 
         except HTTPException as exc:  # e.g. a coach whose team still has athletes
             log.warning("retention: account %s kept: %s", user.id, exc.detail)
             counts["skipped"] += 1
+    if dry_run:
+        session.rollback()
+        return {**counts, "dryRun": True, "accounts": listed}
     return counts
 
 

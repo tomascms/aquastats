@@ -121,8 +121,8 @@ export function SessionAnalysis({ workout, athletes, audience = "coach" }: { wor
           <h3 className="mt-4 text-sm font-semibold text-mist">{t("Série a série")}</h3>
           <p className="text-xs text-mute">
             {audience === "athlete"
-              ? t("Devia fazer: a mediana das tuas reps nesta série (mesma distância, zona, material e descanso) nas últimas 6 semanas.")
-              : t("Devia fazer: a mediana das reps do atleta nesta série (mesma distância, zona, material e descanso) nas últimas 6 semanas.")}
+              ? t("Habitual: a mediana das tuas reps nesta série (mesma distância, zona, material e descanso) nas últimas 6 semanas.")
+              : t("Habitual: a mediana das reps do atleta nesta série (mesma distância, zona, material e descanso) nas últimas 6 semanas.")}
           </p>
           <div className="mt-2 space-y-2">
             {report.sets.map((set) => (

@@ -9,11 +9,12 @@ Porque é assim: [`benchmark-visualizacao.md`](benchmark-visualizacao.md).
   primeiro o que correu bem). Por fim, os números.
 - **Cada atleta é comparado consigo próprio**, com a sua variação normal na mesma série (mesma distância,
   zona, material e descanso), e nunca com uma regra igual para todos.
-- **Certeza em palavras:**
-  - ▲ **mais rápido** (azul) / ▼ **mais lento** (laranja), com "provavelmente" ou "quase de certeza";
-  - ● **igual ao habitual**;
+- **Os mesmos três estados em toda a app** (como nos tempos explicados), sem "provavelmente" nem "quase de certeza":
+  - ▲ **mais rápido do que costuma** (azul) / ▼ **mais lento do que costuma** (laranja), só quando a diferença é
+    clara para aquele atleta;
+  - ● **dentro do habitual**;
   - ○ **ainda não dá para dizer**, sempre com a razão: "poucas vezes feita" ou "os tempos variam muito".
-- **Cada rep** fica ▲ mais rápida, ✓ no tempo ou ▼ mais lenta face ao "devia fazer". A cor nunca aparece sem
+- **Cada rep** fica ▲ mais rápida, ✓ dentro do habitual ou ▼ mais lenta face ao seu tempo habitual. A cor nunca aparece sem
   o ícone e a palavra.
 - **Causas como "coincide com"**, só o que estava fora do normal do atleta (por exemplo "dormiu 5 h
   (costuma 8 h)"). Nunca um diagnóstico. "Uma sessão não é tendência."
@@ -33,16 +34,16 @@ Porque é assim: [`benchmark-visualizacao.md`](benchmark-visualizacao.md).
 - **"A melhorar"** diz o quê, com o número; o que coincidiu; e uma opção para a próxima. Exemplos:
   - "Quebrou a partir da rep 6 nos 8×100 A2: +0,9 s por rep até ao fim. Coincide com: saída com só 3 s de
     descanso. Para a próxima, pode ajudar: mais 5 s de saída, ou 5 reps em vez de 8."
-  - "Mais lento que o habitual nos 23×100 A2: +0,6 s por rep (provavelmente). Coincide com: semana com
+  - "Mais lento que o habitual nos 23×100 A2: +0,6 s por rep. Coincide com: semana com
     26 % mais metros que as 3 anteriores. Uma sessão não é tendência: ver a próxima antes de mudar o
     plano."
 
 ![Uma série](../img/natacao-serie-mobile.jpg)
 
 - **Série a série**, cada uma num cartão:
-  - média, "devia fazer", regularidade (melhor–pior) e o fim da série face ao início;
+  - média, tempo habitual, regularidade (melhor–pior) e o fim da série face ao início;
   - uma fila de pontos (uma rep por ponto, mais rápido em cima) sobre a faixa do normal do atleta;
-  - em **"Ver as N reps"**: Fez / Previsto / Devia fazer / Dif.
+  - em **"Ver as N reps"**: Fez / Previsto / Habitual / Dif.
 - **O aquecimento e a volta à calma (SUAVE)** aparecem, mas não são julgados.
 - *Não concluir* falta de empenho por uma rep laranja solta. Lê-se a série inteira.
 
@@ -74,7 +75,7 @@ Por baixo: o nível (melhor prova e pontos World Aquatics) e, no máximo, 3 sina
 
 - **A frase do topo** diz o que costuma acontecer aos tempos quando os km sobem mais de 20 % face às 3
   semanas anteriores (todas com treino).
-- **A tabela tem uma linha por semana:** km, tempos face ao devido, esforço e sono.
+- **A tabela tem uma linha por semana:** km, tempos face ao habitual, esforço e sono.
 - **Regressos depois de uma paragem** não contam como subida de carga.
 - *Não concluir* risco de lesão.
 

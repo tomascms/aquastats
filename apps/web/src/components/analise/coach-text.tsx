@@ -54,11 +54,12 @@ export function signedS(diff: number): string {
 /** Where one time fell against its target: icon, colour and a word — never colour alone (WCAG 1.4.1). */
 export const POSITION = {
   faster: { icon: "▲", className: "text-faster", word: "mais rápido" },
-  same: { icon: "✓", className: "text-good", word: "no tempo" },
+  same: { icon: "✓", className: "text-good", word: "dentro do habitual" },
   slower: { icon: "▼", className: "text-slower", word: "mais lento" },
 } as const;
 
-/** A verdict chip: ▲ provavelmente mais rápido · ● igual ao habitual · ○ ainda não dá para dizer · ▼ … mais lento. */
+/** A verdict chip in the three states of "tempos explicados": ▲ mais rápido do que costuma · ● dentro do habitual · ▼ mais lento
+ *  do que costuma; ○ ainda não dá para dizer when there is too little history. The certainty is never said. */
 export function VerdictTag({ verdict, size = "sm" }: { verdict: Verdict; size?: "sm" | "xs" }) {
   const t = useT();
   const text = size === "xs" ? "text-xs" : "text-sm";
@@ -74,17 +75,14 @@ export function VerdictTag({ verdict, size = "sm" }: { verdict: Verdict; size?: 
     return (
       <span className={`inline-flex items-center gap-1 ${text} font-semibold text-mist`}>
         <span aria-hidden>●</span>
-        {t("igual ao habitual")}
+        {t("dentro do habitual")}
       </span>
     );
   const pos = POSITION[verdict.dir];
-  const sure = verdict.certainty === "quase";
   return (
     <span className={`inline-flex items-center gap-1 ${text} font-semibold ${pos.className}`}>
       <span aria-hidden>{pos.icon}</span>
-      {verdict.dir === "faster"
-        ? t(sure ? "mais rápido que o habitual (quase de certeza)" : "provavelmente mais rápido que o habitual")
-        : t(sure ? "mais lento que o habitual (quase de certeza)" : "provavelmente mais lento que o habitual")}
+      {t(verdict.dir === "faster" ? "mais rápido do que costuma" : "mais lento do que costuma")}
     </span>
   );
 }
@@ -99,7 +97,7 @@ export function PositionLegend() {
           <span aria-hidden>{POSITION[key].icon}</span> {t(POSITION[key].word)}
         </span>
       ))}
-      <span>{t("face ao tempo que devia fazer")}</span>
+      <span>{t("face ao que costuma fazer")}</span>
     </p>
   );
 }

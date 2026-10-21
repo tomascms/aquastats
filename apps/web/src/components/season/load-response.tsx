@@ -138,7 +138,7 @@ export function LoadResponse({ athlete }: { athlete: Athlete }) {
                     <>
                       <span aria-hidden>{Math.abs(w.vsDuePct) <= 0.5 ? "✓ " : w.vsDuePct > 0 ? "▼ " : "▲ "}</span>
                       {Math.abs(w.vsDuePct) <= 0.5
-                        ? t("no devido")
+                        ? t("dentro do habitual")
                         : w.vsDuePct > 0
                           ? t("{pct} % lento", { pct: one(w.vsDuePct) })
                           : t("{pct} % rápido", { pct: one(-w.vsDuePct) })}
@@ -156,7 +156,7 @@ export function LoadResponse({ athlete }: { athlete: Athlete }) {
       ) : null}
       <p className="mt-2 text-xs text-mute">
         {t(
-          "Esforço: 0–10 dito pelo atleta. Tempos: média das reps da semana face ao tempo que devia fazer em cada uma.",
+          "Esforço: 0–10 dito pelo atleta. Tempos: média das reps da semana face ao que costuma fazer em cada uma.",
         )}
       </p>
     </section>

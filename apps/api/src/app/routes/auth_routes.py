@@ -755,8 +755,8 @@ def export_my_data(request: Request, session: Session = Depends(get_auth_session
 
 
 @router.post("/internal/retention", include_in_schema=False)
-def retention_job(request: Request, session: Session = Depends(get_auth_session)):
-    """Daily, from Cloud Scheduler (docs/runbooks.md): warns, then deletes accounts inactive for 3 years."""
+def retention_job(request: Request, dry: bool = False, session: Session = Depends(get_auth_session)):
+    """Daily, from Cloud Scheduler (docs/runbooks.md): warns, then deletes accounts inactive for 3 years. ?dry=1 only lists."""
     if not privacy.cron_allowed(request.headers.get("x-cron-key")):
         raise HTTPException(status_code=404)
-    return privacy.run_retention(session)
+    return privacy.run_retention(session, dry_run=dry)

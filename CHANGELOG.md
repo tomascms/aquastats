@@ -2,6 +2,13 @@
 
 ## [Por lançar]
 
+### Linguagem igual em toda a app
+- Os ecrãs anteriores (chips das séries, relatório do treino, época, análise da prova) usam os três estados dos
+  tempos explicados: mais rápido do que costuma, dentro do habitual, mais lento do que costuma. Saem
+  "provavelmente", "quase de certeza" e "devia fazer" (agora "habitual").
+- Retenção: `POST /api/v1/auth/internal/retention?dry=1` só lista as contas que avisaria ou apagaria, sem enviar
+  emails nem gravar nada.
+
 ### Erros do browser nos logs (custo 0 €)
 - Erros de JavaScript da web vão para os logs da API (`POST /api/v1/client-errors`): só rota, mensagem e stack
   curtos, sem dados pessoais, com CSRF e limite de 10/min.

@@ -62,7 +62,7 @@ export function RaceAnalysisPanel({
   );
   const toneClass = r.tone === "good" ? "border-good" : r.tone === "improve" ? "border-slower" : "border-line-strong";
   const prep = r.prep;
-  const trendWord = (p: number) => (Math.abs(p) <= 0.5 ? t("no devido") : p > 0 ? t("{pct} % mais lento", { pct: one(p) }) : t("{pct} % mais rápido", { pct: one(-p) }));
+  const trendWord = (p: number) => (Math.abs(p) <= 0.5 ? t("dentro do habitual") : p > 0 ? t("{pct} % mais lento", { pct: one(p) }) : t("{pct} % mais rápido", { pct: one(-p) }));
 
   return (
     <section className="rounded-2xl border border-line bg-panel p-4 sm:p-5" aria-labelledby="prova-analise">
@@ -153,7 +153,7 @@ export function RaceAnalysisPanel({
             ) : null}
             {prep.trend ? (
               <div>
-                <dt className="text-xs text-mute">{t("Treinos antes da prova, face ao devido")}</dt>
+                <dt className="text-xs text-mute">{t("Treinos antes da prova, face ao habitual")}</dt>
                 <dd>{t("Última semana: {now}; 2 semanas antes: {before}.", { now: trendWord(prep.trend.recentPct), before: trendWord(prep.trend.beforePct) })}</dd>
               </div>
             ) : null}
