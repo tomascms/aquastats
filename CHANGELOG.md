@@ -16,6 +16,15 @@
 - Auditoria #15: o registo responde sempre o mesmo; o dono de uma conta existente recebe um email a avisar.
 - Modelo de acordo de tratamento de dados para clubes em `docs/legal/`. Licença: titular "Tomás Sousa".
 
+### Deploy pelo GitHub
+- Workflow `Deploy` (`.github/workflows/deploy.yml`): arranca à mão em `main` com o CI verde, publica só as partes
+  que mudaram (API no Cloud Run, site e Worker de IA na Cloudflare) e verifica cada uma no site (commit servido,
+  `/api/v1/health`, `/entrar`). Se falhar, diz como reverter. Sem marcar "Publicar" é um ensaio (build e
+  `--dry-run`). Autenticação sem chaves longas: Workload Identity Federation no GCP e um token Cloudflare só com
+  Workers Scripts:Edit. Guia em `docs/runbooks.md`; o deploy manual a partir do PC fica como alternativa.
+- Testes E2E dos tempos explicados: chips do treino (caixa por teclado e por toque), cartão da semana no perfil e
+  "o que a prova diz do treino" na competição.
+
 ### Tempos explicados: treino e competição
 - Treino: cada tempo é um chip nos três estados (mais rápido do que costuma, normal ou mais lento), com até 3
   motivos ao tocar, a curva da série numa frase e "Esta vez vs a última". As séries deixam de usar "provavelmente",
@@ -32,6 +41,9 @@
 - O proxy da web deixa de inventar o `Origin`; a API volta a recusar mutações sem Origin nem Referer.
 - Lockout por IP e por conta, cooldown no "esqueci-me da palavra-passe", hostname validado no Turnstile e
   Turnstile ligado em produção.
+- O access token deixa de valer depois do logout, da mudança ou reposição da palavra-passe (`token_version`,
+  migração 016). A API recusa arrancar em produção se não conseguir confirmar a role da BD (3 tentativas). Os
+  resultados live ligam-se ao IP verificado (DNS rebinding).
 - Leitor de IA dos resultados live: o lugar deixa de ser confundido com a pista. Relatório em
   `docs/security/auditoria-2026-10-17.md`.
 

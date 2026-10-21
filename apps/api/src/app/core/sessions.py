@@ -40,10 +40,12 @@ def _b64d(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + pad)
 
 
-def sign_access(user_id: str, role: str, team_id: str, org_id: str, *, fresh: bool = False) -> str:
-    """fresh=True only right after a login; a refreshed token never counts as recent authentication."""
+def sign_access(user_id: str, role: str, team_id: str, org_id: str, *, fresh: bool = False, version: int = 0) -> str:
+    """fresh=True only right after a login; a refreshed token never counts as recent authentication.
+    version is the user's token_version: bumping it (logout, password change) kills this token early."""
     payload = {
         "sub": user_id,
+        "tv": version or 0,
         "role": role,
         "team_id": team_id,
         "org_id": org_id,
@@ -142,7 +144,21 @@ def rotate_refresh(session: Session, presented: str, request: Request) -> tuple[
     return user, new
 
 
+def token_is_current(payload: dict, user: User) -> bool:
+    """The token was signed at the user's current token_version (checked against the row the request loads anyway)."""
+    return int(payload.get("tv") or 0) == (user.token_version or 0)
+
+
+def bump_token_version(session: Session, user_id: UUID) -> None:
+    user = session.get(User, user_id)  # already in the session at every caller: no extra query
+    if user:
+        user.token_version = (user.token_version or 0) + 1
+        session.flush()
+
+
 def revoke_user_sessions(session: Session, user_id: UUID) -> None:
+    """End every session: refresh tokens revoked, and access tokens already issued stop working too."""
+    bump_token_version(session, user_id)
     session.execute(
         update(RefreshToken)
         .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))

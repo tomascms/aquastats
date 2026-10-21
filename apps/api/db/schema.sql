@@ -55,6 +55,7 @@ create table if not exists users (
   failed_login_count smallint not null default 0,
   locked_until timestamptz,
   password_hash text,
+  token_version integer not null default 0,
   settings jsonb not null default '{}',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

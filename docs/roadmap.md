@@ -319,7 +319,10 @@ competição ([`natacao/tempos-explicados.md`](natacao/tempos-explicados.md)). A
 - Integrações com Garmin, Apple Watch e FORM.
 
 ### 6. Engenharia
-- Builds automáticos ligados ao git (Cloudflare Workers Builds e Cloud Build), sem perder a autorização manual
-  para produção.
-- Testes E2E para os chips, os cartões e a análise da prova.
-- Decidir a licença, o nome do autor e os 3 ficheiros só com CRLF (pendentes desde a Fase A).
+- ~~Builds automáticos ligados ao git, sem perder a autorização manual para produção.~~ Feito: workflow `Deploy`
+  no GitHub Actions, arrancado à mão pelo dono (no GitHub Free não há *required reviewers* em repositórios
+  privados), com verificação no site e reversão documentada em [`runbooks.md`](runbooks.md).
+- ~~Testes E2E para os chips, os cartões e a análise da prova.~~ Feito (`apps/web/e2e/tempos.spec.ts`).
+- Os 3 ficheiros só com CRLF: resolvido. No repositório estão em LF e o `.gitattributes` (`* text=auto eol=lf`)
+  impede que voltem; o CRLF era só da cópia local (`core.autocrlf`).
+- Decidir a licença e o nome do autor (pendentes desde a Fase A).

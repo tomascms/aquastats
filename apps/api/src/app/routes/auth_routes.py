@@ -4,7 +4,7 @@ import json
 import secrets
 import time
 from datetime import date, datetime, timedelta, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
@@ -34,13 +34,17 @@ from ..core.http_security import compare, new_token, sha256
 from ..core.mail import send_password_reset, send_signup_attempt, send_signup_confirmation
 from ..core.passwords import clean_text, hash_password, is_honeypot, valid_email, valid_password, verify_password
 from ..core.sessions import (
+    ACCESS_COOKIE,
     REFRESH_COOKIE,
+    bump_token_version,
     clear_auth_cookies,
     current_user_payload,
+    read_access,
     revoke_user_sessions,
     rotate_refresh,
     set_auth_cookies,
     sign_access,
+    token_is_current,
 )
 from ..core.tenant import require_user
 from ..domain.identity import (
@@ -493,7 +497,7 @@ def confirm_email(body: dict, session: Session = Depends(get_auth_session)):
 def choose_role(body: dict, request: Request, response: Response, session: Session = Depends(get_auth_session)):
     payload = current_user_payload(request)
     user = session.get(User, payload["sub"])
-    if not user or not user.is_active:
+    if not user or not user.is_active or not token_is_current(payload, user):
         raise HTTPException(status_code=401, detail="Sessão inválida.")
     invite = remember_invite(response, _body_invite(body) or request.cookies.get(INVITE_COOKIE))
     guardian_link = _swimmer_basics(session, user, body) if user.role == "pending" and body.get("role") == "swimmer" else None
@@ -594,7 +598,7 @@ def change_password(body: dict, request: Request, response: Response, session: S
     form = parse_body(ChangePasswordBody, body)
     payload = current_user_payload(request)
     user = session.get(User, payload["sub"])
-    if not user or not user.is_active or user.deleted_at:
+    if not user or not user.is_active or user.deleted_at or not token_is_current(payload, user):
         raise HTTPException(status_code=401, detail="Sessão inválida.")
     if not valid_password(form.newPassword):
         raise HTTPException(status_code=400, detail="Palavra-passe fraca (mínimo 12, letras e números).")
@@ -623,7 +627,7 @@ def delete_account(body: dict, request: Request, response: Response, session: Se
     form = parse_body(DeleteAccountBody, body)
     payload = current_user_payload(request)
     user = session.get(User, payload["sub"])
-    if not user or not user.is_active or user.deleted_at:
+    if not user or not user.is_active or user.deleted_at or not token_is_current(payload, user):
         raise HTTPException(status_code=401, detail="Sessão inválida.")
     if user.password_hash:
         if not form.password or not verify_password(form.password, user.password_hash):
@@ -648,6 +652,14 @@ def logout(request: Request, response: Response, session: Session = Depends(get_
         session.execute(
             update(RefreshToken).where(RefreshToken.token_hash == sha256(presented)).values(revoked_at=datetime.now(timezone.utc))
         )
+    # The access token in the cookie dies too, not 15 min later (a copy of it would otherwise keep working).
+    # The user's other devices get a 401, refresh, and carry on.
+    access = read_access(request.cookies.get(ACCESS_COOKIE))
+    if access:
+        try:
+            bump_token_version(session, UUID(str(access["sub"])))
+        except (KeyError, ValueError):
+            pass
     clear_auth_cookies(response)
     return {"ok": True}
 
@@ -659,7 +671,7 @@ def refresh(request: Request, response: Response, session: Session = Depends(get
         raise HTTPException(status_code=401, detail="Sem sessão.")
     user, token = rotate_refresh(session, presented, request)
     team_id, org_id = membership(session, user.id)
-    access = sign_access(str(user.id), user.role, team_id, org_id)
+    access = sign_access(str(user.id), user.role, team_id, org_id, version=user.token_version)
     set_auth_cookies(response, access, token)
     return {"ok": True, "role": user.role, "next": safe_app_path(home_path(user.role))}
 
@@ -668,7 +680,7 @@ def refresh(request: Request, response: Response, session: Session = Depends(get
 def me(request: Request, session: Session = Depends(get_auth_session)):
     payload = current_user_payload(request)
     user = session.get(User, payload["sub"])
-    if not user:
+    if not user or not token_is_current(payload, user):
         raise HTTPException(status_code=401, detail="Sessão inválida.")
     profile = session.get(Profile, user.id)
     team_id, org_id = membership(session, user.id)
@@ -707,7 +719,7 @@ def ask_guardian(body: dict, request: Request, session: Session = Depends(get_au
     """The athlete asks (again) for a guardian's consent, e.g. a new email or a link that expired."""
     payload = current_user_payload(request)
     user = session.get(User, payload["sub"])
-    if not user or not user.is_active or user.deleted_at:
+    if not user or not user.is_active or user.deleted_at or not token_is_current(payload, user):
         raise HTTPException(status_code=401, detail="Sessão inválida.")
     row = session.get(privacy.ParentalConsent, user.id)
     profile = session.get(Profile, user.id)
@@ -733,7 +745,7 @@ def guardian_decide(token: str, body: dict, session: Session = Depends(get_auth_
 def export_my_data(request: Request, session: Session = Depends(get_auth_session)):
     payload = current_user_payload(request)
     user = session.get(User, payload["sub"])
-    if not user or not user.is_active or user.deleted_at:
+    if not user or not user.is_active or user.deleted_at or not token_is_current(payload, user):
         raise HTTPException(status_code=401, detail="Sessão inválida.")
     return Response(
         content=json.dumps(privacy.export_user_data(session, user), ensure_ascii=False, indent=2),
