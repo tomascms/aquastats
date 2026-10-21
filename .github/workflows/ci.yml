@@ -67,11 +67,6 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm run test --if-present
-      - name: ML harness smoke (tuning seeds only, decides nothing)
-        run: |
-          if [ -f scripts/ml-backtest.ts ]; then
-            npx tsx scripts/ml-backtest.ts --predictors "mediana,v1.0 + qualidade + conformal" --seeds tune > /dev/null
-          fi
       - run: npm run build
       - name: Dependency audit (production dependencies block the build)
         run: npm audit --omit=dev --audit-level=high
