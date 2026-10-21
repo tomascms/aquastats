@@ -85,6 +85,9 @@ jobs:
         with:
           fetch-depth: 0
       - id: partes
+        env:
+          # Sem o token, o site e o Worker de IA publicam-se a partir do PC (docs/runbooks.md); só a API sai daqui.
+          TEM_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
         run: |
           base=$(gh run list --workflow deploy.yml --event workflow_dispatch --status success -L 100 \
             --json displayTitle,headSha -q '[.[] | select(.displayTitle | startswith("Publicar"))][0].headSha // ""')
@@ -100,7 +103,12 @@ jobs:
             echo "api=$(has '^apps/api/(src/|db/|Dockerfile$|requirements\.txt$|\.dockerignore$|\.gcloudignore$)')"
             echo "web=$(has '^apps/web/' '^apps/web/(e2e/|scripts/|[^/]+\.md$|playwright\.config\.ts$)|\.test\.tsx?$')"
             echo "ai=$(has '^apps/ai-worker/(src/|wrangler\.jsonc$)')"
-          } | tee -a "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY"
+          } > partes.txt
+          if [ "$TEM_CLOUDFLARE" != true ]; then
+            echo "::warning::Sem CLOUDFLARE_API_TOKEN: o site e o Worker de IA não são publicados aqui (publicar a partir do PC)."
+            sed -i -E 's/^(web|ai)=.*/\1=false/' partes.txt
+          fi
+          tee -a "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY" < partes.txt
 
   api:
     name: Publicar API (Cloud Run)

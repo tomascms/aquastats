@@ -57,6 +57,11 @@ hoje faz os deploys. O pool e a conta de serviço já estão escritos no `deploy
 `aquastats-web` e `aquastats-ai`. Não precisa de *Workers Routes*, porque os domínios `aquastats.net` e
 `www.aquastats.net` já estão ligados e o deploy não os altera. Copiar o valor do token só para o passo 3.
 
+**Sem o token (decisão do dono, 21/10/2026):** o workflow publica só a API e avisa que o site e o Worker de IA
+ficam por publicar; esses saem do PC (ver [Deploy manual](#deploy-manual-alternativa-a-partir-do-pc)). Se um dia o
+token for guardado, a primeira publicação pelo GitHub deve marcar **tudo**, porque o workflow só compara com a última
+publicação feita por ele.
+
 **3. GitHub: segredo e variável** (Settings → Secrets and variables → Actions):
 
 - *Secrets* → *New repository secret* → `CLOUDFLARE_API_TOKEN` = o token do passo 2.
