@@ -40,6 +40,7 @@ const AUTH_LIMITS: Record<string, { limit: number; windowSec: number }> = {
 // Writes: matriz de tempos pode gerar muitos PUT/min (1 por dígito); limites altos para uso real de piscina.
 const WRITE_LIMITS: Record<string, { limit: number; windowSec: number }> = {
   "/api/v1/times": { limit: 720, windowSec: 60 },
+  "/api/v1/client-errors": { limit: 10, windowSec: 60 },
   "/api/v1/": { limit: 360, windowSec: 60 },
 };
 

@@ -4,6 +4,7 @@ import { Barlow_Condensed, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastHost } from "@/components/ui/toast-host";
 import { ConfirmHost } from "@/components/ui/confirm-host";
+import { ErrorReporter } from "@/components/error-reporter";
 import { INTL_LOCALE, translate } from "@/i18n";
 import { LocaleProvider } from "@/i18n/provider";
 import { getServerLocale } from "@/i18n/server";
@@ -101,6 +102,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             {children}
             <ToastHost />
             <ConfirmHost />
+            <ErrorReporter />
           </div>
         </LocaleProvider>
       </body>

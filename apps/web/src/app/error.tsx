@@ -1,15 +1,19 @@
 "use client";
 
+import { useEffect } from "react";
+import { reportError } from "@/components/error-reporter";
 import { BrandLockup } from "@/components/ui/brand";
 import { useT } from "@/i18n/provider";
 
 export default function ErrorPage({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
   const t = useT();
+  useEffect(() => reportError(error, error.digest), [error]);
   return (
     <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-5 pb-8">
       <header className="safe-top pt-8">
