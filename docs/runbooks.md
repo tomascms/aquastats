@@ -141,6 +141,7 @@ gcloud scheduler jobs create http aquastats-retencao --location europe-west3 --p
   --schedule "0 4 * * *" --time-zone "Europe/Lisbon" --http-method POST \
   --uri "https://<URL do Cloud Run>/api/v1/auth/internal/retention" \
   --headers "x-cron-key=<segredo>,x-edge-auth=<EDGE_AUTH_TOKEN>,Origin=https://aquastats.net"
+# Ensaio sem efeitos: o mesmo pedido com ?dry=1 devolve as contas que avisaria/apagaria (ids) e não grava nada
 # Correr já, e ver o resultado ({"reactivated", "warned", "deleted", "skipped"}) nos logs
 gcloud scheduler jobs run aquastats-retencao --location europe-west3 --project gen-lang-client-0997549665
 ```

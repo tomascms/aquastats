@@ -1,11 +1,12 @@
 /*
  * One vocabulary for "is this different?" across the app (docs/natacao/benchmark-visualizacao.md §5).
  * Each swimmer is compared with their own normal: the spread of their reps in the same kind of set (typical
- * error, TE), never a team-wide threshold. Certainty is said in words, never as a probability or a %.
+ * error, TE), never a team-wide threshold. The certainty only decides whether to say it; the screens show the three
+ * states (mais rápido do que costuma / dentro do habitual / mais lento do que costuma), never a probability or a %.
  *   SWC (smallest change that matters) = 0.3 × TE                      (Hopkins 2004/2009)
  *   noise of a comparison σ = TE·√(1/m + 1/n), m capped at 4           (reps in one set are not independent)
- *   "quase de certeza" |d| ≥ SWC + 1.645σ · "provavelmente" |d| ≥ SWC + 0.674σ
- *   "igual ao habitual" |d| ≤ σ/2 · otherwise, or < 3 earlier reps: "ainda não dá para dizer"
+ *   certainty "quase" |d| ≥ SWC + 1.645σ · "provavel" |d| ≥ SWC + 0.674σ
+ *   "dentro do habitual" |d| ≤ σ/2 · otherwise, or < 3 earlier reps: "ainda não dá para dizer"
  */
 
 export type Direction = "faster" | "slower" | "same" | "unclear";

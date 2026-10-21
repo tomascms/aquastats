@@ -1,5 +1,5 @@
 import { loadChangePct, type Expected, type Msg } from "./coach-analysis";
-import { compareTimes, median, type Certainty, type Verdict } from "./coach-verdict";
+import { compareTimes, median, type Verdict } from "./coach-verdict";
 import type { TrainingRep } from "./training-context";
 import type { WellnessEntry, Workout } from "./types";
 
@@ -20,7 +20,7 @@ export type SetSummary = {
   intensity: string;
   gearLabel: string;
   meanS: number;
-  /** "Devia fazer" for the set (median of the reps' targets), null when the set has no history at all. */
+  /** Usual time for the set (median of the reps' targets), null when the set has no history at all. */
   dueS: number | null;
   /** Typical spread of this swimmer's reps in this kind of set (s). */
   te: number | null;
@@ -42,7 +42,6 @@ export type SessionContext = { workouts: Workout[]; wellness: WellnessEntry[]; a
 const DAY = 86_400_000;
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const r1 = (x: number) => Math.round(x * 10) / 10;
-export const certaintyWord = (c: Certainty | undefined): Msg => ({ key: c === "quase" ? "quase de certeza" : "provavelmente" });
 
 /** Group the session's reps into sets (block × segment × round) and summarise each against its target. */
 export function summariseSets(rows: TrainingRep[], expected: Map<string, Expected>): SetSummary[] {
@@ -165,11 +164,11 @@ export function sessionReport(rows: TrainingRep[], expected: Map<string, Expecte
         improve.push({
           tone: "improve",
           what: {
-            key: athlete ? "Nos {reps}×{dist} {zone} começaste devagar e só acelerou na 2.ª metade." : "Começou a guardar-se nos {reps}×{dist} {zone}: 1.ª metade {s} s acima do devido, depois acelerou.",
+            key: athlete ? "Nos {reps}×{dist} {zone} começaste devagar e só acelerou na 2.ª metade." : "Começou a guardar-se nos {reps}×{dist} {zone}: 1.ª metade {s} s acima do habitual, depois acelerou.",
             vars: { ...label(s), s: r1(firstHalf) },
           },
           why: s.rows[0].restVsSet === "more" && s.restS != null ? [{ key: "saída com {s} s de descanso, mais que o habitual", vars: { s: Math.round(s.restS) } }] : [],
-          next: { key: athlete ? "Foco para a próxima: sair no tempo pedido desde a 1.ª rep." : "Para a próxima: pedir o tempo devido desde a 1.ª rep." },
+          next: { key: athlete ? "Foco para a próxima: sair no tempo pedido desde a 1.ª rep." : "Para a próxima: pedir o tempo habitual desde a 1.ª rep." },
         });
         continue;
       }
@@ -178,7 +177,7 @@ export function sessionReport(rows: TrainingRep[], expected: Map<string, Expecte
     if (s.verdict.dir === "slower" && s.verdict.certainty) {
       improve.push({
         tone: "improve",
-        what: { key: athlete ? "Nos {reps}×{dist} {zone} estiveste {s} s por rep acima do teu habitual ({c})." : "Mais lento que o habitual nos {reps}×{dist} {zone}: +{s} s por rep ({c}).", vars: { ...label(s), s: perRep, c: certaintyWord(s.verdict.certainty) } },
+        what: { key: athlete ? "Nos {reps}×{dist} {zone} estiveste {s} s por rep acima do teu habitual." : "Mais lento que o habitual nos {reps}×{dist} {zone}: +{s} s por rep.", vars: { ...label(s), s: perRep } },
         why: causes,
         next: { key: athlete ? "Um treino não é tendência: o próximo diz mais." : "Uma sessão não é tendência: ver a próxima antes de mudar o plano." },
       });
@@ -197,8 +196,8 @@ export function sessionReport(rows: TrainingRep[], expected: Map<string, Expecte
     good.push({
       tone: "good",
       what: {
-        key: athlete ? "Nos {reps}×{dist} {zone} foste {s} s por rep mais rápido que o teu habitual ({c})." : "Mais rápido que o habitual nos {reps}×{dist} {zone}: −{s} s por rep ({c}).",
-        vars: { ...label(f), s: r1(Math.abs(f.meanS - (f.dueS ?? f.meanS))), c: certaintyWord(f.verdict.certainty) },
+        key: athlete ? "Nos {reps}×{dist} {zone} foste {s} s por rep mais rápido que o teu habitual." : "Mais rápido que o habitual nos {reps}×{dist} {zone}: −{s} s por rep.",
+        vars: { ...label(f), s: r1(Math.abs(f.meanS - (f.dueS ?? f.meanS))) },
       },
       next: athlete ? undefined : { key: "Se se repetir, pode ser altura de pedir um tempo mais exigente nesta série." },
     });
@@ -241,7 +240,7 @@ export function sessionReport(rows: TrainingRep[], expected: Map<string, Expecte
     headline = { key: "Quase tudo ao nível habitual: {k} de {m} séries mais lentas.", vars: { k: slower, m: main.length } };
     tone = "mixed";
   } else {
-    headline = { key: "Treino ao nível habitual: {m} séries no tempo devido.", vars: { m: main.length } };
+    headline = { key: "Treino ao nível habitual: {m} séries dentro do habitual.", vars: { m: main.length } };
     tone = "good";
   }
 

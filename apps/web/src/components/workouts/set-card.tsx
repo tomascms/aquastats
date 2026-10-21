@@ -24,7 +24,7 @@ export function SetCard({ set, predicted, showPredicted = true, openReps = false
   const numbers = (
     <p className="mt-1 text-sm tabular-nums text-mute">
       {t("Média {time}", { time: swimClock(set.meanS) })}
-      {due != null ? ` · ${t("devia {time}", { time: swimClock(due) })}` : ""}
+      {due != null ? ` · ${t("habitual {time}", { time: swimClock(due) })}` : ""}
       {set.reps >= 3 ? ` · ${t("regularidade {s}", { s: diffS(set.spreadS) })}` : ""}
       {set.endDeltaS != null && !easy ? ` · ${set.endDeltaS > te / 2 ? t("no fim {s} mais lento", { s: diffS(set.endDeltaS) }) : set.endDeltaS < -te / 2 ? t("no fim {s} mais rápido", { s: diffS(set.endDeltaS) }) : t("ritmo mantido")}` : ""}
     </p>
@@ -56,7 +56,7 @@ export function SetCard({ set, predicted, showPredicted = true, openReps = false
               <th scope="col" className="py-1 font-medium">{t("Rep")}</th>
               <th scope="col" className="py-1 text-right font-medium">{t("Fez")}</th>
               {showPredicted ? <th scope="col" className="py-1 text-right font-medium">{t("Previsto")}</th> : null}
-              <th scope="col" className="py-1 text-right font-medium">{t("Devia fazer")}</th>
+              <th scope="col" className="py-1 text-right font-medium">{t("Habitual")}</th>
               <th scope="col" className="py-1 pl-2 text-right font-medium">{t("Dif.")}</th>
             </tr>
           </thead>
@@ -91,7 +91,7 @@ export function SetCard({ set, predicted, showPredicted = true, openReps = false
   );
 }
 
-/** Every rep as a dot; faster is up. The shaded band is this swimmer's normal around "devia fazer". */
+/** Every rep as a dot; faster is up. The shaded band is this swimmer's normal around the usual time. */
 function RepStrip({ set }: { set: SetSummary }) {
   const t = useT();
   const due = set.dueS!;

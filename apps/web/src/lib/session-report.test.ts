@@ -52,8 +52,8 @@ describe("relatório do treino", () => {
     const r = read(set([68.6, 68.5, 68.7, 68.4]));
     assert.equal(r.tone, "good");
     assert.equal(r.points[0].tone, "good");
-    assert.equal(r.points[0].what.key, "Mais rápido que o habitual nos {reps}×{dist} {zone}: −{s} s por rep ({c}).");
-    assert.deepEqual(r.points[0].what.vars?.c, { key: "quase de certeza" });
+    assert.equal(r.points[0].what.key, "Mais rápido que o habitual nos {reps}×{dist} {zone}: −{s} s por rep.");
+    assert.equal(r.points[0].what.vars?.c, undefined); // the certainty is never said
   });
 
   it("sono mau coincide com um treino lento, face ao habitual do próprio; sem causa, diz que não há", () => {
@@ -83,7 +83,7 @@ describe("relatório do treino", () => {
 
   it("nada abaixo do ruído: treino ao nível habitual", () => {
     const r = read(set([70.1, 69.9, 70.1, 70]));
-    assert.equal(r.headline.key, "Treino ao nível habitual: {m} séries no tempo devido.");
+    assert.equal(r.headline.key, "Treino ao nível habitual: {m} séries dentro do habitual.");
     assert.equal(r.points.filter((p) => p.tone === "improve").length, 0);
   });
 

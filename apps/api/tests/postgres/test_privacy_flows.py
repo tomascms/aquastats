@@ -128,6 +128,10 @@ def test_retention_warns_then_deletes_after_30_days(world, anonymous, monkeypatc
             conn.execute("insert into profiles (user_id, full_name) values (%s, 'Sintético')", (uid,))
     client = anonymous
     assert client.post("/api/v1/auth/internal/retention").status_code == 404  # no key
+    dry = client.post("/api/v1/auth/internal/retention?dry=1", headers={"x-cron-key": secret}).json()
+    assert dry["dryRun"] and str(old) in dry["accounts"]["warn"] and str(recent) not in dry["accounts"]["warn"]
+    with psycopg.connect(world.admin_url) as conn:  # dry run wrote nothing
+        assert conn.execute("select inactivity_notice_at is null from users where id = %s", (old,)).fetchone()[0]
     run = lambda: client.post("/api/v1/auth/internal/retention", headers={"x-cron-key": secret}).json()  # noqa: E731
     assert run()["warned"] >= 1
     with psycopg.connect(world.admin_url) as conn:
