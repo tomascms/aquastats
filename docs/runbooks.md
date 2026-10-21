@@ -48,7 +48,9 @@ gcloud iam service-accounts add-iam-policy-binding github-deploy@gen-lang-client
 ```
 
 Papéis mínimos de deploy a partir do código: Cloud Run Source Developer e Service Usage Consumer no projeto, e
-Service Account User só na conta de serviço da API (`aquastats-api@…`). O build usa a conta do Cloud Build que já
+Service Account User só na conta de serviço da API (`aquastats-api@…`). Também Service Account User na conta de build
+(`445938662978-compute@developer.gserviceaccount.com`), sem o qual o `gcloud run deploy --source` falha com
+`PERMISSION_DENIED` (acrescentado a 21/10). O build usa a conta do Cloud Build que já
 hoje faz os deploys. O pool e a conta de serviço já estão escritos no `deploy.yml`. Se o nome de algum mudar, o
 `deploy.yml` tem de mudar também.
 
