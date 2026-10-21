@@ -2,6 +2,18 @@
 
 ## [Por lançar]
 
+## [1.1.0] — 2026-10-21
+
+### Fecho do projeto
+- Fase G concluída: a role antiga `aquastats_app` já não existe e a password de `neondb_owner` foi rodada.
+- Retenção automática ligada: job diário `aquastats-retencao` no Cloud Scheduler (04:00, Lisboa), segredo
+  `aquastats-cron-secret` no Secret Manager; ensaio `?dry=1` feito antes (0 contas).
+- Deploy pelo GitHub ativo para a API (Workload Identity Federation, conta `github-deploy`); sem token da
+  Cloudflare, o site e o Worker de IA continuam a sair do PC (decisão do dono).
+- CI cerca de 4 vezes mais curto: sai o "ML harness smoke" (o modelo v1.0 está congelado; o teste golden fica).
+- Dependências: API (FastAPI 0.143, SQLAlchemy 2.1, Pydantic 2.14, uvicorn 0.54, argon2-cffi 25.1, com hashes
+  compatíveis).
+
 ### Linguagem igual em toda a app
 - Os ecrãs anteriores (chips das séries, relatório do treino, época, análise da prova) usam os três estados dos
   tempos explicados: mais rápido do que costuma, dentro do habitual, mais lento do que costuma. Saem

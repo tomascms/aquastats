@@ -268,10 +268,12 @@ pelo treinador durante pelo menos uma semana antes de avançar.
 
 ---
 
-## Melhorias futuras (revisto a 20/10/2026)
+## Melhorias futuras (revisto a 21/10/2026)
 
-O estado em 20/10/2026: estão em produção a auditoria de segurança de 17/10 e os tempos explicados no treino e na
-competição ([`natacao/tempos-explicados.md`](natacao/tempos-explicados.md)). A lista segue por ordem de impacto.
+O estado em 21/10/2026 (versão 1.1, projeto fechado; ver [`estado-final.md`](estado-final.md)): estão em produção a
+auditoria de segurança de 17/10, os tempos explicados no treino e na competição
+([`natacao/tempos-explicados.md`](natacao/tempos-explicados.md)), o RGPD e a retenção automática. A lista segue por
+ordem de impacto e é trabalho futuro.
 
 ### 1. Provar com dados reais (prioridade máxima)
 - **Piloto com 2 ou 3 clubes durante uma época.** O modelo v1.0 e os tempos explicados só foram validados com a
@@ -282,9 +284,7 @@ competição ([`natacao/tempos-explicados.md`](natacao/tempos-explicados.md)). A
   sincronização (as piscinas têm má rede).
 
 ### 2. Tempos explicados: próximos passos
-- **Linguagem igual em toda a app.** Os ecrãs anteriores ainda usam "provavelmente", "quase de certeza" e "devia
-  fazer" (`components/analise/coach-text.tsx`, `lib/session-report.ts`, `components/season/load-response.tsx`).
-  Passá-los para os três estados.
+- ~~**Linguagem igual em toda a app.**~~ Feito (21/10): os ecrãs anteriores usam os três estados.
 - **"O treino batia com a prova?"** Escolher as séries pelo ritmo-alvo da prova em causa, não só pela zona.
   Distinguir um 400 de um 50.
 - **Versão para o atleta:** os mesmos chips com frases escritas para o nadador, sem críticas à carga.
@@ -296,22 +296,21 @@ competição ([`natacao/tempos-explicados.md`](natacao/tempos-explicados.md)). A
 - **Comparação por escalão** só contra a média do próprio clube, para não desmotivar os mais novos.
 
 ### 3. Confiança
-- **RGPD com dados de menores:** consentimento parental, revisão da política de privacidade, prazos de retenção e
-  acordo de tratamento de dados com os clubes.
-- **Backups:** um teste de restauro real (restauro de um momento no Neon para um branch) documentado em
+- ~~**RGPD com dados de menores**~~ Feito (consentimento parental, termos, exportação, retenção automática de 3 anos,
+  modelo de acordo com os clubes). Falta a **revisão jurídica** dos textos.
+- ~~**Backups:**~~ Feito a 09/10 (repetir a cada trimestre): um teste de restauro real (restauro de um momento no Neon para um branch) documentado em
   [`runbooks.md`](runbooks.md), repetido a cada trimestre.
-- **Monitorização com alertas:** disponibilidade, erros 5xx e latência da API (alertas do Cloud Run) e erros do
-  browser. Hoje os health checks são manuais.
-- **Fecho da Fase G:** rodar a password de `neondb_owner` e revogar a role antiga `aquastats_app`, se ainda não
-  estiver feito.
-- **Falhas da auditoria abertas por decisão** (#10, #15, #16 e #17 em
-  [`security/auditoria-2026-10-17.md`](security/auditoria-2026-10-17.md)): reavaliar antes de abrir a outros clubes.
+- **Monitorização com alertas:** os erros do browser já chegam aos logs; os alertas automáticos ficam de fora por
+  decisão do dono (pagos a partir de 2027). A vigilância é manual ([`runbooks.md`](runbooks.md)).
+- ~~**Fecho da Fase G**~~ Feito (21/10): `aquastats_app` já não existe; password de `neondb_owner` rodada.
+- ~~**Falhas da auditoria abertas por decisão**~~ Corrigidas a 20/10 (#10, #15, #16 e #17).
 - **Testes de isolamento entre rotas** em falta (meet-results, season-plans, attendance, hr, predictions), já
   listados como risco residual.
 
 ### 4. Credibilidade desportiva
 - **Revisão da metodologia** (indicadores, zonas, tempos explicados) por um treinador de alto nível ou pela FPN, e
   publicação dessa revisão em `docs/natacao/`.
+- **Alertas pagos**, se um dia o orçamento deixar de ser 0 €.
 
 ### 5. Abrir ao mundo
 - Interface completa em inglês (o `en.ts` já existe) e depois em espanhol; piscinas em jardas.
@@ -325,4 +324,5 @@ competição ([`natacao/tempos-explicados.md`](natacao/tempos-explicados.md)). A
 - ~~Testes E2E para os chips, os cartões e a análise da prova.~~ Feito (`apps/web/e2e/tempos.spec.ts`).
 - Os 3 ficheiros só com CRLF: resolvido. No repositório estão em LF e o `.gitattributes` (`* text=auto eol=lf`)
   impede que voltem; o CRLF era só da cópia local (`core.autocrlf`).
-- Decidir a licença e o nome do autor (pendentes desde a Fase A).
+- ~~Decidir a licença e o nome do autor.~~ Feito: licença proprietária, titular Tomás Sousa.
+- Token da Cloudflare no GitHub (opcional) para publicar também o site e o Worker de IA pelo workflow.
