@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthFrame } from "@/components/auth/auth-frame";
+import { ConsentFields, EMPTY_CONSENT, consentBody } from "@/components/auth/consent-fields";
 import { useT, useTDynamic } from "@/i18n/provider";
 import { api, formatApiError, type ApiError } from "@/lib/api";
 import { homeFor } from "@/lib/auth";
@@ -12,6 +13,7 @@ import { safeNext } from "@/lib/safe-next";
 import { actions, useAppState, useAuthBoot } from "@/lib/store";
 
 type CoachRequest = { requested: boolean; requestedAt?: string | null; teamName?: string | null };
+type Basics = { termsAccepted: boolean; needsBirthDate: boolean };
 
 export default function ChooseRolePage() {
   const t = useT();
@@ -25,12 +27,18 @@ export default function ChooseRolePage() {
   const [teamCode, setTeamCode] = useState("");
   const [request, setRequest] = useState<CoachRequest | null>(null);
   const [form, setForm] = useState({ name: "", contact: "", teamName: "", message: "" });
+  const [basics, setBasics] = useState<Basics>({ termsAccepted: true, needsBirthDate: false });
+  const [consent, setConsent] = useState(EMPTY_CONSENT);
+  const [askBirth, setAskBirth] = useState(false);
 
   useEffect(() => {
     if (!bootstrapped || role !== "pending") return;
     void api<CoachRequest>("/api/v1/auth/coach-request")
       .then(setRequest)
       .catch(() => setRequest({ requested: false }));
+    void api<Basics>("/api/v1/auth/me")
+      .then(setBasics)
+      .catch(() => undefined);
   }, [bootstrapped, role]);
 
   useEffect(() => {
@@ -40,12 +48,16 @@ export default function ChooseRolePage() {
   }, [bootstrapped, role, router]);
 
   async function chooseSwimmer() {
+    if (basics.needsBirthDate && !askBirth) {
+      setAskBirth(true);
+      return;
+    }
     setBusy("swimmer");
     setError("");
     try {
       const invite = normalizeInvite(teamCode);
       if (invite) writeInviteCookie(invite);
-      const path = await actions.chooseRole("swimmer", "", invite);
+      const path = await actions.chooseRole("swimmer", "", invite, consentBody(consent, basics.needsBirthDate));
       window.location.assign(safeNext(path, homeFor("swimmer")));
     } catch (err) {
       setError(formatApiError(err as ApiError) || t("Não foi possível guardar a escolha."));
@@ -60,7 +72,7 @@ export default function ChooseRolePage() {
     try {
       const result = await api<CoachRequest>("/api/v1/auth/coach-request", {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, acceptTerms: consent.acceptTerms }),
       });
       setRequest({ ...result, teamName: form.teamName });
       setAskCoach(false);
@@ -80,7 +92,26 @@ export default function ChooseRolePage() {
 
   return (
     <AuthFrame>
-      {askCoach ? (
+      {askBirth ? (
+        <>
+          <h1 className="text-3xl font-bold">{t("Atleta")}</h1>
+          <form
+            className="mt-5 space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void chooseSwimmer();
+            }}
+          >
+            <ConsentFields value={consent} onChange={setConsent} askTerms={!basics.termsAccepted} />
+            <button type="submit" disabled={busy !== null} className="btn-primary h-11 w-full">
+              {busy === "swimmer" ? t("A guardar…") : t("Continuar")}
+            </button>
+          </form>
+          <button type="button" className="mt-4 text-sm font-medium text-mute hover:text-mist" onClick={() => setAskBirth(false)}>
+            {t("Voltar")}
+          </button>
+        </>
+      ) : askCoach ? (
         <>
           <h1 className="text-3xl font-bold">{t("Pedir conta de treinador")}</h1>
           <p className="mt-2 text-sm leading-6 text-mute">
@@ -115,6 +146,11 @@ export default function ChooseRolePage() {
         <>
           <h1 className="text-3xl font-bold">{t("Escolhe o teu perfil")}</h1>
           <p className="mt-2 text-sm leading-6 text-mute">{t("Podes entrar como atleta já, ou pedir uma conta de treinador.")}</p>
+          {!basics.termsAccepted ? (
+            <div className="mt-5">
+              <ConsentFields value={consent} onChange={setConsent} askBirth={false} />
+            </div>
+          ) : null}
           <div className="mt-6 grid gap-3">
             <button
               type="button"

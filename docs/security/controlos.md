@@ -14,6 +14,9 @@ Legenda: ✅ em vigor em produção · 🟡 feito na branch, à espera da Fase G
 | Cookies `HttpOnly`, `Secure`, `SameSite=Lax`, `path=/` | ✅ |
 | Eliminar conta exige "ELIMINAR" + password ou login recente (< 5 min) | ✅ |
 | Links de aprovação de treinador assinados com validade | ✅ |
+| Registo sem enumeração: resposta igual com ou sem conta; o dono existente é avisado por email (#15) | 🟡 |
+| Menores de 13: dados de saúde só com autorização parental por link assinado (7 dias), revogável | 🟡 |
+| Contas inativas há 3 anos apagadas, com aviso 30 dias antes (job com `x-cron-key`) | 🟡 |
 
 ## Pedidos
 

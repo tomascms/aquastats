@@ -18,14 +18,14 @@ def _user(**kw):
 
 class AccountLinkingTest(unittest.TestCase):
     def test_register_cannot_set_a_password_on_a_google_account(self):
-        google_user = _user()
+        google_user = _user(settings={})
+        body = {"email": "nadador@gmail.com", "password": STRONG_TEST_PASSWORD, "acceptTerms": True, "birthDate": "2000-01-01"}
         with patch.object(auth_routes, "find_user_by_email", return_value=google_user):
-            with self.assertRaises(HTTPException) as ctx:
-                auth_routes.register(
-                    {"email": "nadador@gmail.com", "password": STRONG_TEST_PASSWORD}, MagicMock(), MagicMock(), MagicMock()
-                )
-        self.assertEqual(ctx.exception.status_code, 409)
+            result = auth_routes.register(body, MagicMock(), MagicMock(), MagicMock())
+        # Audit #15: the same answer as a new signup; the existing owner is told by email instead.
+        self.assertEqual(result, {"ok": True, "needsConfirmation": True, "next": "/confirmar-pendente"})
         self.assertIsNone(google_user.password_hash)
+        self.assertIn("signup_attempt_at", google_user.settings)
 
     def test_unverified_google_email_does_not_take_over_an_account(self):
         owner = _user(password_hash="hash")

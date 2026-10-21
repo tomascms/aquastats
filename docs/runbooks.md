@@ -123,6 +123,28 @@ para parar o desafiante.
 3. Aplicar na produção, numa transação, como `neondb_owner`; registar em `schema_migrations`.
 4. Verificar no catálogo (roles, políticas, colunas).
 
+A migração 017 (RGPD) tem de ser aplicada **antes** do deploy da API que a usa: o modelo `User` lê
+`terms_version`, `terms_accepted_at` e `inactivity_notice_at`, e sem essas colunas qualquer login falha.
+
+## Retenção (contas inativas há 3 anos)
+
+`POST /api/v1/auth/internal/retention` avisa por email as contas a 30 dias de fazer 3 anos sem uso e apaga, pelo
+fluxo de eliminar conta, as avisadas há 30 dias que não voltaram a entrar. Um treinador com atletas na equipa não
+é apagado (fica no registo como `retention: account ... kept`). Sem `CRON_SECRET` (≥ 32 caracteres) o endpoint
+responde 404. Corre uma vez por dia no Cloud Scheduler (3 jobs grátis por conta de faturação):
+
+```bash
+# Segredo novo na API (não fica no repositório)
+gcloud run services update aquastats-api --region europe-west3 --project gen-lang-client-0997549665 --update-env-vars CRON_SECRET=<segredo>
+# Job diário às 04:00 de Lisboa, direto ao Cloud Run (o Origin passa o CSRF; x-edge-auth passa a guarda da edge)
+gcloud scheduler jobs create http aquastats-retencao --location europe-west3 --project gen-lang-client-0997549665 \
+  --schedule "0 4 * * *" --time-zone "Europe/Lisbon" --http-method POST \
+  --uri "https://<URL do Cloud Run>/api/v1/auth/internal/retention" \
+  --headers "x-cron-key=<segredo>,x-edge-auth=<EDGE_AUTH_TOKEN>,Origin=https://aquastats.net"
+# Correr já, e ver o resultado ({"reactivated", "warned", "deleted", "skipped"}) nos logs
+gcloud scheduler jobs run aquastats-retencao --location europe-west3 --project gen-lang-client-0997549665
+```
+
 ## Restauro (PITR)
 
 Consola Neon → *Branches* → *New branch* → *Branch data and schema from a past point in time* → parent

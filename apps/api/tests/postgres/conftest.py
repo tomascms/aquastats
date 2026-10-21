@@ -122,6 +122,10 @@ def _seed_team(conn: psycopg.Connection, label: str) -> Team:
         uid = uuid.uuid4()
         t.swimmers.append(uid)
         user(uid, "swimmer", "swimmer", f"Atleta {label}{i + 1}")
+        conn.execute(
+            "insert into parental_consents (user_id, birth_date, guardian_email, status, nonce) values (%s, %s, %s, 'granted', %s)",
+            (uid, date(date.today().year - 11, 1, 1), f"responsavel{i}@{label.lower()}.test", uuid.uuid4().hex),
+        )
     for i in range(3):  # two with an account, one placeholder
         aid = uuid.uuid4()
         t.athletes.append(aid)

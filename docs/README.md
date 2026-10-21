@@ -6,6 +6,7 @@ Most documents are in European Portuguese; the [root README](../README.md) is th
 |---|---|
 | Understand how the system is built | [arquitetura.md](arquitetura.md), [adr/](adr/) (decisions) |
 | Know how the data is protected | [security/](security/README.md): RLS, controls, threat model |
+| See the legal texts (GDPR, minors, retention) and the clubs' data processing agreement | [legal/](legal/dpa-clubes.md), pages `/privacidade` and `/termos` |
 | See the coach logic and why each screen looks the way it does | [natacao/guia-do-treinador.md](natacao/guia-do-treinador.md), [natacao/benchmark-visualizacao.md](natacao/benchmark-visualizacao.md), [natacao/logica-treinador.md](natacao/logica-treinador.md), [natacao/indicadores.md](natacao/indicadores.md) |
 | Understand the prediction model | [ml/README.md](ml/README.md) (model card), [ml/experiments.md](ml/experiments.md) (every attempt), raw outputs in [ml/results/](ml/results/) |
 | See how the synthetic demo data is generated | [natacao/gerador.md](natacao/gerador.md) |

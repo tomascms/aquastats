@@ -10,6 +10,8 @@ from ..core.config import get_settings
 from ..core.db import get_auth_session, get_session
 from ..core.tenant import require_member
 from ..domain import polar
+from ..domain.models import Athlete
+from ..domain.privacy import consent_state
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["integrations"])
 
@@ -28,7 +30,10 @@ NONCE_PATH = "/api/v1/integrations/polar"
 
 
 @router.get("/polar/start")
-def polar_start(payload: dict = Depends(require_member)):
+def polar_start(payload: dict = Depends(require_member), session: Session = Depends(get_session)):
+    athlete = session.get(Athlete, payload["athlete_uuid"]) if payload.get("athlete_uuid") else None
+    if athlete and consent_state(session, athlete.user_id, athlete.date_of_birth) not in {"not_required", "granted"}:
+        return _back("consent")
     nonce = secrets.token_urlsafe(32)
     response = RedirectResponse(polar.authorize_url(payload, nonce), status_code=303)
     settings = get_settings()

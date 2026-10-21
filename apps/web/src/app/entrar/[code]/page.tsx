@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AuthFrame } from "@/components/auth/auth-frame";
+import { ConsentFields, EMPTY_CONSENT, consentBody } from "@/components/auth/consent-fields";
 import { useT, useTDynamic } from "@/i18n/provider";
 import { GoogleSignIn } from "@/components/auth/google-sign-in";
 import { api } from "@/lib/api";
@@ -21,6 +22,9 @@ export default function JoinTeamPage() {
   const [teamName, setTeamName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Accounts that came without accepted terms or a birth date (e.g. Google) give them before joining.
+  const [basics, setBasics] = useState<{ termsAccepted: boolean; needsBirthDate: boolean } | null>(null);
+  const [consent, setConsent] = useState(EMPTY_CONSENT);
   const token = (code || "").trim().toUpperCase();
 
   useEffect(() => {
@@ -35,7 +39,8 @@ export default function JoinTeamPage() {
     setBusy(true);
     setError("");
     try {
-      const result = await api<{ next: string }>(`/api/v1/auth/join/${token}`, { method: "POST" });
+      const body = basics ? consentBody({ ...consent, acceptTerms: consent.acceptTerms || basics.termsAccepted }, basics.needsBirthDate) : {};
+      const result = await api<{ next: string }>(`/api/v1/auth/join/${token}`, { method: "POST", body: JSON.stringify(body) });
       window.location.assign(safeNext(result.next, "/escolher"));
     } catch (err) {
       const status = (err as { status?: number }).status;
@@ -58,6 +63,7 @@ export default function JoinTeamPage() {
   }
 
   const loggedIn = bootstrapped && Boolean(role);
+  const askBasics = Boolean(basics && role !== "coach" && (!basics.termsAccepted || basics.needsBirthDate));
   const banner = error || td(bootError || "");
   const autoJoined = useRef(false);
 
@@ -66,21 +72,37 @@ export default function JoinTeamPage() {
     void api<{ teamName: string }>(`/api/v1/auth/join/${token}/details`)
       .then((data) => setTeamName(data.teamName))
       .catch(() => undefined);
+    void api<{ termsAccepted: boolean; needsBirthDate: boolean }>("/api/v1/auth/me")
+      .then(setBasics)
+      .catch(() => setBasics({ termsAccepted: true, needsBirthDate: false }));
   }, [token, loggedIn]);
 
   // Finish joining automatically once logged in — the coach or swimmer already told us they want
   // to join by opening this link, so a login shouldn't need a second, separate tap to complete it.
   useEffect(() => {
-    if (!loggedIn || autoJoined.current || busy || error) return;
+    if (!loggedIn || !basics || askBasics || autoJoined.current || busy || error) return;
     autoJoined.current = true;
     void join();
-  }, [loggedIn, busy, error]);
+  }, [loggedIn, basics, askBasics, busy, error]);
 
   return (
     <AuthFrame>
       <h1 className="text-2xl font-semibold tracking-tight">{teamName || t("Convite")}</h1>
 
-      {loggedIn ? (
+      {loggedIn && askBasics && basics ? (
+        <form
+          className="mt-6 space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void join();
+          }}
+        >
+          <ConsentFields value={consent} onChange={setConsent} askBirth={basics.needsBirthDate} askTerms={!basics.termsAccepted} />
+          <button type="submit" disabled={busy} className="btn-primary h-10 w-full">
+            {busy ? t("A entrar…") : t("Entrar na equipa")}
+          </button>
+        </form>
+      ) : loggedIn ? (
         <button
           type="button"
           disabled={busy || Boolean(error && !teamName)}

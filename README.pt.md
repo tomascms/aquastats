@@ -207,5 +207,5 @@ desafiante com dados reais logo que haja algumas semanas de tempos cronometrados
 
 ## Licença
 
-Código proprietário, todos os direitos reservados ([LICENSE](LICENSE), [ADR 0001](docs/adr/0001-licenca-e-autoria.md)).
+Copyright (c) 2026 Tomás Sousa. Código proprietário, todos os direitos reservados ([LICENSE](LICENSE), [ADR 0001](docs/adr/0001-licenca-e-autoria.md)).
 Alterações por versão: [CHANGELOG.md](CHANGELOG.md).

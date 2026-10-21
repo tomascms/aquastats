@@ -1,6 +1,6 @@
 # ADR 0001 — Licença, visibilidade e autoria
 
-- Estado: aceite (atualizado a 12/10/2026: repositório público)
+- Estado: aceite (atualizado a 12/10/2026: repositório público; a 20/10/2026: titular "Tomás Sousa")
 - Data: 06/10/2026
 - Decisor: dono do projeto (decisão delegada ao agente e registada aqui)
 
@@ -11,7 +11,7 @@ quem o lê. O dono quer o repositório privado até nova ordem e pediu uma decis
 
 ## Decisão
 
-1. **Licença proprietária: "Copyright (c) 2026 tomás castro mendes de sousa. Todos os direitos reservados."**
+1. **Licença proprietária: "Copyright (c) 2026 Tomás Sousa. Todos os direitos reservados."**
    Ficheiro `LICENSE` na raiz; `"license": "UNLICENSED"` no `package.json` do site.
 2. **Repositório privado** até o dono decidir o contrário. Tornar público exige: Fase G concluída, scan de
    segredos limpo em todo o histórico e revisão dos documentos de segurança (ver "Consequências").

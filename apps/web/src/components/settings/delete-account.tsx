@@ -49,7 +49,7 @@ export function DeleteAccountSection({ hasPassword }: { hasPassword: boolean }) 
       <div>
         <p className="text-xs font-semibold text-coral">{t("Zona perigosa")}</p>
         <h2 className="text-lg font-semibold">{t("Eliminar conta")}</h2>
-        <p className="mt-1 text-sm text-mute">{t("Remove o acesso e desactiva a conta. Os dados da equipa mantêm-se.")}</p>
+        <p className="mt-1 text-sm text-mute">{t("Apaga a conta e os teus dados, de forma definitiva. Os planos da equipa ficam com o treinador.")}</p>
       </div>
       {!open ? (
         <button type="button" onClick={() => setOpen(true)} className="btn-ghost h-11 w-full text-coral">

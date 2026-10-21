@@ -12,6 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from ..core.client import stored_ip
 from ..core.passwords import clean_text
+from .privacy import require_health_consent
 from .models import (
     Athlete,
     AttendanceSession,
@@ -344,6 +345,9 @@ def update_athlete(session: Session, payload: dict, athlete_id: str, body: dict,
     if payload.get("athlete_uuid") != target:
         raise HTTPException(status_code=403, detail="Só podes editar a tua ficha.")
     row = _owned_athlete(session, payload["team_uuid"], target)
+    if "wellness" in body:  # before any change: an HTTPException still commits the session
+        birth = _as_date(body.get("dateOfBirth")) if "dateOfBirth" in body else row.date_of_birth
+        require_health_consent(session, row.user_id, birth)
     row.name = _clean_name(body.get("name") or row.name)
     if "dateOfBirth" in body:  # partial updates (e.g. only wellness) must not wipe the birthday
         row.date_of_birth = _as_date(body.get("dateOfBirth"))
@@ -1212,6 +1216,9 @@ def update_swimmer_profile(session: Session, user_id: UUID, body: dict, request)
     profile = session.get(Profile, user_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil não encontrado.")
+    if "wellness" in body:
+        birth = _as_date(body.get("dateOfBirth")) if "dateOfBirth" in body else profile.date_of_birth
+        require_health_consent(session, user_id, birth)
     if "name" in body:
         profile.full_name = _clean_name(body.get("name") or profile.full_name)
     if "dateOfBirth" in body:

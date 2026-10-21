@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthFrame } from "@/components/auth/auth-frame";
+import { ConsentFields, EMPTY_CONSENT, consentBody } from "@/components/auth/consent-fields";
 import { GoogleSignIn } from "@/components/auth/google-sign-in";
 import { Turnstile } from "@/components/auth/turnstile";
 import { PasswordStrength } from "@/components/ui/password-strength";
@@ -34,6 +35,7 @@ export function LoginForm({ turnstileSiteKey = "" }: { turnstileSiteKey?: string
   const [teamCode, setTeamCode] = useState("");
   const [captcha, setCaptcha] = useState("");
   const [captchaRound, setCaptchaRound] = useState(0);
+  const [consent, setConsent] = useState(EMPTY_CONSENT);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -76,7 +78,13 @@ export function LoginForm({ turnstileSiteKey = "" }: { turnstileSiteKey?: string
         {
           method: "POST",
           headers: turnstileSiteKey ? { "x-turnstile-token": captcha } : undefined,
-          body: JSON.stringify({ email, password, name, invite: invite || teamCode }),
+          body: JSON.stringify({
+            email,
+            password,
+            name,
+            invite: invite || teamCode,
+            ...(mode === "register" ? consentBody(consent) : {}),
+          }),
         },
       );
       if (result.needsConfirmation) {
@@ -179,6 +187,7 @@ export function LoginForm({ turnstileSiteKey = "" }: { turnstileSiteKey?: string
           </span>
           {mode === "register" ? <PasswordStrength password={password} /> : null}
         </label>
+        {mode === "register" ? <ConsentFields value={consent} onChange={setConsent} /> : null}
 
         {banner && (
           <p id="auth-error" className="text-sm text-coral" role="alert">

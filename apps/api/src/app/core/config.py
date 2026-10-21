@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     sentry_traces_sample_rate: float = 0.05
     recent_auth_seconds: int = 300
     edge_auth_token: str = ""
+    # Shared with Cloud Scheduler (header x-cron-key) for POST /api/v1/internal/retention; empty = off.
+    cron_secret: str = ""
     outbox_batch_size: int = 20
     coach_request_email: str = "aquastats@outlook.com"
     polar_client_id: str = ""

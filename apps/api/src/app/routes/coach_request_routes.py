@@ -26,6 +26,8 @@ from ..core.sessions import current_user_payload, token_is_current
 from ..domain.identity import provision_role
 from ..domain.models import Profile, User
 
+from ..domain.privacy import accept_terms
+
 router = APIRouter(tags=["coach-requests"])
 
 TOKEN_TTL_SECONDS = 30 * 24 * 3600
@@ -103,6 +105,10 @@ def request_coach_account(body: dict, request: Request, session: Session = Depen
     message = clean_text(str(body.get("message") or ""), 600)
     if len(name) < 2 or len(team) < 2 or len(contact) < 6:
         raise HTTPException(status_code=422, detail="Preenche o nome, o contacto e a equipa.")
+    if not user.terms_accepted_at:
+        if not body.get("acceptTerms"):
+            raise HTTPException(status_code=400, detail="Aceita os termos e a política de privacidade para continuar.")
+        accept_terms(user)
 
     previous = (user.settings or {}).get("coach_request") or {}
     if previous.get("requested_ts", 0) > time.time() - RESEND_AFTER_SECONDS:

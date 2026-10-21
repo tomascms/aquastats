@@ -85,3 +85,47 @@ def send_signup_confirmation(to: str, link: str) -> bool:
         "O link vale 24 horas e só pode ser usado uma vez. "
         "Se não foste tu, ignora este email.\n",
     )
+
+
+def send_signup_attempt(to: str, link: str) -> bool:
+    return send_mail(
+        to,
+        "Aquastats — alguém tentou registar-se com este email",
+        "Alguém tentou criar uma conta na Aquastats com este email, que já tem conta.\n\n"
+        f"Se foste tu, entra com a tua conta, ou repõe a palavra-passe aqui: {link}\n\n"
+        "Se não foste tu, não precisas de fazer nada: a tua conta não mudou.\n",
+    )
+
+
+def send_guardian_request(to: str, child: str, link: str) -> bool:
+    return send_mail(
+        to,
+        "Aquastats — autorização de responsável parental",
+        f"{child} criou uma conta na Aquastats, uma app de treino de natação, e indicou este email como "
+        "o de um responsável parental.\n\n"
+        "Como tem menos de 13 anos, só guardamos dados de saúde e bem-estar (sono, esforço percebido, "
+        "recuperação e frequência cardíaca) com a tua autorização. Sem ela, a conta funciona na mesma, sem "
+        "esses dados.\n\n"
+        f"Para autorizar ou recusar: {link}\n\n"
+        "O link vale 7 dias. Se não conheces este pedido, ignora este email.\n",
+    )
+
+
+def send_guardian_confirmation(to: str, child: str, link: str) -> bool:
+    return send_mail(
+        to,
+        "Aquastats — autorização registada",
+        f"Registámos a tua autorização para {child}.\n\n"
+        f"Podes retirá-la a qualquer momento neste link: {link}\n"
+        "Ao retirar, apagamos os dados de saúde e bem-estar guardados até aí.\n",
+    )
+
+
+def send_inactivity_notice(to: str, when: str) -> bool:
+    return send_mail(
+        to,
+        "Aquastats — a tua conta vai ser apagada por inatividade",
+        "A tua conta na Aquastats não é usada há quase 3 anos.\n\n"
+        f"Se não entrares até {when}, apagamos a conta e todos os dados associados, de forma definitiva.\n"
+        "Para a manter, basta entrar uma vez.\n",
+    )
