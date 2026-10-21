@@ -27,6 +27,9 @@
 - O proxy da web deixa de inventar o `Origin`; a API volta a recusar mutações sem Origin nem Referer.
 - Lockout por IP e por conta, cooldown no "esqueci-me da palavra-passe", hostname validado no Turnstile e
   Turnstile ligado em produção.
+- O access token deixa de valer depois do logout, da mudança ou reposição da palavra-passe (`token_version`,
+  migração 016). A API recusa arrancar em produção se não conseguir confirmar a role da BD (3 tentativas). Os
+  resultados live ligam-se ao IP verificado (DNS rebinding).
 - Leitor de IA dos resultados live: o lugar deixa de ser confundido com a pista. Relatório em
   `docs/security/auditoria-2026-10-17.md`.
 

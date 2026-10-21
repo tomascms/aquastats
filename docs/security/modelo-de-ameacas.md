@@ -36,7 +36,7 @@ treinador (SSRF), repositório e CI.
 | T5 | Contornar o rate limit pela origem aberta e falsificar o IP (S/D) | `ingress: all`, sem token; `CF-Connecting-IP` aceite de qualquer um | Token da edge testado; IPs validados antes de chegar a colunas `inet` | Ligar o token = passo 6 |
 | T6 | Negação de serviço com pedidos pesados (D) | `/snapshot` 5 s e 39 MB por pedido (sintético 32×4) | Fase C (janela, paginação, compressão) | Ver Fase C |
 | T7 | PDF malicioso (D/E) | pypdf 5.1.0 (49 avisos) | pypdf 6.19.0; limite de 15 MB | Parser ainda no processo da API |
-| T8 | SSRF pelos resultados ao vivo (I) | HTTPS, porta 443, IPs privados bloqueados | Igual | DNS rebinding teórico (mitigado por TLS) |
+| T8 | SSRF pelos resultados ao vivo (I) | HTTPS, porta 443, IPs privados bloqueados | Igual | DNS rebinding fechado: a ligação vai para o IP verificado (`PinnedTransport`, auditoria #17) |
 | T9 | Fuga de segredos (I) | Variáveis simples no Cloud Run; `.env` local com o owner da produção | Guarda no arranque; plano: 1 segredo no Secret Manager + conta de serviço própria; rodar o owner | Passos 4 e 9 |
 | T10 | Cópias de dados reais fora do fluxo de apagamento (I) | Branch Neon `teste-i18n-local` com dados de 26/09 | **Apagada** (06/10) | — |
 | T11 | Edição do ledger ou bloqueio do direito ao apagamento (T) | Trigger contornável por qualquer role; permissões sem efeito | Sem UPDATE/DELETE para a API; interruptor só para o owner; cascatas testadas pelos caminhos reais | — |

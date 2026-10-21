@@ -19,7 +19,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from ..core.ssrf import assert_safe_url
+from ..core.ssrf import PinnedTransport, assert_safe_url
 from .commands import _now
 from .lenex import LenexAthlete, LenexClub, LenexError, LenexMeet, parse_lenex
 from .lenex_import import process_lenex
@@ -139,7 +139,9 @@ def sync(session: Session, payload: dict, row: Competition, request, force: bool
     files: dict = dict(live.get("files") or {})
     athletes = list(session.scalars(select(Athlete).where(Athlete.team_id == row.team_id, Athlete.deleted_at.is_(None))))
     body = {"dryRun": False}
-    with httpx.Client(timeout=10.0, follow_redirects=False, headers={"User-Agent": "Aquastats live results follower"}) as client:
+    with httpx.Client(
+        transport=PinnedTransport(), timeout=10.0, follow_redirects=False, headers={"User-Agent": "Aquastats live results follower"}
+    ) as client:
         index = _fetch(client, live["url"]).decode("utf-8", "ignore")
         names = live_files(index)
         # Every file is read, and all of them are imported together: one event alone may have none of our

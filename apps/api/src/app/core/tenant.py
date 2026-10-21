@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from .db import get_session
 from .rls import set_tenant_context, set_user_context
-from .sessions import current_user_payload
+from .sessions import current_user_payload, token_is_current
 from ..domain.models import Athlete, Team, TeamMember, User
 
 
@@ -21,7 +21,7 @@ def require_user(request: Request, session: Session = Depends(get_session)) -> U
     # The signed session names the user; the database then shows only their own account and memberships.
     set_user_context(session, user_id)
     user = session.get(User, user_id)
-    if not user or not user.is_active or user.deleted_at:
+    if not user or not user.is_active or user.deleted_at or not token_is_current(payload, user):
         raise HTTPException(status_code=401, detail="Sessão inválida.")
     if user.password_hash and not user.is_verified:
         raise HTTPException(status_code=403, detail="Confirma o email antes de continuar.")

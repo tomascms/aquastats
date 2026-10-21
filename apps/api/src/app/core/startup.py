@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from urllib.parse import urlparse
 
 from sqlalchemy import text
@@ -17,6 +18,8 @@ _ROLE_CHECK = text(
     "SELECT rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb FROM pg_roles WHERE rolname = current_user"
 )
 _CAN_BECOME_AUTH = text("SELECT pg_has_role(current_user, :auth, 'MEMBER')")
+# 3 attempts over ~10 s (plus the connect timeouts) before refusing to start.
+_RETRY_DELAYS = (3, 7)
 
 
 def _check(engine, query, params=None):
@@ -29,18 +32,26 @@ def verify_database_role(engine, settings: Settings | None = None, auth_engine=N
     could act as the auth role.
 
     The name check in validate_settings is not enough: a role can be altered by hand (as aquastats_app was).
-    If the database cannot be reached the check is logged and skipped, so a database blip never stops new
-    instances from starting; a role that bypasses RLS always does.
+    The check fails closed: if the database stays unreachable after the retries the instance does not start
+    (Cloud Run starts another), because an unverified role could be one that skips RLS.
     """
     settings = settings or get_settings()
     if engine is None or not settings.is_production:
         return
-    try:
-        privileged = _check(engine, _ROLE_CHECK) or (auth_engine is not None and _check(auth_engine, _ROLE_CHECK))
-        api_is_auth = _check(engine, _CAN_BECOME_AUTH, {"auth": AUTH_ROLE})
-    except Exception as exc:  # connectivity, not a verdict on the roles
-        _logger.warning("Database role check skipped: %s", type(exc).__name__)
-        return
+    for attempt, delay in enumerate((*_RETRY_DELAYS, None), start=1):
+        try:
+            privileged = _check(engine, _ROLE_CHECK) or (auth_engine is not None and _check(auth_engine, _ROLE_CHECK))
+            api_is_auth = _check(engine, _CAN_BECOME_AUTH, {"auth": AUTH_ROLE})
+            break
+        except Exception as exc:  # connectivity, not a verdict on the roles
+            if delay is None:
+                _logger.error("Database role check failed %d times (%s): refusing to start", attempt, type(exc).__name__)
+                raise RuntimeError(
+                    "Não consegui confirmar que as roles da base de dados respeitam a RLS (base inacessível). "
+                    "A API não arranca sem essa confirmação."
+                ) from exc
+            _logger.warning("Database role check attempt %d failed (%s), retrying in %ss", attempt, type(exc).__name__, delay)
+            time.sleep(delay)
     if privileged:
         raise RuntimeError(
             "Uma role da base de dados contorna a RLS (superuser, BYPASSRLS, CREATEROLE ou CREATEDB). "

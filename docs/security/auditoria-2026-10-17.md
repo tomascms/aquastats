@@ -89,20 +89,45 @@ completo também não correu, porque a API foi chamada diretamente.
   - #10, #15, #16 e #17: o dono decidiu deixá-las como estão.
   - As contas `audit-*` de teste foram apagadas do staging, com as respetivas equipas e dados.
 
+### Atualização 20/10 — #10, #16 e #17 corrigidas
+
+O dono pediu para corrigir as três. A #15 (registo) fica com a sessão que trata o registo e o RGPD.
+
+| # | Correção | Teste |
+|---|---|---|
+| 10 | Em produção, o guard da role tenta 3 vezes (esperas de 3 s e 7 s, ~10 s) e depois recusa arrancar, com um log `ERROR` "refusing to start". Em desenvolvimento e teste não consulta a BD, como antes. Contrapartida aceite: um soluço longo do Neon impede uma instância nova de arrancar, e o Cloud Run tenta outra. | `tests/test_startup_guard.py` (`RoleCheckRetryTest`) |
+| 16 | `users.token_version` (migração `016_token_version.sql`; a 017 é a do RGPD) vai no access token (`tv`) e é comparado com a linha do utilizador que cada pedido já lê (`require_user`, `/auth/me` e as outras rotas de conta). O logout, o "terminar todas as sessões" (`revoke_user_sessions`: mudança de palavra-passe, reset e eliminação da conta) incrementam-no. Os tokens anteriores à migração não têm `tv` e contam como 0, por isso o deploy não termina sessões. Os outros dispositivos do utilizador recebem 401 depois de um logout, renovam com o refresh e continuam. | `tests/test_token_version.py`; Postgres: `tests/postgres/test_session_revocation.py` (token antigo dá 401 depois do logout e da mudança de palavra-passe; falha sem a correção) |
+| 17 | `PinnedTransport` (`core/ssrf.py`) resolve e verifica o nome uma vez por pedido e liga-se a esse IP. O `Host` mantém o nome original e o TLS envia-o como SNI e valida o certificado contra ele. Os redirects continuam desligados. Os resultados live usam-no. | `tests/test_ssrf_rebinding.py` (resolver simulado que muda de IP entre chamadas) |
+
+Impacto da #16, medido com a suite Postgres local (pgserver 16), 100 pedidos, main vs este ramo:
+`GET /snapshot` 27 queries nos dois; `GET /auth/me` 11 nos dois. O tempo por pedido ficou dentro do ruído
+(snapshot 20,8 vs 23,5 ms; me 11,7 vs 12,1 ms). Não há ida extra à BD: a verificação compara dois inteiros.
+
+A #17 foi confirmada contra um site real: com o IP fixado e o SNI, `https://live.swimrankings.net/` responde 200
+com o certificado validado; sem o SNI, a ligação ao mesmo IP falha a validação.
+
+Suites: `pytest tests/ -q` 132 passed, 58 skipped; suite Postgres local 58 passed.
+
+Staging (20/10, com autorização do dono): a migração 016 foi aplicada como `neondb_owner` no branch
+`br-raspy-leaf-b1wvhlo5` (coluna `integer not null default 0`; `aquastats_api` e `aquastats_auth` com SELECT e
+UPDATE). Com a API deste ramo ligada ao staging, RLS ativa: conta nova → login → `/auth/me` 200 → logout →
+`/auth/me` com o token antigo 401; novo login → mudança da palavra-passe → token antigo 401, token novo 200 →
+conta eliminada. As contas `audit-tv-*` das tentativas ficaram apagadas; o staging ficou sem utilizadores, como estava.
+
 ## Falhas propostas (não corrigidas, precisam de decisão ou de migração)
 
 | # | Gravidade | Falha | Onde | Proposta |
 |---|---|---|---|---|
 | 8 | ~~Alta~~ resolvida (provável, ver Fase 3) | A memória do projeto diz que a produção ainda usa a role `aquastats_app` (BYPASSRLS). Nesse caso a RLS não protege nada em produção e o isolamento entre equipas depende só das verificações do código. O guard em `startup.py:36` recusaria essa role, por isso, ou a produção corre um build anterior, ou já migrou. | Fase G | Verificar na Fase 3 (query `current_user` via logs, ou consola do Cloud Run). Se ainda for `aquastats_app`, fazer a Fase G passo a passo. |
 | 9 | Média | Lockout de 15 min após 8 falhas, por conta: quem sabe o email bloqueia a vítima indefinidamente. | `domain/identity.py:546-554`, `auth_routes.py:350` | Contar falhas por (conta, IP); a correção 1 torna isto possível. Ou deixar passar a palavra-passe certa quando o Turnstile foi resolvido. |
-| 10 | Média | O guard da role da BD falha aberto se a query der erro no arranque. | `core/startup.py:42-44` | Em produção, tentar de novo e depois falhar. Contrapartida: um soluço do Neon impede instâncias novas. Decisão do dono. |
+| 10 | Média, ~~aberta~~ corrigida a 20/10 | O guard da role da BD falha aberto se a query der erro no arranque. | `core/startup.py:42-44` | Em produção, tentar de novo e depois falhar. Contrapartida: um soluço do Neon impede instâncias novas. Decisão do dono. |
 | 11 | Baixa | As políticas RLS de `workouts`, `competitions`, `season_plans`, `attendance_sessions` e `teams` não verificam `app_role()` no WITH CHECK. Só o `require_coach` impede um atleta de as escrever. | `db/migrations/002_rls_policies.sql:12-58` | Nova migração: `WITH CHECK (app_bypass_rls() OR (team_id = app_team_id() AND app_role() = 'coach'))`. Testar primeiro no staging. |
 | 12 | Baixa | O Turnstile só verifica `success`, sem hostname nem action. | `apps/web/src/lib/turnstile.ts:17` | Verificar `hostname`. Mitigado porque a sitekey está restrita a domínios no painel. As chaves de teste devolvem `example.com`, por isso não pode partir o staging. |
 | 13 | Baixa | O proxy inventa `Origin = APP_URL` quando o pedido não tem Origin. A API nunca recusa um pedido sem Origin que venha do Worker. | `route.ts:53-56` | Remover o fallback. É preciso confirmar no staging que nenhum fluxo legítimo (ex.: o form POST do Google) fica sem Origin. |
 | 14 | Baixa | O `/forgot` não tem cooldown por email (flood da caixa de correio). | `auth_routes.py:367-391` | O mesmo cooldown do `resend-confirmation`. |
 | 15 | Baixa | O registo revela se um email já tem conta (409). | `auth_routes.py:311-313` | Resposta uniforme, e email ao dono existente. |
-| 16 | Baixa | O access token (15 min) continua válido depois do logout ou da mudança de palavra-passe. | `core/sessions.py:57-70` | Aceitar, ou `token_version` no utilizador. |
-| 17 | Baixa | DNS rebinding no SSRF dos resultados live: a verificação resolve o nome, mas o httpx resolve-o de novo. | `core/ssrf.py:33-37`, `domain/live_results.py:89` | Fixar o IP resolvido num transport do httpx. Os redirects já estão desligados. |
+| 16 | Baixa, ~~aberta~~ corrigida a 20/10 | O access token (15 min) continua válido depois do logout ou da mudança de palavra-passe. | `core/sessions.py:57-70` | Aceitar, ou `token_version` no utilizador. |
+| 17 | Baixa, ~~aberta~~ corrigida a 20/10 | DNS rebinding no SSRF dos resultados live: a verificação resolve o nome, mas o httpx resolve-o de novo. | `core/ssrf.py:33-37`, `domain/live_results.py:89` | Fixar o IP resolvido num transport do httpx. Os redirects já estão desligados. |
 | 18 | Baixa | Um id de race-session de outra equipa dá 500 em vez de 404 (confirma que o UUID existe). | `domain/commands.py:976` | `uuid4()` quando a linha não existe. É preciso confirmar que o cliente usa o id devolvido. |
 | 19 | Baixa | O ai-worker aceita qualquer modelo `@cf/` vindo de quem tem a chave. | `apps/ai-worker/src/index.ts:43-65` | Allowlist contra `MODELS`. |
 
@@ -136,7 +161,7 @@ completo também não correu, porque a API foi chamada diretamente.
 
 - A role da BD em produção foi inferida pela data do build, e não por uma query (#8).
 - O lockout por conta só dispara às 40 falhas, vindas de qualquer IP; até lá, cada IP é bloqueado ao fim de 8 (#9).
-- #10, #15, #16 e #17 ficam abertas por decisão do dono (ver tabela).
+- #10, #16 e #17 foram corrigidas a 20/10 (ver a atualização de 20/10); a #15 continua aberta.
 - O Turnstile reduz bots, mas não os humanos/fazendas de resolução.
 - Os testes de isolamento entre rotas cobrem só 5 rotas, e só como treinador. Faltam meet-entries, results, race-sessions, season-plans, attendance, goals, hr, predictions, swimrankings, live e lenex, e os casos de atleta→colega e atleta→rotas de treinador. A Fase 4 deve cobrir isto.
 - A Fase 4 cobriu as rotas principais, mas não todas (`season-plans`, `attendance`, `meet-results`, `hr/delete`, `predictions` GET). Esses casos ficam para a suite de Postgres, que ainda não os cobre.
