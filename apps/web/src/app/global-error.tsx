@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { reportError } from "@/components/error-reporter";
 import { isLocale, LOCALE_COOKIE, translate, type Locale } from "@/i18n";
 
 // Replaces the root layout, so there is no LocaleProvider here: read the saved choice directly.
@@ -9,7 +11,8 @@ function savedLocale(): Locale {
   return match && isLocale(match[1]) ? match[1] : "pt";
 }
 
-export default function GlobalError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useEffect(() => reportError(error, error.digest), [error]);
   const locale = savedLocale();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   return (

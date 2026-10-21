@@ -165,8 +165,51 @@ Ensaio (09/10/2026, branch `staging-hardening`, dados sintéticos):
 
 | Sinal | Primeiro passo |
 |---|---|
-| 5xx > 1 % em 15 min (logs `aquastats.request`, `status >= 500`) | Ver o `requestId` nos logs; se começou com um deploy, reverter |
+| 5xx nos logs `aquastats.request` (`status >= 500`) | Ver o `requestId` nos logs; se começou com um deploy, reverter |
 | Dados de outra equipa visíveis | Reverter já a revisão; rodar `SESSION_SECRET`; rever logs de acesso; avisar os afetados |
 | `/health/ready` em 503 | Neon em baixo ou sem compute: consola Neon → estado do endpoint |
 | Cronometragem lenta | Logs: `PUT /times` ms; muitos snapshots em paralelo → mais instâncias (`--max-instances`) |
 | Fuga de segredo | Rodar no fornecedor, atualizar o segredo, nova revisão, revogar o antigo; correr gitleaks |
+
+## Monitorização e alertas
+
+Sem alertas automáticos, por decisão do dono (20/10/2026): os alertas do Cloud Monitoring passam a ser pagos a partir
+de 01/09/2027 e o plano grátis da Cloudflare não envia emails por erros dos Workers. Tudo o que existe é gratuito e
+sem prazo: logs da API no Cloud Logging (50 GiB/mês grátis) e Workers Logs da Cloudflare. A vigilância é manual:
+olhar para os logs depois de cada deploy e quando um treinador se queixar.
+
+Erros no browser: `POST /api/v1/client-errors` (sem sessão; CSRF por Origin, segredo da edge, 10 por minuto por IP
+na edge e na API). Guarda só a rota (ids trocados por `:id`, sem query), a mensagem (300 car.) e o stack (2000
+car.), com emails e tokens mascarados. Origem: `window` `error`/`unhandledrejection` e os ecrãs `error.tsx` /
+`global-error.tsx` (a mensagem leva o `digest` do erro de servidor, que liga aos logs do Worker).
+
+### Onde ver
+
+- Logs da API: consola GCP → Logging → `resource.type="cloud_run_revision"
+  resource.labels.service_name="aquastats-api"`.
+  - Pedidos: `jsonPayload.logger="aquastats.request"`; erros do servidor com `jsonPayload.status>=500`.
+  - Erros do browser: `jsonPayload.logger="aquastats.client_error"` (campos `route`, `error`, `stack`).
+  - Arranques falhados: `textPayload:"Container called exit"` ou `"probe failed"`.
+  - Leitor de IA: `"own reader failed"` / `"own meet reader failed"` (o `aquastats-ai` falhou; o Gemini substitui).
+- Pela linha de comandos: `gcloud logging read 'jsonPayload.logger="aquastats.client_error"' --project
+  gen-lang-client-0997549665 --freshness 1d --limit 20`.
+- Workers: painel Cloudflare → Workers → `aquastats-web` / `aquastats-ai` → Observability (logs persistentes).
+- Saúde: `https://aquastats.net/api/v1/health` → `aquastats-api`; `/api/v1/health/ready` → `ok` (acorda o Neon;
+  não automatizar, um pedido por minuto gastaria ~183 CU-h/mês, acima das 100 do plano grátis).
+
+### Depois de um deploy (5 min)
+
+1. `/entrar` abre; `/api/v1/health` e `/api/v1/health/ready` com 200.
+2. Logs da API dos últimos 15 min sem `status>=500`, sem `Container called exit` e sem `aquastats.client_error` novos.
+3. Workers Logs do `aquastats-web` sem exceções novas.
+
+### Sintomas
+
+| Sintoma | O que fazer |
+|---|---|
+| Site não abre | `npx wrangler deployments list` (a partir de `apps/web`); se começou com um deploy, `npx wrangler rollback`. Ver Workers Logs do `aquastats-web` |
+| API em baixo ou 5xx | Logs `aquastats.request` com `status>=500` → `requestId` → erro. 503 em todos: `/api/v1/health/ready` e consola Neon (compute, quota de CU-h). Se começou com um deploy, reverter (ver Reversão) |
+| API lenta | Logs: `ms` por `path`; muitos snapshots em paralelo ou Neon a escalar. Ver instâncias no Cloud Run |
+| API não arranca | Logs da revisão nova: `validate_settings`/`verify_database_role` recusam arrancar com segredos ou roles errados. Corrigir o segredo ou reverter o tráfego |
+| Ecrã "Algo correu mal" | Logs `aquastats.client_error` pela `route`; com `digest`, procurar o mesmo valor nos Workers Logs do `aquastats-web` |
+| Leitura de PDFs falha | Logs do `aquastats-ai`; quota do Workers AI (10 000 neurónios/dia no grátis) |

@@ -18,6 +18,8 @@ def _limit(path: str, method: str) -> int:
     # API fica acima da edge (Cloudflare) — segunda linha, não o gargalo no uso normal.
     if path == "/api/v1/auth/refresh":
         return 180
+    if path == "/api/v1/client-errors":
+        return 10  # browser error reports: a broken page must not flood the logs
     if method in {"POST", "PUT", "PATCH", "DELETE"}:
         if path.startswith("/api/v1/auth"):
             return 80

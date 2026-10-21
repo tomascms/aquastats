@@ -2,6 +2,12 @@
 
 ## [Por lançar]
 
+### Erros do browser nos logs (custo 0 €)
+- Erros de JavaScript da web vão para os logs da API (`POST /api/v1/client-errors`): só rota, mensagem e stack
+  curtos, sem dados pessoais, com CSRF e limite de 10/min.
+- Sem alertas automáticos (os do Cloud Monitoring passam a ser pagos em 2027). Runbook: secção "Monitorização e
+  alertas", com onde ver os logs e o que verificar depois de cada deploy.
+
 ### RGPD: menores, termos, retenção e direitos do titular
 - Atletas com menos de 13 anos (Lei 58/2019, art. 16.º): o registo, a escolha de perfil e o convite pedem a data de
   nascimento e, abaixo dos 13, o email de um responsável parental, que recebe um link assinado (7 dias) para

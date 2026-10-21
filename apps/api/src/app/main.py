@@ -29,6 +29,7 @@ from .core.http_security import (
     SecurityHeadersMiddleware,
 )
 from .routes.auth_routes import router as auth_router
+from .routes.client_error_routes import router as client_error_router
 from .routes.data_routes import router as data_router
 from .routes.coach_request_routes import router as coach_request_router
 from .routes.integration_routes import router as integration_router
@@ -69,6 +70,7 @@ app.include_router(auth_router)
 app.include_router(data_router)
 app.include_router(coach_request_router)
 app.include_router(integration_router)
+app.include_router(client_error_router)
 
 
 @app.exception_handler(RuntimeError)

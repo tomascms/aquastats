@@ -67,4 +67,5 @@ produção com roles que contornem a RLS, e em desenvolvimento recusa a base de 
 ## Observabilidade
 
 Logs JSON (uma linha por pedido: método, caminho, estado, ms, request id; nunca a query string), `/api/v1/health`
-e `/api/v1/health/ready`. Alertas por métricas de logs no Cloud Monitoring: Fase G.
+e `/api/v1/health/ready`; erros do browser em `POST /api/v1/client-errors`. Sem alertas
+automáticos (custo 0 €); Workers Logs na Cloudflare. Ver [runbooks](runbooks.md#monitorização-e-alertas).
